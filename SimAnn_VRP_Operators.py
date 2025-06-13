@@ -3,6 +3,7 @@ from SimAnn_VRP_BLOperators import *
 import random
 import itertools
 import bisect
+import math
 
 ### Commented operators for reference. No need to reimplement ###
 # Permute route with permutation array: route.permute(permutation)
@@ -80,6 +81,30 @@ class Operator(ABC):
         self.last_elapsed = 0.0
         self.last_improvement = 0.0
 
+        self.num_useless_calls = 0
+        self.total_useless_call_time = 0
+        self.mean_useless_call_time = 0
+
+        self.num_useful_calls = 0
+        self.total_useful_call_time = 0
+        self.mean_useful_call_time = 0
+
+        self.num_improving_calls = 0
+        self.total_improving_improvement = 0
+        self.mean_improving_improvement = 0
+        self.total_improving_call_time = 0
+        self.mean_improving_call_time = 0
+
+        self.num_degrading_calls = 0
+        self.total_degrading_degradation = 0
+        self.mean_degrading_degradation = 0
+        self.total_degrading_call_time = 0
+        self.mean_degrading_call_time = 0
+
+        self.num_neutral_calls = 0
+        self.total_neutral_call_time = 0
+        self.mean_neutral_call_time = 0
+
         # Revert method. Just calls op_BL's revert method.
         self.revert = self.base_operator.revert
 
@@ -88,6 +113,46 @@ class Operator(ABC):
         """
             Subclass __init__ methods must choose its own OperatorBL class and pass it in here.
         """
+
+    def update_reporting_stats(self):
+        elapsed = self.last_elapsed
+        improvement = self.last_improvement
+        if self.prev_operation_was_useful():
+            self.num_useful_calls += 1
+            self.total_useful_call_time += elapsed
+            self.mean_useful_call_time = self.total_useful_call_time / self.num_useful_calls
+
+            eps = 1e-9
+            if improvement > eps:
+                self.num_improving_calls += 1
+                self.total_improving_improvement += improvement
+                self.mean_improving_improvement = self.total_improving_improvement / self.num_improving_calls
+                self.total_improving_call_time += elapsed
+                self.mean_improving_call_time = self.total_improving_call_time / self.num_improving_calls
+            elif improvement < -eps:
+                self.num_degrading_calls += 1
+                self.total_degrading_degradation -= improvement
+                self.mean_degrading_degradation = self.total_degrading_degradation / self.num_degrading_calls
+                self.total_degrading_call_time += elapsed
+                self.mean_degrading_call_time = self.total_degrading_call_time / self.num_degrading_calls
+            else:
+                self.num_neutral_calls += 1
+                self.total_neutral_call_time += elapsed
+                self.mean_neutral_call_time = self.total_neutral_call_time / self.num_neutral_calls
+
+        else:
+            self.num_useless_calls += 1
+            self.total_useless_call_time += elapsed
+            self.mean_useless_call_time = elapsed / self.num_useless_calls
+
+
+    def report_stats(self):
+        print(f"Stats for operator {type(self).__name__}: \n"
+              f"LogWeight: {math.log(self.weight, 10)}, Total calls: {self.num_useful_calls + self.num_useless_calls}, Num useful calls: {self.num_useful_calls}, Useful call time: {self.total_useful_call_time}s, Mean useful call time:{self.mean_useful_call_time*1e6}us\n"
+              f"Num improving calls: {self.num_improving_calls}, Mean improvement: {self.mean_improving_improvement}, Mean improving call time: {self.mean_improving_call_time*1e6}us\n"
+              f"Num degrading calls: {self.num_degrading_calls}, Mean degradation: {self.mean_degrading_degradation}, Mean degrading call time: {self.mean_degrading_call_time*1e6}us\n" )
+
+
 
     def operate(self):
         """
@@ -104,6 +169,8 @@ class Operator(ABC):
         self.last_elapsed = elapsed
         self.last_improvement = self.base_operator.last_improvement
 
+        self.update_reporting_stats()
+
     def prev_operation_was_useful(self):
         return self.base_operator.prev_operation_was_useful()
 
@@ -117,7 +184,7 @@ class Operator(ABC):
 
         eps = 1e-9
         sign = -1 if last_improvement < 0 else 1
-        score = sign * (abs(last_improvement) ** 1.5) / max(last_elapsed, eps)
+        score = max(0, sign * (abs(last_improvement) ** 1.5) / max(last_elapsed, eps))
         self.stats.record_use(score)
 
     def get_stats(self):
@@ -202,6 +269,65 @@ class RandomCustomerReassignment(Operator):
 
         return src_route, src_index, dest_route, dest_index
 
+class RandomCustomerReassignmentToNewRoute(Operator):
+    def __init__(self, sln: FullSolution):
+        super().__init__(sln, ReassignCustomerToNewRouteAt(sln))
+
+    def _operand_selection_impl(self):
+        sln = self.sln
+
+        src_route = random.choice(sln.all_routes)
+        if len(src_route.path) == 0:
+            return src_route, 0, sln.vehicles[0], 0, sln.depots[0]
+
+        customer_id = random.randint(0, len(src_route.path) - 1)
+
+        dest_vehicle = random.choice(sln.vehicles)
+        dest_index = random.randint(0, len(dest_vehicle.routes))
+        depot = random.choice(sln.depots)
+
+        return src_route, customer_id, dest_vehicle, dest_index, depot
+
+class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator):
+    def __init__(self, sln: FullSolution, k):
+        super().__init__(sln, ReassignCustomerToNewRouteAt(sln))
+        self.k = k
+
+    def _operand_selection_impl(self):
+        sln = self.sln
+
+        route = None
+        customer_id = -1
+        worst_travel = -float('inf')
+
+        for i in range(0, self.k):
+            src_route = random.choice(sln.all_routes)
+            if len(src_route.path) == 0:
+                continue
+
+            src_customer_id = random.randint(0, len(src_route.path) - 1)
+
+            prev_node = src_route.start_depot if src_customer_id == 0 else src_route.path[src_customer_id-1]
+            customer = src_route.path[src_customer_id]
+            next_node = src_route.end_depot if src_customer_id == len(src_route.path) - 1\
+                else src_route.path[src_customer_id+1]
+
+            distance = prev_node.distance(customer) + customer.distance(next_node)
+            if distance > worst_travel:
+                worst_travel = distance
+                route = src_route
+                customer_id = src_customer_id
+
+        if route is None:
+            return sln.all_routes[0], -1, sln.vehicles[0], -1, sln.depots[0]
+
+        dest_vehicle = random.choice(sln.vehicles)
+        dest_index = random.randint(0, len(dest_vehicle.routes))
+        depot = random.choice(sln.depots)
+
+        return route, customer_id, dest_vehicle, dest_index, depot
+
+
 class RandomCustomerSwap(Operator):
     def __init__(self, sln: FullSolution):
         super().__init__(sln, SwapCustomersAt(sln))
@@ -223,6 +349,25 @@ class RandomCustomerSwap(Operator):
         index2 = random.randint(0, len(route2.path)-1)
 
         return route1, index1, route2, index2
+
+class Customer2OpSwapInRandomRoute(Operator):
+    def __init__(self, sln: FullSolution):
+        super().__init__(sln, SwapCustomersAt(sln))
+
+    def _operand_selection_impl(self):
+        sln = self.sln
+        route = random.choice(sln.all_routes)
+        path = route.path
+        path_len = len(path)
+
+        if path_len <= 1:
+            return route, 0, route, 0
+
+        (index1, index2, _) = max(((index1, index2, self.base_operator.compute_improvement(route, index1, route, index2))
+                                   for index1 in range(0, path_len) for index2 in range(0, path_len) if index1 < index2), key = lambda tp: tp[2])
+
+        return route, index1, route, index2
+
 
 class RandomRoutePermutation(Operator):
     def __init__(self, sln: FullSolution):

@@ -15,7 +15,7 @@ def build_vrp_model():
     ]
 
     # Customer data: id -> (x, y, demand)
-    num_customers = 20#5000
+    num_customers = 2000#5000
     customer_data = [
         {
             "location": tuple(np.random.randint(0, 100, size=2)),

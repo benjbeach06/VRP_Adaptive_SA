@@ -31,12 +31,12 @@ def build_model():
                           for i in range(num_depots)]
 
         num_vehicles = len(vehicles)
-        max_routes = 10
+        max_routes = 20
         cost_per_vehicle = 10
-        cost_per_depot = 10
+        cost_per_depot = 20
 
         capacity_per_vehicle = 25
-        max_routes_per_vehicle = 100000
+        max_routes_per_vehicle = 20
 
         # Customer data: id -> (x, y, demand)
         num_customers = 20

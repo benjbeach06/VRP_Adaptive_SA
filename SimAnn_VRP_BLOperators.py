@@ -79,7 +79,7 @@ class ReassignRouteAt(OperatorBL):
 
     def _operate_pure_impl(self, route, vehicle, insertion_index):
         # Operation is: Reassign route to target vehicle at split_index insertion_index
-        route.vehicle.pop_route(route)
+        route.vehicle.remove_route(route)
         vehicle.insert_route(route, insertion_index)
 
     def _operate_impl(self, src_vehicle, src_index, dest_vehicle, dest_index):
@@ -96,13 +96,16 @@ class ReassignRouteAt(OperatorBL):
         vehicle = dest_vehicle
         insertion_index = dest_index
 
+        old_depots_used = sln.depots_used()
+        old_vehicles_used = sln.vehicles_used()
+
         if src_vehicle == dest_vehicle and dest_index >= len(dest_vehicle.routes):
             # Cannot move past the end of the current route! Invalid operation
             self._revert_info = None
             self.last_improvement = INVALID_OP
             return
 
-        if src_vehicle == dest_vehicle and src_index == dest_index:
+        if src_vehicle == dest_vehicle and src_index == dest_index or route.should_dispose():
             # It's a no-op!
             self._revert_info = None
             self.last_improvement = 0.0
@@ -133,7 +136,6 @@ class ReassignRouteAt(OperatorBL):
             if max_index <= len(vehicle.routes) - 2:
                 old_travel_distance += vehicle.routes[max_index+1].first_move_distance()
 
-            cost_delta = 0
 
             self._operate_pure_impl(route, vehicle, insertion_index)
 
@@ -159,10 +161,10 @@ class ReassignRouteAt(OperatorBL):
                 next_dest_route = dest_vehicle.routes[dest_index]
                 old_travel_distance += next_dest_route.first_move_distance()
 
-            src_will_be_deactivated = int(len(src_vehicle.routes) == 1) # Note: since route has vehicle src_vehicle, we have that this length is >=1.
-            dest_will_be_activated = int(len(dest_vehicle.routes) == 0)
+            #src_will_be_deactivated = len(src_vehicle.routes) == 1 and (len(route.path) > 0 or route.start_depot == route.end_depot) # Note: since route has vehicle src_vehicle, we have that this length is >=1.
+            #dest_will_be_activated = len(dest_vehicle.routes) == 0
 
-            cost_delta = sln.cost_per_vehicle*(dest_will_be_activated - src_will_be_deactivated)
+            #cost_delta = sln.cost_per_vehicle*(dest_will_be_activated - src_will_be_deactivated)
 
             # Operate
             self._operate_pure_impl(route, vehicle, insertion_index)
@@ -178,7 +180,12 @@ class ReassignRouteAt(OperatorBL):
         route_is_overloaded = route.is_overloaded()
         overload_delta = sln.overload_penalty * (route_is_overloaded - route_was_overloaded)
 
+        new_depots_used = sln.depots_used()
+        new_vehicles_used = sln.vehicles_used()
+
         # A negative cost delta is a positive improvement.
+        cost_delta = sln.cost_per_depot * (new_depots_used - old_depots_used)
+        cost_delta += sln.cost_per_vehicle * (new_vehicles_used - old_vehicles_used)
         cost_delta += sln.unit_travel_cost * (new_travel_distance - old_travel_distance)
         cost_delta += overload_delta
         improvement = -cost_delta
@@ -244,7 +251,7 @@ class ReassignCustomerAt(OperatorBL):
 
         customer = src_route.path[src_index]
 
-        pop_delta = src_route.get_visit_pop_travel_delta(src_index)
+        pop_delta = src_route.get_customer_pop_travel_delta(src_index)
 
         if src_route == dest_route and src_index == dest_index:
             return 0
@@ -278,10 +285,10 @@ class ReassignCustomerAt(OperatorBL):
         # Now account for altered travel distances
         if src_route != dest_route or src_index >= dest_index + 2:
             # Different routes, or same routes popping from later. No weird list shifts to handle.
-            insert_delta = dest_route.get_visit_insert_travel_delta(customer, dest_index)
+            insert_delta = dest_route.get_customer_insert_travel_delta(customer, dest_index)
         elif src_index <= dest_index - 2:
             # In this special case: the insertion is from src_index to a later point - insertion will be after dest_index
-            insert_delta = dest_route.get_visit_insert_travel_delta(customer, dest_index+1)
+            insert_delta = dest_route.get_customer_insert_travel_delta(customer, dest_index + 1)
         else:
             # In this case, index1 and index2 are adjacent. So the order (prev, min_id, max_id, next) turns to (prev, max, min, next).
             min_id = min(src_index, dest_index)
@@ -311,8 +318,8 @@ class ReassignCustomerAt(OperatorBL):
         if src_route == dest_route and src_index == dest_index:
             return
 
-        customer = src_route.pop_visit_at(src_index)
-        dest_route.insert_visit(customer, dest_index)
+        customer = src_route.pop_customer_at(src_index)
+        dest_route.insert_customer(customer, dest_index)
 
     def _operate_impl(self, src_route: Route, src_index, dest_route: Route, dest_index):
         sln = self.sln
@@ -343,82 +350,45 @@ class ReassignCustomerAt(OperatorBL):
         #print(f"Revt: src_route_len:{len(src_route.path)}, src_index:{src_index}, dest_route_len:{len(dest_route.path)}, dest_index:{dest_index}\n")
 
 """
-TODO: Finish this one. It's tougher than the customer-move operators because it also involves adding in a route
+TODO: Finish this one with more efficient cost comps. It's tougher than the customer-move operators because it also involves adding in a route
     to an existing vehicle - and thus requires more involved computations. Route splitting is easier to implement.
+"""
 class ReassignCustomerToNewRouteAt(OperatorBL):
     def __init__(self, sln: FullSolution):
         super().__init__(sln)
 
-    def compute_improvement(self, src_route: Route, src_index, dest_vehicle: Vehicle, dest_index, end_depot):
-        if src_index > len(src_route.path) - 1:
-            return INVALID_OP # Invalid operation
-        
-        customer = src_route.path[src_index]
-        route = Route(path=[customer], end_depot=end_depot)
-
-        pop_delta = src_route.get_visit_pop_travel_delta(src_index)
-
-        if src_route == dest_route and src_index == dest_index:
-            return 0
-
-        if src_route != dest_route or src_index >= dest_index + 2:
-            insert_delta = dest_route.get_visit_insert_travel_delta(customer, dest_index)
-        elif src_index <= dest_index - 2:
-            insert_delta = src_route.get_visit_insert_travel_delta(customer, dest_index)
-        else:
-            # In this case, index1 and index2 are adjacent. So the order (prev, min_id, max_id, next) turns to (prev, max, min, next).
-            min_id = min(src_index, dest_index)
-            max_id = max(src_index, dest_index)
-
-            path = src_route.path
-            path_len = len(src_route.path)
-
-            prev_node = src_route.start_depot if (min_id == 0) else path[min_id - 1]
-            node1 = path[min_id]
-            node2 = path[max_id]
-            next_node = src_route.end_depot if (max_id == path_len - 1) else path[max_id + 1]
-
-            prev_distance = prev_node.distance(node1) + node1.distance(node2) + node2.distance(next_node)
-            next_distance = prev_node.distance(node2) + node2.distance(node1) + node2.distance(next_node)
-
-            insert_delta = next_distance - prev_distance
-
-        delta_cost = self.sln.unit_travel_cost * (pop_delta + insert_delta)
-
-        return -delta_cost
-
-    def _operate_pure_impl(self, src_route: Route, src_index, dest_route: Route, dest_index):
+    def _operate_pure_impl(self, src_route: Route, src_index, dest_vehicle: Vehicle, dest_index, end_depot: Depot):
         sln = self.sln
 
-        if src_route == dest_route and src_index == dest_index:
-            return
+        customer = src_route.pop_customer_at(src_index)
+        dest_route = Route([customer], end_depot)
+        dest_vehicle.insert_route(dest_route, dest_index)
+        sln.all_routes.append(dest_route)
 
-        customer = src_route.pop_visit_at(src_index)
-        dest_route.insert_visit(customer, dest_index)
-
-    def _operate_impl(self, src_route: Route, src_index, dest_route: Route, dest_index):
+    def _operate_impl(self, src_route: Route, src_index, dest_vehicle: Vehicle, dest_index, end_depot: Depot):
         sln = self.sln
 
-        if src_index > len(src_route.path) - 1:
+        if src_index > len(src_route.path) - 1 or dest_index > len(dest_vehicle.routes) - 1 or\
+            src_index < 0 or dest_index < 0:
             self._revert_info = None
             self.last_improvement = INVALID_OP
             return
 
-        if src_route == dest_route and src_index == dest_index:
-            self._revert_info = None
-            self.last_improvement = 0
-            return
+        self.old_objective = sln.solution_cost()
+        self._revert_info = (src_route, src_index, dest_vehicle, dest_index)
 
-        self.last_improvement = self.compute_improvement(src_route, src_index, dest_route, dest_index)
-        self._revert_info = (src_route, src_index, dest_route, dest_index)
+        self.operate_pure(src_route, src_index, dest_vehicle, dest_index, end_depot)
 
-        self.operate_pure(src_route, src_index, dest_route, dest_index)
+        self.last_improvement = self.old_objective - sln.solution_cost()
 
     def _revert_impl(self):
-        src_route, src_index, dest_route, dest_index = self._revert_info
+        sln = self.sln
 
-        self._operate_pure_impl(dest_route, dest_index, src_route, src_index)
-"""
+        src_route, src_index, dest_vehicle, dest_index = self._revert_info
+        dest_route: Route = dest_vehicle.pop_route_at(dest_index)
+        src_route.insert_customer(dest_route.path[0], src_index)
+
+        sln.all_routes.pop() # The new route was most recently appended on the end. So we pop it! Like a balloon
 
 class SwapCustomersAt(OperatorBL):
     def __init__(self, sln: FullSolution):
@@ -492,7 +462,7 @@ class SwapCustomersAt(OperatorBL):
         if route1 == route2 and index1 == index2:
             return
 
-        route1.swap_visits_with(index1, route2, index2)
+        route1.swap_customers_with(index1, route2, index2)
 
     def _operate_impl(self, route1: Route, index1, route2: Route, index2):
         # Note: This body is nearly identical to the Reassign (move) version of this operator.
@@ -664,6 +634,11 @@ class DisposeOfEmptyRoutesBL(OperatorBL):
         self.sln.remove_routes(routes)
 
     def _operate_impl(self, routes: list[Route]):
+        if len(routes) == 0:
+            self._revert_info = None
+            self.last_improvement = 0
+            return
+
         sln = self.sln
         prev_obj = 0
         if not self.dispose_only_trivial_routes:
