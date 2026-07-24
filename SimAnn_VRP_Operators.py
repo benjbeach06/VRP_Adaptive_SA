@@ -13,13 +13,17 @@ class OperatorStats:
     def __init__(self):
         self.uses = 0
         self.score_sum = 0
+        self.improvements = 0
 
     def record_use(self, score):
+        if score > 0:
+            self.improvements += 1
         self.uses += 1
         self.score_sum += max(0,score)
 
     def reset(self):
         self.uses = 0
+        self.improvements = 0
         self.score_sum = 0
 
 def pick_random_vehicle_and_route_index(sln):
@@ -43,7 +47,10 @@ def pick_random_vehicle_and_route_index(sln):
 
     # 2) Draw a random integer in [1, total_routes]. (The cumsum elements only work for 1-indexed arrays - so we
     #   subtract 1 from the resulting route index at the end.
-    R = random.randrange(1, total_routes)
+    if total_routes == 1:
+        R = 1
+    else:
+        R = random.randrange(1, total_routes)
 
     # 3) Find the vehicle split_index: the smallest i such that cum_counts[i] > R
     #    Note: bisect_left must be used to avoid picking an empty vehicle
@@ -171,6 +178,24 @@ class Operator(ABC):
 
         self.update_reporting_stats()
 
+    def re_operate(self):
+        operands = self.prev_operands
+        self.base_operator.operate(*operands)
+
+    def re_operate_with_stats(self):
+
+        t0 = time.time()
+        operands = self.prev_operands
+        self.prev_operands = operands
+        self.base_operator.operate(*operands)
+        elapsed = time.time() - t0
+
+        # Save for SA to inspect and possibly revert
+        self.last_elapsed = elapsed
+        self.last_improvement = self.base_operator.last_improvement
+
+        self.update_reporting_stats()
+
     def prev_operation_was_useful(self):
         return self.base_operator.prev_operation_was_useful()
 
@@ -188,7 +213,8 @@ class Operator(ABC):
         self.stats.record_use(score)
 
     def get_stats(self):
-        return self.stats.uses, self.stats.score_sum
+        stats = self.stats
+        return stats.uses, stats.improvements, stats.score_sum
 
     def reset_stats(self):
         self.stats.reset()
@@ -350,7 +376,7 @@ class RandomCustomerSwap(Operator):
 
         return route1, index1, route2, index2
 
-class Customer2OpSwapInRandomRoute(Operator):
+class CustomerBestOfkSwapInRandomRoute(Operator):
     def __init__(self, sln: FullSolution):
         super().__init__(sln, SwapCustomersAt(sln))
 
@@ -394,10 +420,10 @@ class ChangeRandomEndDepot(Operator):
     def _operand_selection_impl(self):
         sln = self.sln
 
-        (vehicle, route_id) = pick_random_vehicle_and_route_index(sln)
+        route = random.choice(sln.all_routes)
         depot = random.choice(sln.depots)
 
-        return vehicle, route_id, depot
+        return route, depot
 
 class DisposeOfTrivialRoutes(Operator):
     def __init__(self, sln: FullSolution):

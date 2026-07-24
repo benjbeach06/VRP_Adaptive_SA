@@ -1,11 +1,7 @@
-from platform import machine
-
 import hexaly.optimizer
-import sys
-from math import sqrt, hypot
+from math import hypot
 from BaseMath import *
 import numpy as np
-from functools import lru_cache
 
 def build_model():
     with (hexaly.optimizer.HexalyOptimizer() as optimizer):
@@ -20,26 +16,19 @@ def build_model():
             {"location": (90, 10), "supply_limit": 35, "vehicle_count": 1},
         ]
         num_depots = len(depots)
-        depot_locations_x = m.array(depot["location"][0] for depot in depots)
-        depot_locations_y = m.array(depot["location"][1] for depot in depots)
-        depot_supply_limits = m.array(depot["supply_limit"] for depot in depots)
-        #depot_vehicle_counts = m.array(depot["vehicle_count"] for depot in depots)
 
         vehicles = range(sum(depot["vehicle_count"] for depot in depots))
         vehicle_starts = sum(([i]*depot["vehicle_count"] for (i, depot) in enumerate(depots)), [])
-        depot_vehicles = [m.array(v for v in vehicles if vehicle_starts == i)
-                          for i in range(num_depots)]
 
         num_vehicles = len(vehicles)
-        max_routes = 20
+        max_routes = 200
         cost_per_vehicle = 10
         cost_per_depot = 20
 
         capacity_per_vehicle = 25
-        max_routes_per_vehicle = 20
 
         # Customer data: id -> (x, y, demand)
-        num_customers = 20
+        num_customers = 200
         customers = [
             {
                 "location": tuple(np.random.randint(0, 100, size=2)),
@@ -47,11 +36,11 @@ def build_model():
             }
             for i in range(num_customers)
         ]
-        customer_locations_x = m.array(customer["location"][0] for customer in customers)
-        customer_locations_y = m.array(customer["location"][1] for customer in customers)
+
+        #print('\n'.join(f"{customer["location"]}, {customer["demand"]}" for customer in customers))
+
         customer_demands = m.array(customer["demand"] for customer in customers)
 
-        # @lru_cache(maxsize=None)
         def dist(node1, node2):
             (x1,y1) = node1["location"]
             (x2,y2) = node2["location"]
@@ -80,10 +69,10 @@ def build_model():
         route_start_locations = m.array(vehicle_start_locations[i][route["vehicle"]] for (i, route) in routes.items())
         route_end_locations = m.array(route["end"] for route in routes.values())
 
-        vehicle_usage_count = m.array(m.sum(route_indexes, m.lambda_function(lambda i: m.iif(m.and_(v == route_vehicles[i],
-                                                                                                    m.count(route_paths[i]) > 0),
-                                                                                             1, 0)))
-                                      for v in vehicles)
+        #vehicle_usage_count = m.array(m.sum(route_indexes, m.lambda_function(lambda i: m.iif(m.and_(v == route_vehicles[i],
+        #                                                                                            m.count(route_paths[i]) > 0),
+         #                                                                                    1, 0)))
+         #                             for v in vehicles)
 
         route_partition_def = m.constraint(m.partition(rt["path"] for rt in routes.values()))
         capacity_limit = [m.constraint(m.sum(rt["path"], m.lambda_function(lambda customer : customer_demands[customer])) <= capacity_per_vehicle) for rt in routes.values()]
@@ -107,7 +96,10 @@ def build_model():
 
             start_dist = depot_start_dists[customer1_id]
             end_dist = depot_end_dists[customer_last_id]
-            mid_dist = m.sum(cc_dist[subroute[i]][subroute[i+1]] for i in range(len(route) - 1))
+
+            dist_lambda = m.lambda_function(lambda i : cc_dist[subroute[i]][subroute[i+1]])
+
+            mid_dist = m.sum(m.range(0, path_len-1), dist_lambda)
 
             return start_dist + mid_dist + end_dist
 
@@ -157,7 +149,7 @@ def build_model():
 
                 start_dist = depot_start_dists[customer1_id]
                 end_dist = depot_end_dists[customer_last_id]
-                mid_dist = sum(cc_dist.value[subroute[i]][subroute[i + 1]] for i in range(len(route) - 1))
+                mid_dist = sum(cc_dist.value[subroute[i]][subroute[i + 1]] for i in range(path_len - 1))
 
                 print(f"Cost breakdown for route {i} : start_dist={start_dist}, end_dist={end_dist}, mid_dist={mid_dist}")
 
