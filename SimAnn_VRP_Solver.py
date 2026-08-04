@@ -212,7 +212,7 @@ class SimAnnVRPSolver:
                 if any(depot.num_routes_starting_here != depot_breakdown[depot] for depot in sln.depots):
                     pass
 
-                if any(customer.next_node is None or customer.prev_node is None for customer in self.sln.customers):
+                if any(customer.next_visit is None or customer.prev_visit is None for customer in self.sln.customers):
                     pass
 
                 if any(vehicle.num_routes > 0 and (vehicle.routes[0].prev_route is not None or vehicle.routes[-1].next_route is not None)
@@ -227,7 +227,7 @@ class SimAnnVRPSolver:
                            route.path[0].prev_node == route.start_depot and
                            route.path[path_len - 1].next_node == route.end_depot and
                            all((next_node := customer.next_node) == route.path[i+1] and
-                               next_node.prev_node == customer
+                               next_node.prev_visit == customer
                                for (i, customer) in enumerate(route.path[:-1]))
                            for route in sln.all_routes):
                     pass
@@ -258,7 +258,7 @@ class SimAnnVRPSolver:
                     print("Hmmm")
 
                 """
-                if debug_level >= 1 and abs(improvement - (preop_obj - postop_obj)) >= 1e-6 or any(route.capacity_needed() != route.current_load for route in self.sln.all_routes):
+                if debug_level >= 1 and abs(improvement - (preop_obj - postop_obj)) >= 1e-6 or any(route.recompute_current_load() != route.current_load for route in self.sln.all_routes):
                     print("Accepted Move info:")
                     print(f"Move operator name: {type(op).__name__}")
                     print(f"Computed Improvement: {improvement}")
@@ -315,7 +315,7 @@ class SimAnnVRPSolver:
                     if any(depot.num_routes_starting_here != depot_breakdown[depot] for depot in sln.depots):
                         pass
 
-                    if any(customer.next_node is None or customer.prev_node is None for customer in self.sln.customers):
+                    if any(customer.next_visit is None or customer.prev_visit is None for customer in self.sln.customers):
                         pass
 
                     if any(vehicle.num_routes > 0 and (
@@ -330,7 +330,7 @@ class SimAnnVRPSolver:
                                route.path[0].prev_node == route.start_depot and
                                route.path[path_len - 1].next_node == route.end_depot and
                                all((next_node := customer.next_node) == route.path[i + 1] and
-                                   next_node.prev_node == customer
+                                   next_node.prev_visit == customer
                                    for (i, customer) in enumerate(route.path[:-1]))
                                for route in sln.all_routes):
                         pass

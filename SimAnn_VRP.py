@@ -14,7 +14,7 @@ def build_vrp_model():
         {"location": (90, 10), "supply_limit": 35, "vehicle_count": 1},
     ]
 
-    # Customer data: id -> (x, y, demand)
+    # Customer data: cID -> (x, y, demand)
     num_customers = 200#5000
     customer_data = [
         {
@@ -51,11 +51,11 @@ def build_vrp_model():
     solver = SimAnnVRPSolver(sln)
 
     """
-    route1 = Route([customers[i] for i in [1, 15, 18, 17, 5]], depots[2])
-    route2 = Route([customers[i] for i in [3, 9, 10, 11]], depots[1])
-    route3 = Route([customers[i] for i in [19, 2, 0]], depots[1])
-    route4 = Route([customers[i] for i in [4, 12, 6, 7]], depots[1])
-    route5 = Route([customers[i] for i in [13, 8, 16, 14]], depots[0])
+    route1 = Route([customers[cID] for cID in [1, 15, 18, 17, 5]], depots[2])
+    route2 = Route([customers[cID] for cID in [3, 9, 10, 11]], depots[1])
+    route3 = Route([customers[cID] for cID in [19, 2, 0]], depots[1])
+    route4 = Route([customers[cID] for cID in [4, 12, 6, 7]], depots[1])
+    route5 = Route([customers[cID] for cID in [13, 8, 16, 14]], depots[0])
 
     vehicle = sln.vehicles[1]
     sln.add_route_to_vehicle(route1, vehicle)
@@ -102,16 +102,16 @@ def build_vrp_model():
     curr_obj = solver.curr_objective
 
     print('\n'.join(f"{key}, {value}" for (key,value) in
-                    {i: {"Path": ["d"+str(route.start_depot.i)] +
-                       [customer.i for customer in route.path] +
-                                 ["d"+str(route.end_depot.i)],
-                         "Vehicle": route.vehicle.i,
+                    {i: {"Path": ["d" + str(route.start_depot.cID)] +
+                                 [customer.cID for customer in route.path] +
+                                 ["d" + str(route.end_depot.cID)],
+                         "Vehicle": route.vehicle.cID,
                          "Cost": route.total_distance()}
                      for (i,route) in enumerate(all_routes)}.items()
                     )
     )
 
-    print('\n'.join(f"Total distance traveled for vehicle {vehicle.i}: "
+    print('\n'.join(f"Total distance traveled for vehicle {vehicle.cID}: "
                     f"{vehicle.get_total_distance()}" for vehicle in vehicles))
 
     print(f"Total cost: "
@@ -121,9 +121,9 @@ def build_vrp_model():
           f"{sln.solution_cost()}")
 
     print(f"Infeasibility routes - {sln.total_overload()} total units:\n" +
-          "\n".join("["+', '.join(["d"+str(route.start_depot.i)] +
-                       [str(customer.i) for customer in route.path] +
-                                 ["d"+str(route.end_depot.i)]) + f"], load={route.current_load}, cap={route.vehicle.capacity}" for route in all_routes))
+          "\n".join("[" +', '.join(["d" + str(route.start_depot.cID)] +
+                                   [str(customer.cID) for customer in route.path] +
+                                   ["d" + str(route.end_depot.cID)]) + f"], load={route.current_load}, cap={route.vehicle.capacity}" for route in all_routes))
 
 
     #print(vehicle_usage_count.value)
@@ -140,9 +140,9 @@ def build_vrp_model():
             end_dist = end.distance(path[-1])
             mid_dist = sum(path[i].distance(path[i+1]) for i in range(path_len - 1))
 
-            print(f"Cost breakdown for route {i} : start_dist={start_dist}, end_dist={end_dist}, mid_dist={mid_dist}, capacity={route.capacity_needed()}")
+            print(f"Cost breakdown for route {i} : start_dist={start_dist}, end_dist={end_dist}, mid_dist={mid_dist}, capacity={route.recompute_current_load()}")
 
 
-    print("We did it!")
+    print("We dID it!")
 
 build_vrp_model()

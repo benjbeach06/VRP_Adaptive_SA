@@ -52,7 +52,7 @@ def pick_random_vehicle_and_route_index(sln):
     else:
         R = random.randrange(1, total_routes)
 
-    # 3) Find the vehicle split_index: the smallest i such that cum_counts[i] > R
+    # 3) Find the vehicle split_index: the smallest cID such that cum_counts[cID] > R
     #    Note: bisect_left must be used to avoid picking an empty vehicle
     #    For example: In the previous example, vehicle 0 and 1 have the same len cumsum, but vehicle 1 is empty.
     vehicle_idx = bisect.bisect_left(cum_counts, R)
@@ -452,6 +452,7 @@ class SplitRandomRoute(Operator):
         route = vehicle.routes[route_id]
         path = route.path
 
+        # TODO: Investigate handling of no-ops vs invalid operations. (No-ops should be invalid? Or should be separately marked.)
         if len(path) <= 1:
             return vehicle, route_id, 0, sln.depots[0] # should gracefully report as a no-op instead of an invalid operation
 
