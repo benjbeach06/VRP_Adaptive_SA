@@ -1,4 +1,3 @@
-import SimAnn_VRP_BLOperators
 from SimAnn_VRP_Core_Model import *
 from SimAnn_VRP_Operators import *
 import math
@@ -46,21 +45,32 @@ class SimAnnVRPSolver:
 
         self.operators.append(RandomRouteReassignment(sln))
         self.operators.append(RandomCustomerReassignment(sln))
-        self.operators.append(ReassignWorstCustomerOutOfRandomKToNewRoute(sln, k=10))
         self.operators.append(RandomCustomerSwap(sln))
         self.operators.append(CustomerBestOfkSwapInRandomRoute(sln))
         self.operators.append(RandomRoutePermutation(sln))
         self.operators.append(ChangeRandomEndDepot(sln))
         self.operators.append(DisposeOfEmptyRoutes(sln))
-        #self.operators.append(SplitRandomRoute(sln))
-        #self.operators.append(RandomCustomerReassignmentToNewRoute(sln))
-        #self.operators.append(DisposeOfTrivialRoutes(sln))
+        self.operators.append(SplitRandomRoute(sln))
+        self.operators.append(DisposeOfTrivialRoutes(sln))
+        self.operators.append(CombineRandomRoutes(sln))
+        # TODO(known-bug): ReassignCustomerToNewRouteBefore's pricing is wrong for the throwaway
+        # new-route case (it prices a "swap" from a VirtualDepot placeholder start, but a brand
+        # new route never had a real old start to swap from). Needs a purpose-built Core delta
+        # function rather than reusing cost_deltas_if_inserted_before. Disabled until fixed.
+        # self.operators.append(ReassignWorstCustomerOutOfRandomKToNewRoute(sln, k=10))
+        # self.operators.append(RandomCustomerReassignmentToNewRoute(sln))
 
         self.snapshots: list[tuple[float, FullSolution]] = []
         self.max_snapshots = 10
 
         self.num_complete_reheats = 0
         self.num_plateau_reheats = 0
+
+        # Every this-many iterations, dispose of any empty routes outright rather than waiting
+        # for weighted operator selection to stochastically pick DisposeOfEmptyRoutes -- since
+        # all objective coefficients are non-negative, this is never a net loss.
+        self.empty_route_cleanup_interval = 100
+        self._dispose_bl = DisposeOfEmptyRoutesBL(sln, dispose_only_trivial_routes=False)
 
     def update_weights(self):
         weights = [op.weight for op in self.operators]
@@ -135,7 +145,9 @@ class SimAnnVRPSolver:
         def add_next_route():
             (vehicle, customer1, _) = get_closest_remaining_service()
             customers_remaining.remove(customer1)
-            route = Route([customer1], None)
+            # End depot isn't decided until the route is full; DEFAULT_DEPOT is a harmless
+            # placeholder always replaced by set_end_depot below before the route is used.
+            route = Route([CustomerVisit(customer1)], DEFAULT_DEPOT)
 
             if customers_remaining:
                 next_customer = get_closest_remaining_customer(customer1)
@@ -145,7 +157,7 @@ class SimAnnVRPSolver:
                 can_add_route = lambda : capacity_so_far + next_capacity <= vehicle.capacity
 
                 while customers_remaining and can_add_route():
-                    route.append_customer(next_customer)
+                    route.append_customer(CustomerVisit(next_customer))
                     capacity_so_far += next_customer.demand
                     customers_remaining.remove(next_customer)
 
@@ -179,6 +191,56 @@ class SimAnnVRPSolver:
         self.best_objective = sln.solution_cost()
         self.curr_objective = self.best_objective
 
+    def _cleanup_empty_routes(self):
+        # Unconditional maintenance: since every objective coefficient is non-negative, removing
+        # an empty route's travel/depot footprint is never a net loss. Called directly rather than
+        # through weighted operator selection.
+        empty_routes = RouteSet(r for r in self.sln.all_routes if r.is_empty)
+        if not empty_routes:
+            return
+        move = self._dispose_bl.evaluate(empty_routes)
+        if move.is_actionable:
+            self._dispose_bl.apply(move)
+            self._dispose_bl.commit()
+            self.curr_objective -= move.improvement
+            self.best_objective = min(self.best_objective, self.curr_objective)
+
+    def _check_solution_invariants(self, sln) -> list[str]:
+        # debug_level >= 2 structural checks, lifted from the old inline blocks and adapted to
+        # walk prev_route/next_route chains instead of RouteSet.index (which doesn't exist).
+        problems = []
+
+        depot_breakdown = sln.depot_usage_breakdown()
+        if any(depot_breakdown[depot] != sln.depot_num_uses[depot] for depot in sln.depots):
+            problems.append("depot usage breakdown disagrees with depot_num_uses")
+
+        # sln.customers holds the raw problem-data Customer objects, not the per-route
+        # CustomerVisit wrappers that carry linkage -- check the actual visits in each route.
+        if any(visit.next_visit is None or visit.prev_visit is None
+               for route in sln.all_routes for visit in route.path):
+            problems.append("a customer visit has an unlinked visit")
+
+        for vehicle in sln.vehicles:
+            node = vehicle.first_route.next_route   # first_route itself is the FirstRoute sentinel, not a Route
+            seen = 0
+            while node is not vehicle.last_route:
+                if not isinstance(node, Route):
+                    problems.append(f"vehicle {vehicle.vID} chain broke before reaching last_route")
+                    break
+                seen += 1
+                node = node.next_route
+            if seen != vehicle.num_routes:
+                problems.append(f"vehicle {vehicle.vID} chain length {seen} != num_routes {vehicle.num_routes}")
+
+        if any(isinstance(route.next_route, Route) and route.next_route.start_depot != route.end_depot
+               for route in sln.all_routes):
+            problems.append("a route's successor start_depot doesn't match its own end_depot")
+
+        if any(route.recompute_current_load() != route.current_load for route in sln.all_routes):
+            problems.append("a route's cached current_load is stale")
+
+        return problems
+
     def solve(self):
         sln = self.sln
         initial_temp = 0.05 * self.best_objective
@@ -189,6 +251,14 @@ class SimAnnVRPSolver:
         elapsed_time = 0
         iterations = 0
 
+        # 0 = none.
+        # 1 = verify accepted moves' reported improvement against solution_cost() before/after
+        #     apply() (or before/after propose() for escape-hatch operators, which mutate there).
+        # 2 = also run _check_solution_invariants() after every accepted/rejected move.
+        # 3 = also force a rejected move through apply -> recompute -> revert -> recompute, to
+        #     verify the rejection would have been valid had it been accepted. Only ever applies
+        #     to moves that reached the accept/reject test (move.kind is VALID) -- INVALID/NOOP
+        #     moves never reach that branch and must never be applied.
         debug_level = 0
 
         while elapsed_time < self.max_time:
@@ -197,182 +267,89 @@ class SimAnnVRPSolver:
             if iterations % self.segment_length == 0:
                 self.update_weights()
 
+            if iterations % self.empty_route_cleanup_interval == 0:
+                self._cleanup_empty_routes()
+
             op = self.choose_operator()
 
             if debug_level >= 1:
-                preop_obj = self.sln.solution_cost()
-            if debug_level >= 2:
-                preop_costs = (self.sln.total_path_len(), self.sln.depots_used(), self.sln.vehicles_used(), self.sln.total_overload())
-                preop_routes = list((list(route.path), route.start_depot, route.end_depot, route.vehicle.routes.index(route)) for route in self.sln.all_routes)
+                pre_propose_obj = sln.solution_cost()
 
-            op.operate()
+            move = op.propose()
 
-            if debug_level >= 2:
-                depot_breakdown = sln.depot_usage_breakdown()
-                if any(depot.num_routes_starting_here != depot_breakdown[depot] for depot in sln.depots):
-                    pass
+            if not move.is_actionable:
+                op.revert()   # no-op unless op's base operator mutated during propose() (escape hatch)
+                elapsed_time = time.time() - start_time
+                continue
 
-                if any(customer.next_visit is None or customer.prev_visit is None for customer in self.sln.customers):
-                    pass
+            if debug_level >= 1 and getattr(op.base_operator, "_evaluates_by_applying", False):
+                post_propose_obj = sln.solution_cost()
+                if abs(move.improvement - (pre_propose_obj - post_propose_obj)) >= 1e-6:
+                    print(f"[debug] {type(op).__name__} (escape-hatch): reported improvement {move.improvement} "
+                          f"!= measured {pre_propose_obj - post_propose_obj}")
 
-                if any(vehicle.num_routes > 0 and (vehicle.routes[0].prev_route is not None or vehicle.routes[-1].next_route is not None)
-                       for vehicle in sln.vehicles):
-                    pass
-
-                if any(route.next_route is not None and route.next_route.start_depot != route.end_depot
-                       for route in sln.all_routes):
-                    pass
-
-                if not all((path_len := route.path_len) == 0 or
-                           route.path[0].prev_node == route.start_depot and
-                           route.path[path_len - 1].next_node == route.end_depot and
-                           all((next_node := customer.next_node) == route.path[i+1] and
-                               next_node.prev_visit == customer
-                               for (i, customer) in enumerate(route.path[:-1]))
-                           for route in sln.all_routes):
-                    pass
-
-            if debug_level >= 1:
-                postop_obj = self.sln.solution_cost()
-            if debug_level >= 2:
-                postop_costs = (self.sln.total_path_len(), self.sln.depots_used(), self.sln.vehicles_used(), self.sln.total_overload())
-                pstop_routes = list((list(route.path), route.start_depot, route.end_depot, route.vehicle.routes.index(route)) for route in self.sln.all_routes)
-
-            improvement = op.last_improvement
-
+            improvement = move.improvement
             loglog_acceptance_threshold = -float('inf') if improvement >= 0 else math.log(-improvement, 2) - self.log_temperature
-
-            accept = op.prev_operation_was_useful() and (improvement > 0 or math.log(-math.log(random.random()), 2) >= loglog_acceptance_threshold)
+            accept = improvement > 0 or math.log(-math.log(random.random()), 2) >= loglog_acceptance_threshold
 
             if accept:
-                """
-                if improvement > 0:
-                    print(preop_obj)
-                    print(preop_costs)
-                    operands = op.prev_operands
-                    print(self.sln.solution_cost())
-                    print((self.sln.total_path_len(), self.sln.depots_used(), self.sln.vehicles_used(), self.sln.num_overloaded_routes()))
-                    op.revert()
-                    print(self.sln.solution_cost())
-                    print((self.sln.total_path_len(), self.sln.depots_used(), self.sln.vehicles_used(), self.sln.num_overloaded_routes()))
-                    print("Hmmm")
-
-                """
-                if debug_level >= 1 and abs(improvement - (preop_obj - postop_obj)) >= 1e-6 or any(route.recompute_current_load() != route.current_load for route in self.sln.all_routes):
-                    print("Accepted Move info:")
-                    print(f"Move operator name: {type(op).__name__}")
-                    print(f"Computed Improvement: {improvement}")
-                    print(f"SLN reported improvement: {preop_obj - postop_obj}")
-                    print(f"Pre-op objective: {preop_obj}")
-
-                    if debug_level >= 2:
-                        print("Pre-op cost breakdown:" + str(preop_costs))
-                    print(f"Current pre-op increment-based solver-reported objective:{self.curr_objective}")
-                    print(f"Post-op objective:{postop_obj}")
-
-                    if debug_level >= 2:
-                        print(f"Post-op cost breakdown:{postop_costs}")
-
-                    operands = op.prev_operands
-                    op.revert()
-                    rev_obj = sln.solution_cost()
-
-                    (improvement_recomp, operated) = op.base_operator.compute_improvement(*operands)
-                    op.re_operate()
-
-                    print()
-
                 if improvement < 0 and self.curr_objective <= self.best_objective + 1e-12:
                     # Error-safe comparison of current and best objectives - relative error as abs/ave
-                    # If we're disimproving from our running global optimum: take a snapshot.
-                    op.revert() # To get back to the global minimum
-
+                    # If we're disimproving from our running global optimum: take a snapshot
+                    # BEFORE stepping away from it. No revert/re-apply dance needed.
                     self.take_sln_snapshot()
 
-                    op.re_operate() # Return to the disimproved solution
+                if debug_level >= 1 and not getattr(op.base_operator, "_evaluates_by_applying", False):
+                    preop_obj = sln.solution_cost()
+                    op.apply(move)
+                    postop_obj = sln.solution_cost()
+                    if abs(improvement - (preop_obj - postop_obj)) >= 1e-6:
+                        print(f"[debug] {type(op).__name__}: reported improvement {improvement} "
+                              f"!= measured {preop_obj - postop_obj}")
+                else:
+                    op.apply(move)
 
+                if debug_level >= 2:
+                    problems = self._check_solution_invariants(sln)
+                    if problems:
+                        print(f"[debug] invariant violations after accepted {type(op).__name__}: {problems}")
+
+                op.commit()
                 op.update_stats()
 
                 self.curr_objective -= improvement
                 self.best_objective = min(self.best_objective, self.curr_objective)
             else:
-                """
-                print("Rejection info:")
-                print(improvement)
-                print(self.curr_objective)
-                print(preop_obj)
-                print(preop_costs)
-                print(self.sln.solution_cost())
-                print((self.sln.total_path_len(), self.sln.depots_used(), self.sln.vehicles_used(),
-                       self.sln.num_overloaded_routes()))
-                """
-
-                op.revert()
-
+                if debug_level >= 3:
+                    # move.kind is VALID here (checked above) -- never force-apply an INVALID/NOOP move.
+                    preop_obj = sln.solution_cost()
+                    op.apply(move)
+                    postop_obj = sln.solution_cost()
+                    if abs(improvement - (preop_obj - postop_obj)) >= 1e-6:
+                        print(f"[debug] {type(op).__name__} (rejected): reported improvement {improvement} "
+                              f"!= measured {preop_obj - postop_obj}")
+                    if debug_level >= 2:
+                        problems = self._check_solution_invariants(sln)
+                        if problems:
+                            print(f"[debug] invariant violations mid-rejection-check for {type(op).__name__}: {problems}")
+                    op.revert()
+                    reverted_obj = sln.solution_cost()
+                    if abs(reverted_obj - preop_obj) >= 1e-6:
+                        print(f"[debug] {type(op).__name__}: revert() did not restore objective "
+                              f"({reverted_obj} != {preop_obj})")
+                else:
+                    op.revert()   # move was never applied (unless escape-hatch, in which case this undoes it)
 
                 if debug_level >= 2:
-                    depot_breakdown = sln.depot_usage_breakdown()
-                    if any(depot.num_routes_starting_here != depot_breakdown[depot] for depot in sln.depots):
-                        pass
-
-                    if any(customer.next_visit is None or customer.prev_visit is None for customer in self.sln.customers):
-                        pass
-
-                    if any(vehicle.num_routes > 0 and (
-                            vehicle.routes[0].prev_route is not None or vehicle.routes[-1].next_route is not None) for vehicle in sln.vehicles):
-                        pass
-
-                    if any(route.next_route is not None and route.next_route.start_depot != route.end_depot
-                           for route in sln.all_routes):
-                        pass
-
-                    if not all((path_len := route.path_len) == 0 or
-                               route.path[0].prev_node == route.start_depot and
-                               route.path[path_len - 1].next_node == route.end_depot and
-                               all((next_node := customer.next_node) == route.path[i + 1] and
-                                   next_node.prev_visit == customer
-                                   for (i, customer) in enumerate(route.path[:-1]))
-                               for route in sln.all_routes):
-                        pass
-
-
-                if debug_level >= 1 and abs(self.sln.solution_cost() - preop_obj) > 1e-6:
-                    operands = op.prev_operands
-                    print("Rejected Move info:")
-                    print(f"Move operator name: {type(op).__name__}")
-                    print(f"Computed Improvement: {improvement}")
-                    print(f"SLN reported improvement: {preop_obj - postop_obj}")
-                    print(f"Pre-op objective: {preop_obj}")
-
-                    if debug_level >= 2:
-                        print("Pre-op cost breakdown:" + str(preop_costs))
-
-                    print(f"Current pre-op increment-based solver-reported objective:{self.curr_objective}")
-                    print(f"Post-op objective:{postop_obj}")
-
-                    if debug_level >= 2:
-                        print(f"Post-op cost breakdown:{postop_costs}")
-                    print(f"Reverted objective:{self.sln.solution_cost()}")
-
-                    if debug_level >= 2:
-                        print(f"Reverted cost breakdown:" + str((self.sln.total_path_len(), self.sln.depots_used(), self.sln.vehicles_used(), self.sln.total_overload())))
-                        rev_routes = list((list(route.path), route.start_depot, route.end_depot, route.vehicle.routes.index(route)) for route in self.sln.all_routes)
-                    print()
+                    problems = self._check_solution_invariants(sln)
+                    if problems:
+                        print(f"[debug] invariant violations after rejected {type(op).__name__}: {problems}")
 
             if len(self.snapshots) > 2*self.max_snapshots:
                 self.pare_snapshots_to_top_k(self.max_snapshots)
 
             curr_time = time.time()
             elapsed_time = curr_time - start_time
-
-            """
-            if self.temperature < self.low_temp_factor:
-                
-                self.temperature = initial_temp
-                self.curr_plateau_size = 0
-
-                self.num_complete_reheats += 1
-            """
 
             if elapsed_time > self.report_every * self.num_reports_so_far:
                 self.num_reports_so_far += 1

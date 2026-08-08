@@ -1,8 +1,6 @@
 import time
 from SimAnn_VRP_BLOperators import *
 import random
-import itertools
-import bisect
 import math
 
 ### Commented operators for reference. No need to reimplement ###
@@ -26,56 +24,15 @@ class OperatorStats:
         self.improvements = 0
         self.score_sum = 0
 
-def pick_random_vehicle_and_route_index(sln):
-    vehicles = sln.vehicles
-
-    if len(vehicles) == 0 or all(len(v.routes) == 0 for v in vehicles):
-        raise ValueError("No routes to pick from")
-
-    """
-    Uniformly pick one (vehicle, route_index) among all routes in sln.
-
-    We build a cumulative‐sum array of src_route counts [r0, r0+r1, r0+r1+r2, ...],
-    where ri = len(vehicle_i.routes). Then pick a random integer R in [0, total-1],
-    find the vehicle split_index via bisect, and subtract to get route_index.
-    """
-    # 1) Build the cumulative sums array: of src_route counts per vehicle
-    #   e.g. len(v) = [3, 0, 5, 2]  → cum = [3, 3, 8, 10]
-    cum_counts = list(itertools.accumulate(len(v.routes) for v in vehicles))  # e.g. [3, 0, 5, 2]
-
-    total_routes = cum_counts[-1]
-
-    # 2) Draw a random integer in [1, total_routes]. (The cumsum elements only work for 1-indexed arrays - so we
-    #   subtract 1 from the resulting src_route index at the end.
-    if total_routes == 1:
-        R = 1
-    else:
-        R = random.randrange(1, total_routes)
-
-    # 3) Find the vehicle split_index: the smallest cID such that cum_counts[cID] > R
-    #    Note: bisect_left must be used to avoid picking an empty vehicle
-    #    For example: In the previous example, vehicle 0 and 1 have the same len cumsum, but vehicle 1 is empty.
-    vehicle_idx = bisect.bisect_left(cum_counts, R)
-    R -= 1
-
-    # 4) Compute the src_route’s local split_index within that vehicle:
-    #    If vehicle_idx == 0, then route_idx = R: split_index in list = split_index in vehicle
-    #    Otherwise route_idx = R - cum_counts[vehicle_idx-1] :
-    #    (split_index within vehicle = overall split_index - routes before current vehicle)
-    if vehicle_idx == 0:
-        route_idx = R
-    else:
-        route_idx = R - cum_counts[vehicle_idx - 1]
-
-    vehicle = vehicles[vehicle_idx]
-
-    return vehicle, route_idx
-
 class Operator(ABC):
     """
-    Base for all in‐place, argument‐free operators.
-    Subclasses only need to override _operate_impl() and _revert_impl().
-    Operate() measures elapsed time and stores revert_info + improvement.
+    Base for all argument-free operators seen by the solver.
+    Subclasses only need to override _operand_selection_impl().
+
+    propose() selects operands and prices the move (evaluate()) without mutating the solution,
+    unless the underlying OperatorBL is escape-hatch flavored (_evaluates_by_applying), in which
+    case it mutates atomically as part of pricing. apply()/commit()/revert() drive the BL operator
+    the same way; see OperatorBL for the actual lifecycle.
     """
 
     def __init__(self, sln: FullSolution, base_operator: OperatorBL):
@@ -83,133 +40,99 @@ class Operator(ABC):
         self.base_operator = base_operator
         self.stats = OperatorStats()
 
-        # Adaptive‐weight bookkeeping
+        # Adaptive-weight bookkeeping
         self.weight = 1.0
-        self.last_elapsed = 0.0
-        self.last_improvement = 0.0
+        self.prev_operands = None
+        self.last_move: Move | None = None
 
-        self.num_useless_calls = 0
-        self.total_useless_call_time = 0
-        self.mean_useless_call_time = 0
+        # Segment-granularity timing: time.time()/perf_counter() has ~15ms resolution on Windows,
+        # while these operators run in single-digit microseconds, so per-call timing is useless.
+        # Accumulate over a whole segment (see SimAnnVRPSolver.update_weights) instead.
+        self.segment_time = 0.0
+        self.segment_proposals = 0
+        self.mean_apply_time = 0.0
+        self._apply_time_total = 0.0
+        self._apply_count = 0
 
+        self.num_invalid_calls = 0
+        self.num_noop_calls = 0
         self.num_useful_calls = 0
-        self.total_useful_call_time = 0
-        self.mean_useful_call_time = 0
 
         self.num_improving_calls = 0
         self.total_improving_improvement = 0
         self.mean_improving_improvement = 0
-        self.total_improving_call_time = 0
-        self.mean_improving_call_time = 0
 
         self.num_degrading_calls = 0
         self.total_degrading_degradation = 0
         self.mean_degrading_degradation = 0
-        self.total_degrading_call_time = 0
-        self.mean_degrading_call_time = 0
 
         self.num_neutral_calls = 0
-        self.total_neutral_call_time = 0
-        self.mean_neutral_call_time = 0
 
-        # Revert method. Just calls op_BL's revert method.
-        self.revert = self.base_operator.revert
+    def propose(self) -> Move:
+        """Select operands and price the move. Never mutates the solution (unless the base
+        operator is escape-hatch flavored, in which case it already has, atomically)."""
+        t0 = time.perf_counter()
+        operands = self._operand_selection_impl()
+        move = self.base_operator.evaluate(*operands)
+        self.segment_time += time.perf_counter() - t0
+        self.segment_proposals += 1
+        self.prev_operands = operands
+        self.last_move = move
+        self._update_reporting_stats(move)
+        return move
 
-        self.prev_operands = None
+    def apply(self, move: Move) -> bool:
+        t0 = time.perf_counter()
+        ok = self.base_operator.apply(move)
+        dt = time.perf_counter() - t0
+        self._apply_count += 1
+        self._apply_time_total += dt
+        self.mean_apply_time = self._apply_time_total / self._apply_count
+        return ok
 
-        """
-            Subclass __init__ methods must choose its own OperatorBL class and pass it in here.
-        """
+    def commit(self) -> Move:
+        return self.base_operator.commit()
 
-    def update_reporting_stats(self):
-        elapsed = self.last_elapsed
-        improvement = self.last_improvement
-        if self.prev_operation_was_useful():
+    def revert(self) -> None:
+        self.base_operator.revert()
+
+    def _update_reporting_stats(self, move: Move):
+        eps = 1e-9
+        if move.kind is MoveKind.INVALID:
+            self.num_invalid_calls += 1
+        elif move.kind is MoveKind.NOOP:
+            self.num_noop_calls += 1
+        else:
             self.num_useful_calls += 1
-            self.total_useful_call_time += elapsed
-            self.mean_useful_call_time = self.total_useful_call_time / self.num_useful_calls
-
-            eps = 1e-9
+            improvement = move.improvement
             if improvement > eps:
                 self.num_improving_calls += 1
                 self.total_improving_improvement += improvement
                 self.mean_improving_improvement = self.total_improving_improvement / self.num_improving_calls
-                self.total_improving_call_time += elapsed
-                self.mean_improving_call_time = self.total_improving_call_time / self.num_improving_calls
             elif improvement < -eps:
                 self.num_degrading_calls += 1
                 self.total_degrading_degradation -= improvement
                 self.mean_degrading_degradation = self.total_degrading_degradation / self.num_degrading_calls
-                self.total_degrading_call_time += elapsed
-                self.mean_degrading_call_time = self.total_degrading_call_time / self.num_degrading_calls
             else:
                 self.num_neutral_calls += 1
-                self.total_neutral_call_time += elapsed
-                self.mean_neutral_call_time = self.total_neutral_call_time / self.num_neutral_calls
-
-        else:
-            self.num_useless_calls += 1
-            self.total_useless_call_time += elapsed
-            self.mean_useless_call_time = elapsed / self.num_useless_calls
-
 
     def report_stats(self):
+        total_calls = self.num_invalid_calls + self.num_noop_calls + self.num_useful_calls
         print(f"Stats for operator {type(self).__name__}: \n"
-              f"LogWeight: {math.log(self.weight, 10)}, Total calls: {self.num_useful_calls + self.num_useless_calls}, Num useful calls: {self.num_useful_calls}, Useful call time: {self.total_useful_call_time}s, Mean useful call time:{self.mean_useful_call_time*1e6}us\n"
-              f"Num improving calls: {self.num_improving_calls}, Mean improvement: {self.mean_improving_improvement}, Mean improving call time: {self.mean_improving_call_time*1e6}us\n"
-              f"Num degrading calls: {self.num_degrading_calls}, Mean degradation: {self.mean_degrading_degradation}, Mean degrading call time: {self.mean_degrading_call_time*1e6}us\n" )
-
-
-
-    def operate(self):
-        """
-        Wrapper that calls _operate_impl, measures elapsed time,
-        and stores revert_info + improvement. Returns revert_info.
-        """
-        t0 = time.time()
-        operands = self._operand_selection_impl()
-        self.prev_operands = operands
-        self.base_operator.operate(*operands)
-        elapsed = time.time() - t0
-
-        # Save for SA to inspect and possibly revert
-        self.last_elapsed = elapsed
-        self.last_improvement = self.base_operator.last_improvement
-
-        self.update_reporting_stats()
-
-    def re_operate(self):
-        operands = self.prev_operands
-        self.base_operator.operate(*operands)
-
-    def re_operate_with_stats(self):
-
-        t0 = time.time()
-        operands = self.prev_operands
-        self.prev_operands = operands
-        self.base_operator.operate(*operands)
-        elapsed = time.time() - t0
-
-        # Save for SA to inspect and possibly revert
-        self.last_elapsed = elapsed
-        self.last_improvement = self.base_operator.last_improvement
-
-        self.update_reporting_stats()
-
-    def prev_operation_was_useful(self):
-        return self.base_operator.prev_operation_was_useful()
+              f"LogWeight: {math.log(self.weight, 10)}, Total calls: {total_calls}, "
+              f"Invalid: {self.num_invalid_calls}, Noop: {self.num_noop_calls}, Useful: {self.num_useful_calls}\n"
+              f"Num improving calls: {self.num_improving_calls}, Mean improvement: {self.mean_improving_improvement}\n"
+              f"Num degrading calls: {self.num_degrading_calls}, Mean degradation: {self.mean_degrading_degradation}\n")
 
     def update_stats(self):
-        last_improvement = self.last_improvement
-        last_elapsed = self.last_elapsed
-
-        if not self.prev_operation_was_useful():
+        move = self.last_move
+        if move is None or not move.is_actionable:
             self.stats.record_use(0)
             return
 
-        eps = 1e-9
-        sign = -1 if last_improvement < 0 else 1
-        score = max(0, sign * (abs(last_improvement) ** 1.5) / max(last_elapsed, eps))
+        mean_cost = self.segment_time / max(self.segment_proposals, 1) + self.mean_apply_time
+        sign = -1 if move.improvement < 0 else 1
+        score = max(0, sign * (abs(move.improvement) ** 1.5) / max(mean_cost, 1e-9))
         self.stats.record_use(score)
 
     def get_stats(self):
@@ -218,6 +141,8 @@ class Operator(ABC):
 
     def reset_stats(self):
         self.stats.reset()
+        self.segment_time = 0.0
+        self.segment_proposals = 0
 
     @abstractmethod
     def _operand_selection_impl(self):
@@ -226,48 +151,71 @@ class Operator(ABC):
         """
         pass
 
-class RandomRouteReassignment(Operator):
-    def __init__(self, sln: FullSolution):
-        use_reassign_at = (len(sln.vehicles) < sln.num_routes_lb/len(sln.vehicles)*2)
 
-        if use_reassign_at:
-            base_operator = ReassignRouteAt(sln)
-        else:
-            base_operator = ReassignRouteBefore(sln)
-
+class BestOfCandidates(Operator):
+    """
+    Evaluates candidate operand tuples purely and returns the argmax. Because _evaluate_impl
+    never mutates (for non-escape-hatch operators), this is exact and works with any pure
+    BL operator with no bespoke logic per operator.
+    """
+    def __init__(self, sln: FullSolution, base_operator: OperatorBL, candidate_source, k: int | None = None):
+        assert not base_operator._evaluates_by_applying, (
+            f"{type(base_operator).__name__} mutates during evaluation; incompatible with BestOfCandidates.")
         super().__init__(sln, base_operator)
-
-        self.use_reassign_at = use_reassign_at
+        self.candidate_source = candidate_source   # callable(sln) -> Iterable[operand tuple]
+        self.k = k
 
     def _operand_selection_impl(self):
-        # If operator is ReassignRouteBefore, do the first version.
-        if self.use_reassign_at:
-            return self.pick_vehicles_and_route_indices()
-        else:
-            return self.pick_route_and_dest_info()
+        raise NotImplementedError("BestOfCandidates overrides propose() directly.")
 
-    def pick_route_and_dest_info(self):
+    def propose(self) -> Move:
+        t0 = time.perf_counter()
+        best, best_imp = Move(MoveKind.NOOP), -float('inf')
+        for i, operands in enumerate(self.candidate_source(self.sln)):
+            if self.k is not None and i >= self.k:
+                break
+            move = self.base_operator.evaluate(*operands)
+            if move.is_actionable and move.improvement > best_imp:
+                best, best_imp = move, move.improvement
+        self.segment_time += time.perf_counter() - t0
+        self.segment_proposals += 1
+        self.prev_operands = best.operands
+        self.last_move = best
+        self._update_reporting_stats(best)
+        return best
+
+
+def random_intra_route_swap_pairs(sln, k=20):
+    route = sln.choose_random_nonempty_route()
+    if route is None or route.path_len <= 1:
+        return
+    for _ in range(k):
+        i, j = random.sample(range(route.path_len), 2)
+        yield route, i, route, j
+
+
+def random_route_pairs(sln, k=10):
+    for _ in range(k):
+        r1, r2 = sln.all_routes.choose_n(2)
+        if not (r1.is_trivial or r2.is_trivial):
+            yield r1, r2
+
+class RandomRouteReassignment(Operator):
+    def __init__(self, sln: FullSolution):
+        super().__init__(sln, ReassignRouteBefore(sln))
+
+    def _operand_selection_impl(self):
         sln = self.sln
 
-        route = random.choice(sln.all_routes)
-        vehicle = random.choice(sln.vehicles)
-        insert_index = random.randint(0, len(vehicle.routes))
+        src_route = sln.choose_random_nonempty_route()
+        dest_route = sln.choose_random_route_insertion_destination()
 
-        return route, vehicle, insert_index
+        if src_route is None or dest_route is None:
+            # Degenerate solution (no routes / no vehicles) - report as invalid rather than raising.
+            src_route = src_route if src_route is not None else sln.all_routes.choose_random()
+            dest_route = dest_route if dest_route is not None else src_route
 
-    def pick_vehicles_and_route_indices(self):
-        sln = self.sln
-        vehicles = sln.vehicles
-
-        if len(vehicles) == 0 or all(len(v.routes) == 0 for v in vehicles):
-            raise ValueError("No routes to pick from")
-
-        (src_vehicle, src_index) = pick_random_vehicle_and_route_index(sln)
-
-        dest_vehicle = random.choice(sln.vehicles)
-        dest_index = random.randint(0, len(dest_vehicle.routes))
-
-        return src_vehicle, src_index, dest_vehicle, dest_index
+        return src_route, dest_route
 
 class RandomCustomerReassignment(Operator):
     def __init__(self, sln: FullSolution):
@@ -284,6 +232,7 @@ class RandomCustomerReassignment(Operator):
         while not valid and tries < retries:
             src_route = random.choice(sln.all_routes)
             valid = len(src_route.path) >= 1
+            tries += 1
 
         if not valid:
             # Note: src_route is still an empty src_route.
@@ -303,55 +252,49 @@ class RandomCustomerReassignmentToNewRoute(Operator):
         sln = self.sln
 
         src_route = random.choice(sln.all_routes)
-        if len(src_route.path) == 0:
-            return src_route, 0, sln.vehicles[0], 0, sln.depots[0]
-
-        customer_id = random.randint(0, len(src_route.path) - 1)
-
-        dest_vehicle = random.choice(sln.vehicles)
-        dest_index = random.randint(0, len(dest_vehicle.routes))
+        dest_route = sln.choose_random_route_insertion_destination()
         depot = random.choice(sln.depots)
 
-        return src_route, customer_id, dest_vehicle, dest_index, depot
+        if len(src_route.path) == 0 or dest_route is None:
+            return src_route, 0, dest_route if dest_route is not None else src_route, depot
+
+        customer_id = random.randint(0, len(src_route.path) - 1)
+        return src_route, customer_id, dest_route, depot
 
 class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator):
     def __init__(self, sln: FullSolution, k):
         super().__init__(sln, ReassignCustomerToNewRouteBefore(sln))
         self.k = k
 
+    # TODO(future-operator): this always relocates the worst customer to a brand-new route.
+    # Worth generalizing later to also try reassigning/swapping it into an existing route.
     def _operand_selection_impl(self):
         sln = self.sln
 
-        route = None
-        customer_id = -1
-        worst_travel = -float('inf')
+        route, customer_id = None, -1
+        best_removal_improvement = -float('inf')
 
-        for i in range(0, self.k):
+        for _ in range(self.k):
             src_route = random.choice(sln.all_routes)
             if len(src_route.path) == 0:
                 continue
 
             src_customer_id = random.randint(0, len(src_route.path) - 1)
+            # "Worst" = highest cost-delta-if-removed among sampled customers, i.e. the most
+            # problematic customer currently in place -- not accounting for where it'd go next.
+            removal_improvement = self.base_operator.improvement_from_deltas(
+                src_route.cost_deltas_if_customer_popped(src_customer_id))
+            if removal_improvement > best_removal_improvement:
+                best_removal_improvement = removal_improvement
+                route, customer_id = src_route, src_customer_id
 
-            prev_node = src_route.start_depot if src_customer_id == 0 else src_route.path[src_customer_id-1]
-            customer = src_route.path[src_customer_id]
-            next_node = src_route.end_depot if src_customer_id == len(src_route.path) - 1\
-                else src_route.path[src_customer_id+1]
-
-            distance = prev_node.distance(customer) + customer.distance(next_node)
-            if distance > worst_travel:
-                worst_travel = distance
-                route = src_route
-                customer_id = src_customer_id
-
-        if route is None:
-            return sln.all_routes[0], -1, sln.vehicles[0], -1, sln.depots[0]
-
-        dest_vehicle = random.choice(sln.vehicles)
-        dest_index = random.randint(0, len(dest_vehicle.routes))
+        dest_route = sln.choose_random_route_insertion_destination()
         depot = random.choice(sln.depots)
 
-        return route, customer_id, dest_vehicle, dest_index, depot
+        if route is None or dest_route is None:
+            return sln.all_routes[0], -1, sln.all_routes[0], depot
+
+        return route, customer_id, dest_route, depot
 
 
 class RandomCustomerSwap(Operator):
@@ -376,23 +319,9 @@ class RandomCustomerSwap(Operator):
 
         return route1, index1, route2, index2
 
-class CustomerBestOfkSwapInRandomRoute(Operator):
+class CustomerBestOfkSwapInRandomRoute(BestOfCandidates):
     def __init__(self, sln: FullSolution):
-        super().__init__(sln, SwapCustomersAt(sln))
-
-    def _operand_selection_impl(self):
-        sln = self.sln
-        route = random.choice(sln.all_routes)
-        path = route.path
-        path_len = len(path)
-
-        if path_len <= 1:
-            return route, 0, route, 0
-
-        (index1, index2, _) = max(((index1, index2, self.base_operator.compute_improvement(route, index1, route, index2))
-                                   for index1 in range(0, path_len) for index2 in range(0, path_len) if index1 < index2), key = lambda tp: tp[2])
-
-        return route, index1, route, index2
+        super().__init__(sln, SwapCustomersAt(sln), random_intra_route_swap_pairs, k=20)
 
 
 class RandomRoutePermutation(Operator):
@@ -431,7 +360,7 @@ class DisposeOfTrivialRoutes(Operator):
 
     def _operand_selection_impl(self):
         # Will dispose of all routes that do absolutely nothing: no customers served, end where they started.
-        return [route for route in self.sln.all_routes if route.should_dispose()],
+        return RouteSet(route for route in self.sln.all_routes if route.should_dispose()),
 
 class DisposeOfEmptyRoutes(Operator):
     def __init__(self, sln: FullSolution):
@@ -439,7 +368,7 @@ class DisposeOfEmptyRoutes(Operator):
 
     def _operand_selection_impl(self):
         # Will dispose of all routes that can be disposed: they serve no customers, but may do a depot-to-depot move.
-        return [route for route in self.sln.all_routes if route.can_dispose()],
+        return RouteSet(route for route in self.sln.all_routes if route.can_dispose()),
 
 class SplitRandomRoute(Operator):
     def __init__(self, sln: FullSolution):
@@ -448,15 +377,18 @@ class SplitRandomRoute(Operator):
     def _operand_selection_impl(self):
         sln = self.sln
 
-        (vehicle, route_id) = pick_random_vehicle_and_route_index(sln)
-        route = vehicle.routes[route_id]
+        route = random.choice(sln.all_routes)
         path = route.path
 
-        # TODO: Investigate handling of no-ops vs invalid operations. (No-ops should be invalid? Or should be separately marked.)
         if len(path) <= 1:
-            return vehicle, route_id, 0, sln.depots[0] # should gracefully report as a no-op instead of an invalid operation
+            return route, 0, sln.depots[0]   # reported as invalid by SplitRoute._evaluate_impl
 
         depot = random.choice(sln.depots)
         split_index = random.randint(1, len(path) - 1)
 
-        return vehicle, route_id, split_index, depot
+        return route, split_index, depot
+
+
+class CombineRandomRoutes(BestOfCandidates):
+    def __init__(self, sln: FullSolution, k: int = 10):
+        super().__init__(sln, CombineRoutes(sln), random_route_pairs, k=k)
