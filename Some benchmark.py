@@ -58,7 +58,7 @@ def sort_colors_dnf(nums):
             mid += 1
         elif nums == 1:
             mid += 1
-        else:  # num == 2
+        else:  # Num == 2
             if nums[high] != 2:
                 nums[high], nums[mid] = 2, nums[high]
             high -= 1

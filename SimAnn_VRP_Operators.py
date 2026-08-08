@@ -6,8 +6,8 @@ import bisect
 import math
 
 ### Commented operators for reference. No need to reimplement ###
-# Permute route with permutation array: route.permute(permutation)
-# Permute subset of route: route.subpermute(permutation)
+# Permute src_route with permutation array: src_route.permute(permutation)
+# Permute subset of src_route: src_route.subpermute(permutation)
 
 class OperatorStats:
     def __init__(self):
@@ -35,18 +35,18 @@ def pick_random_vehicle_and_route_index(sln):
     """
     Uniformly pick one (vehicle, route_index) among all routes in sln.
 
-    We build a cumulative‐sum array of route counts [r0, r0+r1, r0+r1+r2, ...],
+    We build a cumulative‐sum array of src_route counts [r0, r0+r1, r0+r1+r2, ...],
     where ri = len(vehicle_i.routes). Then pick a random integer R in [0, total-1],
     find the vehicle split_index via bisect, and subtract to get route_index.
     """
-    # 1) Build the cumulative sums array: of route counts per vehicle
+    # 1) Build the cumulative sums array: of src_route counts per vehicle
     #   e.g. len(v) = [3, 0, 5, 2]  → cum = [3, 3, 8, 10]
     cum_counts = list(itertools.accumulate(len(v.routes) for v in vehicles))  # e.g. [3, 0, 5, 2]
 
     total_routes = cum_counts[-1]
 
     # 2) Draw a random integer in [1, total_routes]. (The cumsum elements only work for 1-indexed arrays - so we
-    #   subtract 1 from the resulting route index at the end.
+    #   subtract 1 from the resulting src_route index at the end.
     if total_routes == 1:
         R = 1
     else:
@@ -58,7 +58,7 @@ def pick_random_vehicle_and_route_index(sln):
     vehicle_idx = bisect.bisect_left(cum_counts, R)
     R -= 1
 
-    # 4) Compute the route’s local split_index within that vehicle:
+    # 4) Compute the src_route’s local split_index within that vehicle:
     #    If vehicle_idx == 0, then route_idx = R: split_index in list = split_index in vehicle
     #    Otherwise route_idx = R - cum_counts[vehicle_idx-1] :
     #    (split_index within vehicle = overall split_index - routes before current vehicle)
@@ -233,14 +233,14 @@ class RandomRouteReassignment(Operator):
         if use_reassign_at:
             base_operator = ReassignRouteAt(sln)
         else:
-            base_operator = ReassignRoute(sln)
+            base_operator = ReassignRouteBefore(sln)
 
         super().__init__(sln, base_operator)
 
         self.use_reassign_at = use_reassign_at
 
     def _operand_selection_impl(self):
-        # If operator is ReassignRoute, do the first version.
+        # If operator is ReassignRouteBefore, do the first version.
         if self.use_reassign_at:
             return self.pick_vehicles_and_route_indices()
         else:
@@ -286,7 +286,7 @@ class RandomCustomerReassignment(Operator):
             valid = len(src_route.path) >= 1
 
         if not valid:
-            # Note: src_route is still an empty route.
+            # Note: src_route is still an empty src_route.
             return src_route, 0, src_route, 0
 
         src_index = random.randint(0, len(src_route.path)-1)
@@ -297,7 +297,7 @@ class RandomCustomerReassignment(Operator):
 
 class RandomCustomerReassignmentToNewRoute(Operator):
     def __init__(self, sln: FullSolution):
-        super().__init__(sln, ReassignCustomerToNewRouteAt(sln))
+        super().__init__(sln, ReassignCustomerToNewRouteBefore(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -316,7 +316,7 @@ class RandomCustomerReassignmentToNewRoute(Operator):
 
 class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator):
     def __init__(self, sln: FullSolution, k):
-        super().__init__(sln, ReassignCustomerToNewRouteAt(sln))
+        super().__init__(sln, ReassignCustomerToNewRouteBefore(sln))
         self.k = k
 
     def _operand_selection_impl(self):
@@ -443,7 +443,7 @@ class DisposeOfEmptyRoutes(Operator):
 
 class SplitRandomRoute(Operator):
     def __init__(self, sln: FullSolution):
-        super().__init__(sln, SplitRouteAt(sln))
+        super().__init__(sln, SplitRoute(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln

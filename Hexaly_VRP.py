@@ -27,7 +27,7 @@ def build_model():
 
         capacity_per_vehicle = 25
 
-        # Customer data: id -> (x, y, demand)
+        # Customer data: cID -> (x, y, demand)
         num_customers = 200
         customers = [
             {
@@ -50,7 +50,7 @@ def build_model():
         dc_dist = m.array(m.array(dist(depot, customer) for customer in customers) for depot in depots)
         cc_dist = m.array(m.array(dist(customer, customer2) for customer2 in customers) for customer in customers)
 
-        # Each route gets a vehicle ID and a depot to end at.
+        # Each src_route gets a vehicle ID and a depot to end at.
         route_vehicles = m.array(m.int(0, num_vehicles) for i in range(max_routes))
         route_vehicles.name = "route_vehicles"
 
@@ -69,8 +69,8 @@ def build_model():
         route_start_locations = m.array(vehicle_start_locations[i][route["vehicle"]] for (i, route) in routes.items())
         route_end_locations = m.array(route["end"] for route in routes.values())
 
-        #vehicle_usage_count = m.array(m.sum(route_indexes, m.lambda_function(lambda i: m.iif(m.and_(v == route_vehicles[i],
-        #                                                                                            m.count(route_paths[i]) > 0),
+        #vehicle_usage_count = m.array(m.sum(route_indexes, m.lambda_function(lambda cID: m.iif(m.and_(v == route_vehicles[cID],
+        #                                                                                            m.count(route_paths[cID]) > 0),
          #                                                                                    1, 0)))
          #                             for v in vehicles)
 

@@ -123,7 +123,7 @@ class Vector(Matrix):
         if len(self) != 3 or len(other) != 3:
             raise ValueError(f"Vectors must have 3 elements, not {len(self)} and {len(other)}. May change this later.")
 
-        # Cross product between self and other
+        # Cross product between self and dest_route
         return cpo(self.v)*other
 
     def to_list(self):

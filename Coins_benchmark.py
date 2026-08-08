@@ -169,7 +169,7 @@ class Solution:
 
             if amount%self.revGCD[i]:
                 # Cannot build amount with the coins remaining
-                #print(f"GCD prune! Coin={coin}, i={i}")
+                #print(f"GCD prune! Coin={coin}, cID={cID}")
                 break
 
             maxNumCoin = amount // coin
@@ -190,10 +190,10 @@ class Solution:
                 canProveImpossible = False
                 break
 
-            # mygcd = self.revCumGCDs[i]
+            # mygcd = self.revCumGCDs[cID]
             # if amount % mygcd != 0:
             # Remaining coins can't be used to reach target due to incompatible gcd! Break.
-            # print(f"Wow it actually happened with i={i}, amount={amount}, gcd={mygcd}.")
+            # print(f"Wow it actually happened with cID={cID}, amount={amount}, gcd={mygcd}.")
             # canProveImpossible = False
             #    break
 
@@ -286,7 +286,7 @@ class Solution:
             print(f"isCanonical = {self.isWeaklyCanonical}")
 
             if self.isCanonical[0]:
-                # We're canonical! Turn the other stuff off baby, time to get greedy!
+                # We're canonical! Turn the dest_route stuff off baby, time to get greedy!
                 useSylvesterStabilityBounds = False
                 useBFSStabilityBounds = False
 
@@ -438,7 +438,7 @@ class Solution:
             if i == self.n - 2:
                 nextCost = self.solve2Coin(amount)
 
-            #    verify = self.coinChange2DDP(amount, i)
+            #    verify = self.coinChange2DDP(amount, cID)
             #    if(nextCost != verify):
             #        print(f"2-coin results: amount={amount}, coin={coin}, coins[-1]={self.coins[-1]}, coins[-2]={self.coins[-2]}, cost={nextCost}, trueCost={verify}")
             #    else:
@@ -482,7 +482,7 @@ class Solution:
 
             if amount%self.revGCD[i]:
                 # Cannot build amount with the coins remaining
-                #print(f"GCD prune! Coin={coin}, i={i}")
+                #print(f"GCD prune! Coin={coin}, cID={cID}")
                 break
 
             if self.useCanonicity and self.isWeaklyCanonical[i]:
@@ -510,10 +510,10 @@ class Solution:
                 canProveImpossible = False
                 break
 
-            # mygcd = self.revCumGCDs[i]
+            # mygcd = self.revCumGCDs[cID]
             # if amount % mygcd != 0:
             # Remaining coins can't be used to reach target due to incompatible gcd! Break.
-            # print(f"Wow it actually happened with i={i}, amount={amount}, gcd={mygcd}.")
+            # print(f"Wow it actually happened with cID={cID}, amount={amount}, gcd={mygcd}.")
             # canProveImpossible = False
             #    break
 
@@ -596,7 +596,7 @@ class Solution:
                     q = (c_j // c_next) + 1
                     w = q * c_next
 
-                    # TEST: Does Greedy(w) using the WHOLE suffix [i...n-1]
+                    # TEST: Does Greedy(w) using the WHOLE suffix [cID...n-1]
                     # match the Optimal result? Since the set ends in 1,
                     # the 'Optimal' is found by testing the greedy solve
                     # starting from the NEXT coin (j+1).
@@ -778,7 +778,7 @@ class Solution:
             self.remainderBasedStableBounds[i] = (searched, isComplete)
             if not isComplete:
                 # We didn't finish this one, and thus will likely not finish any others. Break and save nothing.
-                # i and all smaller i will populate self.remainderBasedStableBounds with {} on access and give no info.
+                # cID and all smaller cID will populate self.remainderBasedStableBounds with {} on access and give no info.
                 break
 
     def solve2Coin(self, a):

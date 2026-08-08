@@ -7,16 +7,16 @@ setup_code = """
 from random import sample
 
 class Route:
-    def __init__(self, id):
-        self.id = id
+    def __init__(self, cID):
+        self.cID = cID
     def __hash__(self):
-        return id(self)  # simulate identity-based hash
-    def __eq__(self, other):
-        return self is other
+        return cID(self)  # simulate identity-based hash
+    def __eq__(self, dest_route):
+        return self is dest_route
     def dispose(self):
         pass
 
-all_routes = [Route(i) for i in range(30000)]
+all_routes = [Route(cID) for cID in range(30000)]
 routes_to_remove = sample(all_routes, 100)
 """
 

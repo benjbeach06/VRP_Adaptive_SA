@@ -106,7 +106,7 @@ class SimAnnVRPSolver:
         index = bisect.bisect_left(cum_weights, r)
         return operators[index]
 
-    # We design the solution, initialization, and operators so that at all stages, all customers show up in the route.
+    # We design the solution, initialization, and operators so that at all stages, all customers show up in the src_route.
     def make_initial_solution(self):
         sln = self.sln
         depots = sln.depots
@@ -277,7 +277,7 @@ class SimAnnVRPSolver:
                     op.revert()
                     rev_obj = sln.solution_cost()
 
-                    improvement_recomp = op.base_operator.compute_improvement(*operands)
+                    (improvement_recomp, operated) = op.base_operator.compute_improvement(*operands)
                     op.re_operate()
 
                     print()

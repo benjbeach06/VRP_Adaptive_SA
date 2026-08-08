@@ -140,7 +140,7 @@ def build_vrp_model():
             end_dist = end.distance(path[-1])
             mid_dist = sum(path[i].distance(path[i+1]) for i in range(path_len - 1))
 
-            print(f"Cost breakdown for route {i} : start_dist={start_dist}, end_dist={end_dist}, mid_dist={mid_dist}, capacity={route.recompute_current_load()}")
+            print(f"Cost breakdown for src_route {i} : start_dist={start_dist}, end_dist={end_dist}, mid_dist={mid_dist}, capacity={route.recompute_current_load()}")
 
 
     print("We dID it!")
