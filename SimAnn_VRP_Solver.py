@@ -1,4 +1,4 @@
-from SimAnn_VRP_Core_Model import *
+#from SimAnn_VRP_Core_Model import *
 from SimAnn_VRP_Operators import *
 import math
 import time
@@ -10,6 +10,43 @@ import heapq
 
 def argmin(values):
     return min(range(len(values)), key=values.__getitem__)
+
+
+# TODO(debug-tooling): improvements to the verification machinery, ordered by payoff. Each of
+# these was reconstructed ad hoc while chasing the depot-usage / combine-linkage bug set, and
+# would have found those bugs immediately (and at their true source) had it already existed.
+#
+# 1) Visit-linkage checks in _check_solution_invariants. It currently covers depot counts, the
+#    vehicle route chain, successor start_depot agreement, and cached load -- but NOT the visit
+#    doubly-linked list: last_visit.prev_visit is path[-1], path[-1].next_visit is last_visit,
+#    first_visit.next_visit is path[0], and path[i].prev_visit is path[i-1] for all i. A
+#    combine_with bug left last_visit.prev_visit pointing at the pre-merge last customer; it was
+#    invisible here and only surfaced later as a wrong ChangeEndDepot delta in a different
+#    operator. This is the single highest-value addition.
+#
+# 2) Structured debug findings instead of formatted print() strings. Emit records
+#    (operator, check_kind, predicted, actual, operands) where check_kind is one of
+#    delta_mismatch / revert_not_restored / invariant_violated, and aggregate on check_kind.
+#    Free-form strings are easy to bucket wrongly: grouping on the text before the first ':'
+#    silently merges "revert() did not restore objective" into the delta-mismatch bucket, which
+#    sent a debugging pass after the wrong bug class for several rounds.
+#
+# 3) Per-term delta reporting as its own debug level. Compare move.deltas against a diff of two
+#    objective_terms() calls field by field and report WHICH term is wrong. "improvement off by
+#    27.78" is a search; "travel_distance wrong, other four exact" is a location. This is what
+#    localized both the intra-route overload bug and the combine-with-next travel bug.
+#
+# 4) Iteration-count termination alongside max_time. Wall-clock termination makes runs
+#    non-reproducible: an instrumented run executes a different number of iterations than a clean
+#    one, so it explores a different trajectory and may not reproduce the bug at all. A fixed
+#    iteration budget makes runs comparable, bisectable, and deterministic given a seed.
+#
+# 5) A per-operator property harness in the repo (not scratch scripts). For each BL operator, on
+#    random legal operands: assert evaluate() is pure (objective_terms unchanged), assert
+#    per-term deltas match ground truth after apply, assert invariants hold, then revert and
+#    assert an exact structural+cost fingerprint round-trip. Revert-exactness is the check that
+#    caught CombineRoutes failing to restore route1's end depot -- a bug no accepted-move check
+#    can see, since it only manifests on the apply->revert path.
 
 class SimAnnVRPSolver:
     def __init__(self, sln: FullSolution, max_time: int = 120):
@@ -123,9 +160,8 @@ class SimAnnVRPSolver:
         customers = sln.customers
 
         vehicles = sln.vehicles
-        all_routes = sln.all_routes
 
-        customers_remaining = sln.customers.copy()
+        customers_remaining = customers.copy()
 
         def get_closest_depot(customer: Customer):
             return depots[argmin([customer.distance(depot) for depot in depots])]
@@ -205,7 +241,8 @@ class SimAnnVRPSolver:
             self.curr_objective -= move.improvement
             self.best_objective = min(self.best_objective, self.curr_objective)
 
-    def _check_solution_invariants(self, sln: FullSolution) -> list[str]:
+    @staticmethod
+    def _check_solution_invariants(sln: FullSolution) -> list[str]:
         # debug_level >= 2 structural checks, lifted from the old inline blocks and adapted to
         # walk prev_route/next_route chains instead of RouteSet.index (which doesn't exist).
         problems = []
@@ -343,7 +380,17 @@ class SimAnnVRPSolver:
                         problems = self._check_solution_invariants(sln)
                         if problems:
                             print(f"[debug] invariant violations mid-rejection-check for {type(op).__name__}: {problems}")
+                            problems = self._check_solution_invariants(sln)
                     op.revert()   # something is applied at this point either way -- always revert
+                    recompute = op.base_operator.evaluate(*move.operands)
+                    op.revert()
+
+                    if debug_level >= 2:
+                        problems = self._check_solution_invariants(sln)
+                        if problems:
+                            print(f"[debug] invariant violations mid-rejection-check for {type(op).__name__}: {problems}")
+                            problems = self._check_solution_invariants(sln)
+
                     reverted_obj = sln.solution_cost()
                     if abs(reverted_obj - pre_op_obj) >= 1e-6:
                         print(f"[debug] {type(op).__name__}: revert() did not restore objective "

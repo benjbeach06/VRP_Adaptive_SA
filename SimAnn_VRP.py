@@ -9,9 +9,9 @@ def build_vrp_model():
 
     # Depots
     depots = [
-        Depot(location = (10, 10), supply_limit = 35, vehicle_count = 1),
-        Depot(location = (50, 50), supply_limit = 35, vehicle_count = 1),
-        Depot(location = (90, 10), supply_limit = 35, vehicle_count = 1),
+        Depot(location = (10, 10), supply_limit = 35, vehicle_count = 1, dID = 0),
+        Depot(location = (50, 50), supply_limit = 35, vehicle_count = 1, dID = 1),
+        Depot(location = (90, 10), supply_limit = 35, vehicle_count = 1, dID = 2),
     ]
 
     # Customers

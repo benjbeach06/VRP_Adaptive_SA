@@ -199,9 +199,6 @@ class Depot(Node):
         self.supply_limit: Num = supply_limit
         self.vehicle_count: int = vehicle_count
 
-    def __repr__(self):
-        return f"{self.dID}"
-
     def _copy_data(self, source: Node):
         assert isinstance(source, Depot)
 
@@ -209,6 +206,12 @@ class Depot(Node):
         self.dID = source.dID
         self.supply_limit = source.supply_limit
         self.vehicle_count = source.vehicle_count
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return f"DEP{self.dID}"
 
 _exDepot = Depot(dID=0, location=(0, 0))
 _exDepot_vars = vars(_exDepot).keys()
@@ -237,6 +240,12 @@ class VirtualDepot(Depot):
         # 3) if self is not virtual, object.__eq__ is called
         return isinstance(other, VirtualDepot)
 
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return f"(ᅲ_ᅲ)"
+
 
 class Customer(Node):
     cID: int
@@ -247,15 +256,18 @@ class Customer(Node):
         self.cID = cID
         self.demand = demand
 
-    def __repr__(self):
-        return f"{self.cID}"
-
     def _copy_data(self, source: Node):
         assert isinstance(source, Customer)
         super()._copy_data(source)
 
         self.cID = source.cID
         self.demand = source.demand
+
+    def __str__(self):
+        return f"c{self.cID}"
+
+    def __repr__(self):
+        return str(self)
 
 _exCustomer = Customer(cID=0, location=(0, 0))
 _exCustomer_vars = vars(_exCustomer).keys()
@@ -273,9 +285,17 @@ class RouteVisit(Node, ABC):
       3) To swap depots for a src_route, the corresponding RouteVisit can directly query info from its parent depot
     """
 
-    route: Route | None = None
-    prev_visit: RouteVisit | None = None
-    next_visit: RouteVisit | None = None
+    # Annotations only -- initialized per-instance below (see FullSolution for why defaults here
+    # would be shared class state). next_visit is deliberately NOT initialized anywhere:
+    #   - LastRouteVisit overrides it as a read-only property (derived from the next route), so
+    #     assigning it on every RouteVisit would raise AttributeError.
+    #   - CustomerVisit and FirstRouteVisit narrow it to a non-Optional type ("never None"), so
+    #     seeding it with None would contradict their own declared invariant.
+    # Every construction path links it immediately (Route.__init__ -> populate_derived_data, or
+    # insert/append -> link_customer), so there is no window where it is read unset.
+    route: Route | None
+    prev_visit: RouteVisit | None
+    next_visit: RouteVisit | None
 
     # Populate on linkage
     depot_num_uses: DefaultDict[Depot, int]
@@ -286,6 +306,10 @@ class RouteVisit(Node, ABC):
             "location mismatch between node and forwarded kwargs"
         kwargs.setdefault('location', node.location)
         super().__init__(**kwargs)
+
+        # Subclasses overwrite route (and link the visits) after calling super().__init__().
+        self.route = None
+        self.prev_visit = None
 
     #region Objective and state-related computations
     # We choose not to use full objective deltas here: full related processing done in Route
@@ -489,9 +513,13 @@ class CustomerVisit(Customer, RouteVisit):
         if self.route is None:
             raise ValueError(f"Cannot unlink CustomerVisit {self.cID}: it is already unlinked!")
 
-        # If it's the last in the src_route and removal will deactivate the vehicle, the start depot is no longer used
-        if self.will_deactivate_depot_if_removed():
-            self.prev_visit.uncount_route_in_depot() # type: ignore - If it will deactivate: src_route exists and prev visit is a FirstRouteVisit
+        # If it's the last in the src_route, the src_route goes inactive and stops using its start depot.
+        # NOTE: this is the USAGE-COUNT question ("does depot_num_uses drop by 1"), NOT the
+        # activation question ("does the depot go from used to unused"). Gating this on
+        # will_deactivate_depot_if_removed() instead would skip the decrement whenever 2+ routes
+        # start at that depot, leaving depot_num_uses permanently too high.
+        if self.will_decrement_depot_usage_if_removed():
+            self.prev_visit.uncount_route_depot_use() # type: ignore - If it decrements: src_route exists and this is its only customer, so prev visit is a FirstRouteVisit
 
         # Link neighbors
         prev_visit = self.prev_visit
@@ -513,6 +541,12 @@ class CustomerVisit(Customer, RouteVisit):
 
         # Note: This calls both Customer and RouteVisit versions of _copy_data
         super()._copy_data(source)
+
+    def __str__(self):
+        return str(self.source_customer)
+
+    def __repr__(self):
+        return str(self)
 
     #endregion
 
@@ -670,6 +704,12 @@ class FirstRouteVisit(Depot, RouteVisit):
         # Note: This calls both Customer and RouteVisit versions of _copy_data
         super()._copy_data(source)
 
+    def __str__(self):
+        return str(self.source_depot)
+
+    def __repr__(self):
+        return str(self)
+
     #endregion
 
 
@@ -716,7 +756,7 @@ class LastRouteVisit(Depot, RouteVisit):
         if next_first_visit is not None:
             travel_delta += next_first_visit.start_travel_delta_if_depot_swapped(new_depot)
 
-        return new_length - old_length
+        return travel_delta
 
     def travel_delta_if_inserting_customer_before_this(self, new_customer: Customer):
         # Change to src_route travel distance if inserting new_customer before this
@@ -804,15 +844,25 @@ class LastRouteVisit(Depot, RouteVisit):
         # Note: This calls both Customer and RouteVisit versions of _copy_data
         super()._copy_data(source)
 
+
+    def __str__(self):
+        return str(self.source_depot)
+
+    def __repr__(self):
+        return str(self)
+
     #endregion
 #endregion
 
 # Route-like objects, including start-point and end-point
 class VehicleNode(ABC):
-    vehicle: Vehicle | None = None
+    # Annotations only -- each concrete subclass initializes these in its own __init__.
+    # VehicleNode has no __init__ of its own (subclasses don't chain to one), so defaults here
+    # would be shared class state rather than per-instance.
+    vehicle: Vehicle | None
 
-    prev_route: VehicleNode | None = None
-    next_route: VehicleNode | None = None
+    prev_route: VehicleNode | None
+    next_route: VehicleNode | None
     # Only field guarantees are vehicle, prev_route, and next_route.
 
     def is_adjacent_with(self, other: Route | None):
@@ -843,7 +893,7 @@ class VehicleNode(ABC):
 
 class FirstRoute(VehicleNode):
     # First src_route is the start of a vehicle's path, and an "end" to the virtual src_route preceding the vehicle's path
-    prev_route: None = None
+    prev_route: None    # always None: nothing precedes the head sentinel
     next_route: Route | LastRoute
 
     end_depot: Depot
@@ -851,10 +901,18 @@ class FirstRoute(VehicleNode):
     def __init__(self, depot: Depot):
         self.end_depot = depot
 
+        self.vehicle = None      # set by Vehicle.__init__/__copy__
+        self.prev_route = None   # structurally always None
+        self.next_route = None   # type: ignore # immediately overwritten by LastRoute._link_after
+
     def __copy__(self):
         new_route = FirstRoute.__new__(FirstRoute)
 
         new_route.end_depot = self.end_depot
+        # __new__ bypasses __init__: no class-level defaults remain, so set these explicitly.
+        new_route.vehicle = None      # reassigned by Vehicle.__copy__
+        new_route.prev_route = None
+        new_route.next_route = None   # type: ignore # relinked by Vehicle.__copy__
 
         return new_route
 
@@ -866,12 +924,15 @@ class FirstRoute(VehicleNode):
 class LastRoute(VehicleNode):
     # Last src_route is the end of a vehicle's path, and a "start" to the virtual src_route succeeding the vehicle's path
     prev_route: FirstRoute | Route
-    next_route: None = None
+    next_route: None    # always None: nothing follows the tail sentinel
 
     start_depot: Depot
 
     def __init__(self, prev_route: FirstRoute | Route):
-        self._link_after(prev_route)
+        self.vehicle = None      # set by Vehicle.__init__/__copy__
+        self.next_route = None   # structurally always None
+
+        self._link_after(prev_route)   # sets self.prev_route and start_depot
 
     # We use only _link_after and not _link_before: Anytime a src_route links to a prior src_route, it inherits its start depot
     def _link_after(self, route: FirstRoute | Route):
@@ -885,6 +946,10 @@ class LastRoute(VehicleNode):
         new_route = LastRoute.__new__(LastRoute)
 
         new_route.start_depot = self.start_depot
+        # __new__ bypasses __init__: no class-level defaults remain, so set these explicitly.
+        new_route.vehicle = None       # reassigned by Vehicle.__copy__
+        new_route.prev_route = None    # type: ignore # relinked by Vehicle.__copy__
+        new_route.next_route = None
 
         return new_route
 
@@ -904,7 +969,7 @@ class Route(VehicleNode):
 
         # List choice: We will often want to swap a customer range or permute customers, requiring a fixed-order data structure.
         path: list[CustomerVisit]
-        vehicle: Vehicle | None = None
+        vehicle: Vehicle | None
         first_visit: FirstRouteVisit
         last_visit: LastRouteVisit
 
@@ -915,6 +980,12 @@ class Route(VehicleNode):
         depot_num_uses: defaultdict[Depot, int]
 
         def __init__(self, path: list[CustomerVisit], end_depot: Depot):
+            # MUST come first: populate_derived_data/count_load_change below read self.vehicle,
+            # and there is no class-level default to fall back on.
+            self.vehicle = None
+            self.prev_route = None   # None iff unassigned; set when linked into a vehicle
+            self.next_route = None
+
             self.path = path # List of customer visits
 
             self.first_visit = FirstRouteVisit(VirtualDepot(), self)
@@ -1900,8 +1971,22 @@ class Route(VehicleNode):
             assert self is not other, "Cannot combine with self"
             assert isinstance(other, Route), "Can only combine with Routes"
 
-            # We're just removing the current end depot stop.
-            return self.last_visit.travel_delta_if_removed
+            # Combining with the immediate successor collapses the shared depot stop, which is TWO
+            # visit objects at the same location: self's last_visit (end depot) and other's
+            # first_visit (start depot). Both disappear, replaced by one direct edge from self's
+            # last customer to other's first customer.
+            # NOTE: self.last_visit.travel_delta_if_removed is NOT usable here -- it removes a
+            # single node, and that node's next_visit is other.first_visit, sitting at the very
+            # same location, so it always evaluates to exactly 0.
+            # Both routes are guaranteed non-empty by the callers (CombineRoutes rejects empty
+            # operands), so prev/next visits below are real customers.
+            curr_visit_before_end = self.last_visit.prev_visit
+            other_visit_after_start = other.first_visit.next_visit
+
+            old_distance = self.last_move_distance() + other.first_move_distance()
+            new_distance = curr_visit_before_end.distance(other_visit_after_start)
+
+            return new_distance - old_distance
 
         def travel_delta_for_combine_with_prev(self) -> Num:
             other = self.prev_route
@@ -2414,8 +2499,11 @@ class Route(VehicleNode):
 
         #region Customer move operations
         def insert_customer(self, customer: CustomerVisit, index):
-            # Just inserts the customer. Updates start depot's "num_used" if the src_route was trivial pre-insert.
-            if self.is_trivial:
+            # Just inserts the customer. Updates start depot's "num_used" if the src_route goes
+            # inactive -> active. Mirrors CustomerVisit.unlink_from_route's decrement: the rule is
+            # "uses its depot" = "has customers AND is assigned" (is_active), NOT is_trivial --
+            # an empty route with start != end is non-trivial but still inactive/uncounted.
+            if self.is_inactive and self.is_active_after_customer_add():
                 self.first_visit.count_route_depot_use()
 
             self.register_customer_add_in_vehicle()
@@ -2425,8 +2513,8 @@ class Route(VehicleNode):
             self.link_customer(index)
 
         def append_customer(self, customer):
-            # Just appends the customer. Updates start depot's "num_used" if the src_route was trivial pre-insert.
-            if self.is_trivial:
+            # Just appends the customer. Same inactive -> active depot-usage rule as insert_customer.
+            if self.is_inactive and self.is_active_after_customer_add():
                 self.first_visit.count_route_depot_use()
 
             self.register_customer_add_in_vehicle()
@@ -2485,6 +2573,9 @@ class Route(VehicleNode):
             # annotations with no class-level default).
             new_route.prev_route = None
             new_route.next_route = None
+            # Likewise for vehicle: Vehicle.__copy__ overwrites this for assigned routes, but an
+            # unassigned copy would otherwise have no vehicle attribute at all.
+            new_route.vehicle = None
 
             # Can't use count_load_change here: Parent vehicle already copies correct overload info during its copy
             new_route.current_load = self.current_load
@@ -2552,6 +2643,12 @@ class Route(VehicleNode):
         def split_at(self, split_index: int, refill_depot: Depot) -> Route:
             # Removes the customers at or after the index. Then returns a new src_route with those customers and
             # the given end depot. Idea is that vehicle will handle the insertion of the new src_route.
+            # TODO(revert-identity): take an optional `into: Route | None = None` and, when given,
+            # refill THAT route object with the tail customers instead of constructing a new one.
+            # Needed so CombineRoutes._revert_impl can restore the route combine_with disposed of,
+            # rather than substituting a fresh object. Right now any caller holding a reference to
+            # the original route (an already-evaluated Move's operands, a future undo stack, a
+            # debug re-evaluate) is left pointing at a dead route after an apply->revert cycle.
             path = self.path
             path_len = self.path_len
 
@@ -2615,6 +2712,13 @@ class Route(VehicleNode):
 
             # Relink dest_route's first customer in self (links src_route ends together), and reassign others' routes as self
             self.relink_customer(start_len)
+            # Relink the new final customer to SELF's last_visit too. The appended customers still
+            # carry other's internal links, so without this the tail stays wired to
+            # other.last_visit and self.last_visit.prev_visit keeps pointing at self's OLD last
+            # customer -- which silently corrupts every delta computed off last_visit
+            # (get_replacement_travel_delta, distance_in, ...). Only a no-op when other had
+            # exactly 1 customer, in which case relink_customer(start_len) already did it.
+            self.relink_customer(self.path_len - 1)
             other.last_visit.route = self
             for i in range(start_len+1, self.path_len):
                 self.path[i].route = self
@@ -2623,6 +2727,14 @@ class Route(VehicleNode):
 
             # Clear dest_route src_route
             other.set_values(path=[])
+
+        def __str__(self):
+            return (str(self.start_depot.dID) + '->' +
+                    '->'.join(str(customer.cID) for customer in self.path) + '->' +
+                    str(self.end_depot.dID))
+
+        def __repr__(self):
+            return str(self)
 
         #endregion
 
@@ -2940,13 +3052,13 @@ class Vehicle:
     routes: RouteSet
 
     # Number of overloaded routes, carrying too much supply.
-    num_routes_overloaded: int = 0
+    num_routes_overloaded: int
 
     # Number of nonempty (active) routes. (NOTE: active routes can still be nontrivial! Another op will be required to deactivate them.)
-    num_routes_with_customers: int = 0
+    num_routes_with_customers: int
 
     # Total number of customers. A vehicle is active iff it serves customers.
-    num_customers: int = 0
+    num_customers: int
 
     # First and last routes (head and tail)
     first_route: FirstRoute
@@ -2959,6 +3071,11 @@ class Vehicle:
         self.initial_depot = initial_depot # type:ignore # data
         self.capacity = capacity # data
         self.routes = RouteSet() # Core decision for the vehicle
+
+        # Running counters, maintained incrementally by register_*_change_in_vehicle
+        self.num_routes_overloaded = 0
+        self.num_routes_with_customers = 0
+        self.num_customers = 0
 
         first_route = FirstRoute(initial_depot)
         last_route = LastRoute(first_route)
@@ -3135,6 +3252,21 @@ class Vehicle:
 
         return new_vehicle
 
+    def __str__(self):
+        curr_route = self.first_route
+        str_reps = [str(curr_route.end_depot)]
+        curr_route = curr_route.next_route
+
+        while isinstance(curr_route, Route):
+            route_rep = '->'.join(str(customer) for customer in curr_route.path) + '->' + str(curr_route.end_depot)
+            str_reps.append(route_rep)
+            curr_route = curr_route.next_route
+
+        return '->'.join(str_reps)
+
+    def __repr__(self):
+        return str(self)
+
     #endregion
 
     #region postprocessing
@@ -3148,39 +3280,43 @@ class Vehicle:
 
 
 class FullSolution:
-    all_routes: RouteSet = RouteSet()
-    vehicles: list[Vehicle] = []
+    # NOTE: annotations only -- no values. Every field is initialized per-instance in __init__.
+    # These must never carry defaults: a class-level `vehicles: list = []` (or RouteSet()/defaultdict())
+    # is created ONCE and shared by every FullSolution ever built, so in-place mutation
+    # (all_routes.add, vehicles.append, depot_num_uses[d] += 1) leaks across instances.
+    all_routes: RouteSet
+    vehicles: list[Vehicle]
 
-    empty_routes: RouteSet = RouteSet()
+    empty_routes: RouteSet
 
     # Objective terms
-    unit_travel_cost: Num = 0
-    cost_per_vehicle: Num = 0
-    cost_per_depot: Num = 0
+    unit_travel_cost: Num
+    cost_per_vehicle: Num
+    cost_per_depot: Num
 
     # unit feasibility penalty for overloading a src_route. $1000 per unit to replace a broken truck should suffice XD
     # Strongly encourages splitting or reassigning customers from overloaded routes
-    unit_overload_penalty: Num = 1000
+    unit_overload_penalty: Num
     # Strongly discourages temporary src_route overloading. Per-vehicle computation prevents penalization of splitting
     # two severely overloaded routes into one far less overloaded src_route.
-    vehicle_overload_penalty: Num = 100000  # activated feasibility penalty for overloading any vehicle in a src_route. Don't wanna replace the truck.
+    vehicle_overload_penalty: Num  # activated feasibility penalty for overloading any vehicle in a src_route. Don't wanna replace the truck.
 
     # Problem data
-    depots: list[Depot] = []
-    customers: list[Customer] = []
-    capacity_per_vehicle: list[Num] = []
+    depots: list[Depot]
+    customers: list[Customer]
+    capacity_per_vehicle: list[Num]
 
-    total_customer_capacity: Num = 0
-    mean_customer_capacity: Num = 0
+    total_customer_capacity: Num
+    mean_customer_capacity: Num
 
-    min_vehicle_capacity: Num = 1e100
-    max_vehicle_capacity: Num = -1e100
-    mean_vehicle_capacity: Num = 0
-    total_vehicle_capacity: Num = 0
+    min_vehicle_capacity: Num
+    max_vehicle_capacity: Num
+    mean_vehicle_capacity: Num
+    total_vehicle_capacity: Num
 
-    num_routes_lb: int = -1
+    num_routes_lb: int
 
-    depot_num_uses: defaultdict[Depot, int] = defaultdict[Depot, int](int)
+    depot_num_uses: defaultdict[Depot, int]
 
     # Bumped by OperatorBL.apply/revert. A cheap guard against applying a Move that was
     # evaluate()'d against a since-mutated solution.
@@ -3189,10 +3325,39 @@ class FullSolution:
     # that pair (e.g. a future multi-operator lookahead), bump this in the core mutators too
     # (insert_customer, pop_customer_at, swap_customers, permute, set_end_depot,
     # link_to_vehicle_*, unlink_from_vehicle, split_at, combine_with).
-    version: int = 0
+    version: int
 
     def __init__(self):
-        pass # Default initialization already done above
+        self.all_routes = RouteSet()
+        self.vehicles = []
+
+        self.empty_routes = RouteSet()
+
+        # Objective terms
+        self.unit_travel_cost = 0
+        self.cost_per_vehicle = 0
+        self.cost_per_depot = 0
+        self.unit_overload_penalty = 1000
+        self.vehicle_overload_penalty = 100000
+
+        # Problem data
+        self.depots = []
+        self.customers = []
+        self.capacity_per_vehicle = []
+
+        self.total_customer_capacity = 0
+        self.mean_customer_capacity = 0
+
+        self.min_vehicle_capacity = 1e100
+        self.max_vehicle_capacity = -1e100
+        self.mean_vehicle_capacity = 0
+        self.total_vehicle_capacity = 0
+
+        self.num_routes_lb = -1
+
+        self.depot_num_uses = defaultdict[Depot, int](int)
+
+        self.version = 0
 
     #region Data setters
     def set_customers(self, customers):
@@ -3511,6 +3676,11 @@ class FullSolution:
 
         new_sln.depot_num_uses = copy.copy(self.depot_num_uses)
 
+        # __new__ bypasses __init__, so EVERY field must be set explicitly here -- there are no
+        # class-level defaults to fall back on any more. These two are easy to forget:
+        new_sln.empty_routes = RouteSet(route for route in new_sln.all_routes if route.is_empty)
+        new_sln.version = self.version
+
         # Re-link depot_num_uses.
         # IMPORTANT to do it here so all objects see the copy of depot_num_uses instead of the original.
         new_sln.link_num_depot_uses_to_all()
@@ -3525,3 +3695,9 @@ class FullSolution:
         snapshot = copy.copy(self)
         obj = snapshot.solution_cost()
         return obj, snapshot
+
+    def __str__(self) -> str:
+        return '\n'.join(str(vehicle) for vehicle in self.vehicles)
+
+    def __repr__(self):
+        return str(self)

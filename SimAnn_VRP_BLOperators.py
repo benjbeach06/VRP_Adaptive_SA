@@ -212,6 +212,15 @@ class ReassignCustomerAt(OperatorBL):
             else:
                 deltas += dest_route.cost_deltas_if_customer_inserted(customer, dest_index)
 
+        if src_route == dest_route:
+            # An intra-route move only reorders the path, so the route's load -- and therefore both
+            # load-derived terms -- cannot change. They must be forced to zero rather than summed:
+            # pop-delta and insert-delta are each measured against the SAME original load, and
+            # max(0, load - capacity) is nonlinear, so they don't cancel. E.g. at load == capacity
+            # the pop contributes 0 and the insert contributes +demand, inventing overload that
+            # never happens.
+            deltas = deltas._replace(total_route_overload=0, vehicles_overloaded=0)
+
         return deltas
 
     def _apply_impl(self, src_route: Route, src_index, dest_route: Route, dest_index):
@@ -424,19 +433,34 @@ class CombineRoutes(OperatorBL):
 
     def _apply_impl(self, route1: Route, route2: Route):
         split_index = route1.path_len
-        other_end_depot = route2.end_depot
+        # Capture route1's OWN end depot -- combine_with is about to overwrite it with route2's.
+        # split_at(i, refill_depot) assigns refill_depot to the FIRST half (route1) and hands the
+        # SECOND half whatever route1's end depot currently is. So to undo the combine we must
+        # feed route1's original end depot back in; the rebuilt second half then inherits
+        # route2's end depot automatically, since that's what route1 is carrying post-combine.
+        # (Passing route2's end depot here instead is a no-op that silently leaves route1 with
+        # route2's end depot forever.)
+        own_end_depot = route1.end_depot
         other_prev_route = route2.prev_route
         route1.combine_with(route2)
         # combine_with only unlinks route2 from its vehicle -- it doesn't know about
         # FullSolution.all_routes, so that bookkeeping is on us (mirrors SplitRoute's add).
         self.sln.all_routes.remove(route2)
-        return route1, split_index, other_end_depot, other_prev_route
+        return route1, split_index, own_end_depot, other_prev_route
 
     def _revert_impl(self, revert_info):
-        route1, split_index, other_end_depot, other_prev_route = revert_info
-        new_route = route1.split_at(split_index, other_end_depot)
+        # TODO(revert-identity): restore into the ORIGINAL route2 object rather than building a
+        # new one -- see the matching TODO on Route.split_at (needs its planned `into=` argument,
+        # and route2 itself captured in the revert payload). Until then, revert is only
+        # value-correct, not identity-correct: after an apply->revert cycle this Move's operands
+        # still name the disposed route2, so re-evaluating the same Move (as the solver's
+        # debug_level>=3 check does) reads a dead route.
+        route1, split_index, own_end_depot, other_prev_route = revert_info
+        new_route = route1.split_at(split_index, own_end_depot)
         self.sln.all_routes.add(new_route)
         if other_prev_route is not None:
+            # split_at already linked new_route directly after route1; move it back to route2's
+            # original slot (a no-op when route2 was route1's immediate successor).
             new_route.link_to_vehicle_after(other_prev_route)
 
 # TODO(future-operator): SubPermuteRoute, using the existing (unused)
