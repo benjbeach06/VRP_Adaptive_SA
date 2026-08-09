@@ -205,7 +205,15 @@ def fingerprint(sln: FullSolution):
 
 
 def term_deltas(before: ObjectiveTermDelta, after: ObjectiveTermDelta) -> ObjectiveTermDelta:
-    return ObjectiveTermDelta(*(a - b for a, b in zip(after, before)))
+    """Field-by-field after - before. Written out rather than splatted so each term keeps its
+    declared type (a generator splat widens every field to the union of all of them)."""
+    return ObjectiveTermDelta(
+        travel_distance=after.travel_distance - before.travel_distance,
+        vehicles_activated=after.vehicles_activated - before.vehicles_activated,
+        depots_activated=after.depots_activated - before.depots_activated,
+        total_route_overload=after.total_route_overload - before.total_route_overload,
+        vehicles_overloaded=after.vehicles_overloaded - before.vehicles_overloaded,
+    )
 #endregion
 
 

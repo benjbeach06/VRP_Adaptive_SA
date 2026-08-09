@@ -49,7 +49,7 @@ def argmin(values):
 #    can see, since it only manifests on the apply->revert path.
 
 class SimAnnVRPSolver:
-    def __init__(self, sln: FullSolution, max_time: int = 120):
+    def __init__(self, sln: FullSolution, max_time: float = 120):
         self.sln = sln
         self.operators: list[Operator] = []
 

@@ -41,7 +41,10 @@ def matrix_customers(n=24):
     return [Customer(i, (11 * i % 70, (17 * i) % 61 + 3), 1) for i in range(n)]
 
 
-class OperatorContractMixin:
+class OperatorContractBase(SeededTestCase):
+    """Shared contract assertion. A TestCase subclass (not a bare mixin) so the
+    assert* helpers it calls are actually declared; it defines no test_* methods,
+    so discovery collects nothing from it directly."""
     def assert_operator_contract(self, sln, operator, operands, label):
         """Purity -> per-term delta -> invariants -> exact revert, for one evaluated move."""
         before_fingerprint = fingerprint(sln)
@@ -72,7 +75,7 @@ class OperatorContractMixin:
         return True
 
 
-class ReassignRouteMatrix(OperatorContractMixin, SeededTestCase):
+class ReassignRouteMatrix(OperatorContractBase):
     """
     Every src position x destination kind x end-depot assignment x empty-route placement.
 
@@ -141,7 +144,7 @@ class ReassignRouteMatrix(OperatorContractMixin, SeededTestCase):
         self.assertGreater(checked, 0, "matrix produced no actionable moves")
 
 
-class CombineRoutesMatrix(OperatorContractMixin, SeededTestCase):
+class CombineRoutesMatrix(OperatorContractBase):
     """Adjacent-next, adjacent-prev and non-adjacent combines across route lengths and depots."""
 
     def _build(self, len1, len2, end1, end2, adjacency):
@@ -176,7 +179,7 @@ class CombineRoutesMatrix(OperatorContractMixin, SeededTestCase):
         self.assertGreater(checked, 0, "matrix produced no actionable moves")
 
 
-class RandomisedOperatorContract(OperatorContractMixin, SeededTestCase):
+class RandomisedOperatorContract(OperatorContractBase):
     """
     Drives the real Operator wrappers so operands come from the same selection logic the solver
     uses, then checks the BL contract on whatever they produce. Covers operators (and operand

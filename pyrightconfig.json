@@ -1,0 +1,17 @@
+{
+  "include": [
+    "SimAnn_VRP.py",
+    "SimAnn_VRP_Core_Model.py",
+    "SimAnn_VRP_BLOperators.py",
+    "SimAnn_VRP_Operators.py",
+    "SimAnn_VRP_Solver.py",
+    "tests"
+  ],
+
+  "pythonVersion": "3.14",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "warning",
+
+  "reportIncompatibleMethodOverride": "warning",
+  "reportIncompatibleVariableOverride": "none"
+}
