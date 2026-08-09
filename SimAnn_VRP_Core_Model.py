@@ -16,6 +16,7 @@ from collections import defaultdict
 from math import hypot, ceil
 
 from functools import lru_cache
+from enum import Enum, auto
 from typing import NamedTuple
 
 from abc import ABC, abstractmethod
@@ -713,6 +714,18 @@ class FirstRouteVisit(Depot, RouteVisit):
     #endregion
 
 
+class NextRouteKind(Enum):
+    """
+    What follows a route in its vehicle chain. Names the three-state distinction that a bare
+    `next_route is not None` check silently collapses into two -- the single most common bug
+    shape in this model, since a LastRoute sentinel passes an `is not None` guard and then fails
+    on any Route-only attribute.
+    """
+    NONE       = auto()   # route is unassigned: no successor at all
+    ROUTE      = auto()   # a real successor Route, which owns a FirstRouteVisit to chain into
+    LAST_ROUTE = auto()   # the vehicle's tail sentinel: stores a start_depot, has no visits
+
+
 class LastRouteVisit(Depot, RouteVisit):
     prev_visit: CustomerVisit | FirstRouteVisit # prev visit is never None
     next_visit: FirstRouteVisit | None # next visit is either None or the start of the next src_route
@@ -734,11 +747,74 @@ class LastRouteVisit(Depot, RouteVisit):
     def next_visit(self) -> FirstRouteVisit | None:
         # A route's next_route is a real Route, a LastRoute sentinel (end of vehicle), or None
         # (unassigned). Only a real next Route has a first_visit to chain into.
+        # NOTE: a None here means "no next VISIT", which is NOT the same as "no next route" --
+        # the tail sentinel has a start_depot but no visits. Use next_route_type when the
+        # difference matters, and replace_next_start_depot/get_next_start_depot to act on it.
         next_route = self.route.next_route
         if isinstance(next_route, Route):
             return next_route.first_visit
 
         return None
+
+    @property
+    def next_route_type(self) -> NextRouteKind:
+        """Which of the three successor states this route is in. See NextRouteKind."""
+        route = self.route
+        next_route = route.next_route if route is not None else None
+
+        if isinstance(next_route, Route):
+            return NextRouteKind.ROUTE
+        if isinstance(next_route, LastRoute):
+            return NextRouteKind.LAST_ROUTE
+        return NextRouteKind.NONE
+
+    def get_next_start_depot(self) -> Depot | None:
+        """
+        The depot the successor starts from, whichever kind of successor it is.
+        None only when this route is unassigned (no successor at all).
+        """
+        kind = self.next_route_type
+        if kind is NextRouteKind.NONE:
+            return None
+
+        route = self.route
+        assert route is not None   # guaranteed by kind != NONE
+        next_route = route.next_route
+
+        if kind is NextRouteKind.ROUTE:
+            assert isinstance(next_route, Route)
+            return next_route.start_depot
+
+        assert isinstance(next_route, LastRoute)
+        return next_route.start_depot
+
+    def replace_next_start_depot(self, new_depot: Depot) -> None:
+        """
+        Push this route's new end depot onto whatever follows it, so the successor's recorded
+        start depot never drifts from this route's end depot.
+
+        Both successor kinds must be handled: a real Route carries the change through its
+        FirstRouteVisit (which also does the depot-usage accounting), while the tail sentinel
+        just stores the depot. Updating only the Route case leaves LastRoute.start_depot stale
+        as soon as a vehicle's FINAL route changes end depot -- which silently corrupts
+        Vehicle.final_depot and any "insert before LastRoute" pricing that reads
+        next_route.start_depot to determine the moved route's new start.
+        """
+        kind = self.next_route_type
+        if kind is NextRouteKind.NONE:
+            return   # unassigned route: nothing downstream to update
+
+        route = self.route
+        assert route is not None   # guaranteed by kind != NONE
+        next_route = route.next_route
+
+        if kind is NextRouteKind.ROUTE:
+            assert isinstance(next_route, Route)
+            next_route.first_visit.replace_depot(new_depot)
+            return
+
+        assert isinstance(next_route, LastRoute)
+        next_route.set_start_depot(new_depot)
 
     def depot_is(self, node: Depot):
         return self.source_depot == node
@@ -822,10 +898,9 @@ class LastRouteVisit(Depot, RouteVisit):
 
         # NOTE: This can't trigger a depot activation change for this src_route - just the next one.
 
-        # 1. Update the next src_route's first depot, if there is a next src_route.
-        next_start = self.next_visit
-        if next_start is not None:
-            next_start.replace_depot(new_depot)
+        # 1. Update whatever follows this src_route, so its start depot tracks our new end depot.
+        # Handles both successor kinds (real Route and tail sentinel); see the method.
+        self.replace_next_start_depot(new_depot)
 
         # 2. Update the fields for this visit to match the new depot
         depot_fields = vars(new_depot)
@@ -2134,8 +2209,17 @@ class Route(VehicleNode):
             route1 = self
             route2 = self.next_route
 
-            if route2 is None:
-                raise ValueError("No next src_route to swap with.")
+            # isinstance, not `is not None`: next_route is None only when unassigned -- once
+            # assigned it is a real Route OR the vehicle's LastRoute sentinel, and LastRoute has
+            # no is_empty/end_depot/first_visit. A `is not None` check lets the sentinel through
+            # and raises AttributeError two lines down. (route3 below already gets this right.)
+            if not isinstance(route2, Route):
+                if route2 is None:
+                    raise ValueError("No next src_route to swap with.")
+                # route2 is the LastRoute sentinel: self is the vehicle's final route, so there
+                # is nothing after it to swap with. No-op rather than an error, matching the
+                # empty-route case below (soft rule on calculate, hard on operate).
+                return ObjectiveTermDelta()
 
             if route1.is_empty or route2.is_empty:
                 # Cannot swap with empty routes (soft rule on calculate, hard on operate)

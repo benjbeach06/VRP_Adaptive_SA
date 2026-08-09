@@ -234,7 +234,7 @@ class SimAnnVRPSolver:
         empty_routes = RouteSet(r for r in self.sln.all_routes if r.is_empty)
         if not empty_routes:
             return
-        move = self._dispose_bl.evaluate(empty_routes)
+        move = self._dispose_bl.evaluate((empty_routes,))
         if move.is_actionable:
             self._dispose_bl.apply(move)
             self._dispose_bl.commit()
@@ -382,7 +382,7 @@ class SimAnnVRPSolver:
                             print(f"[debug] invariant violations mid-rejection-check for {type(op).__name__}: {problems}")
                             problems = self._check_solution_invariants(sln)
                     op.revert()   # something is applied at this point either way -- always revert
-                    recompute = op.base_operator.evaluate(*move.operands)
+                    recompute = op.base_operator.evaluate(move.operands)
                     op.revert()
 
                     if debug_level >= 2:
