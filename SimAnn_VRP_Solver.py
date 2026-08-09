@@ -148,7 +148,7 @@ class SimAnnVRPSolver:
         cum_weights = list(itertools.accumulate(op.weight for op in operators))
         total = cum_weights[-1]
 
-        r = random.random()*total
+        r = rand_unit()*total
 
         index = bisect.bisect_left(cum_weights, r)
         return operators[index]
@@ -331,7 +331,7 @@ class SimAnnVRPSolver:
 
             improvement = move.improvement
             loglog_acceptance_threshold = -float('inf') if improvement >= 0 else math.log(-improvement, 2) - self.log_temperature
-            accept = improvement > 0 or math.log(-math.log(random.random()), 2) >= loglog_acceptance_threshold
+            accept = improvement > 0 or math.log(-math.log(rand_unit()), 2) >= loglog_acceptance_threshold
 
             if accept:
                 if improvement < 0 and self.curr_objective <= self.best_objective + 1e-12:

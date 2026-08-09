@@ -210,7 +210,7 @@ def random_intra_route_swap_pairs(sln: FullSolution, k: int = 20) -> Iterator[Sw
     if route is None or route.path_len <= 1:
         return
     for _ in range(k):
-        i, j = random.sample(range(route.path_len), 2)
+        i, j = rand_distinct_indices(route.path_len, 2)
         yield route, i, route, j
 
 
@@ -250,7 +250,7 @@ class RandomCustomerReassignment(Operator[ReassignCustomerAtOps]):
         valid = False
         src_route = None
         while not valid and tries < retries:
-            src_route = random.choice(sln.all_routes)
+            src_route = rand_choice(sln.all_routes)
             valid = len(src_route.path) >= 1
             tries += 1
 
@@ -258,9 +258,9 @@ class RandomCustomerReassignment(Operator[ReassignCustomerAtOps]):
             # Note: src_route is still an empty src_route.
             return src_route, 0, src_route, 0
 
-        src_index = random.randint(0, len(src_route.path)-1)
-        dest_route = random.choice(sln.all_routes)
-        dest_index = random.randint(0, len(dest_route.path))
+        src_index = rand_int_inclusive(0, len(src_route.path)-1)
+        dest_route = rand_choice(sln.all_routes)
+        dest_index = rand_int_inclusive(0, len(dest_route.path))
 
         return src_route, src_index, dest_route, dest_index
 
@@ -271,14 +271,14 @@ class RandomCustomerReassignmentToNewRoute(Operator[ReassignCustomerToNewRouteOp
     def _operand_selection_impl(self):
         sln = self.sln
 
-        src_route = random.choice(sln.all_routes)
+        src_route = rand_choice(sln.all_routes)
         dest_route = sln.choose_random_route_insertion_destination()
-        depot = random.choice(sln.depots)
+        depot = rand_choice(sln.depots)
 
         if len(src_route.path) == 0 or dest_route is None:
             return src_route, 0, dest_route if dest_route is not None else src_route, depot
 
-        customer_id = random.randint(0, len(src_route.path) - 1)
+        customer_id = rand_int_inclusive(0, len(src_route.path) - 1)
         return src_route, customer_id, dest_route, depot
 
 class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator[ReassignCustomerToNewRouteOps]):
@@ -295,11 +295,11 @@ class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator[ReassignCustomerToNew
         best_removal_improvement = -float('inf')
 
         for _ in range(self.k):
-            src_route = random.choice(sln.all_routes)
+            src_route = rand_choice(sln.all_routes)
             if len(src_route.path) == 0:
                 continue
 
-            src_customer_id = random.randint(0, len(src_route.path) - 1)
+            src_customer_id = rand_int_inclusive(0, len(src_route.path) - 1)
             # "Worst" = highest cost-delta-if-removed among sampled customers, i.e. the most
             # problematic customer currently in place -- not accounting for where it'd go next.
             removal_improvement = self.base_operator.improvement_from_deltas(
@@ -309,7 +309,7 @@ class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator[ReassignCustomerToNew
                 route, customer_id = src_route, src_customer_id
 
         dest_route = sln.choose_random_route_insertion_destination()
-        depot = random.choice(sln.depots)
+        depot = rand_choice(sln.depots)
 
         if route is None or dest_route is None:
             return sln.all_routes[0], -1, sln.all_routes[0], depot
@@ -325,17 +325,17 @@ class RandomCustomerSwap(Operator[SwapCustomersAtOps]):
         sln = self.sln
 
         #NOTE: It's worse in this case than in the random reassignment case if the customers choices are invalid.
-        route1 = random.choice(sln.all_routes)
+        route1 = rand_choice(sln.all_routes)
 
         if len(route1.path) == 0:
             return route1, 0, route1, 0
 
-        index1 = random.randint(0, len(route1.path)-1)
-        route2 = random.choice(sln.all_routes)
+        index1 = rand_int_inclusive(0, len(route1.path)-1)
+        route2 = rand_choice(sln.all_routes)
 
         if len(route2.path) == 0:
             return route1, 0, route1, 0
-        index2 = random.randint(0, len(route2.path)-1)
+        index2 = rand_int_inclusive(0, len(route2.path)-1)
 
         return route1, index1, route2, index2
 
@@ -351,14 +351,14 @@ class RandomRoutePermutation(Operator[PermuteRouteOps]):
     def _operand_selection_impl(self):
         sln = self.sln
 
-        route = random.choice(sln.all_routes)
+        route = rand_choice(sln.all_routes)
 
         permutation = list(range(len(route.path)))
 
         if len(route.path) <= 1:
             return route, permutation
 
-        random.shuffle(permutation)
+        rand_shuffle(permutation)
 
         return route, permutation
 
@@ -369,8 +369,8 @@ class ChangeRandomEndDepot(Operator[ChangeEndDepotOps]):
     def _operand_selection_impl(self):
         sln = self.sln
 
-        route = random.choice(sln.all_routes)
-        depot = random.choice(sln.depots)
+        route = rand_choice(sln.all_routes)
+        depot = rand_choice(sln.depots)
 
         return route, depot
 
@@ -397,14 +397,14 @@ class SplitRandomRoute(Operator[SplitRouteOps]):
     def _operand_selection_impl(self):
         sln = self.sln
 
-        route = random.choice(sln.all_routes)
+        route = rand_choice(sln.all_routes)
         path = route.path
 
         if len(path) <= 1:
             return route, 0, sln.depots[0]   # reported as invalid by SplitRoute._evaluate_impl
 
-        depot = random.choice(sln.depots)
-        split_index = random.randint(1, len(path) - 1)
+        depot = rand_choice(sln.depots)
+        split_index = rand_int_inclusive(1, len(path) - 1)
 
         return route, split_index, depot
 

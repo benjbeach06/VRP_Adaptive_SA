@@ -5,6 +5,7 @@ from ftplib import all_errors
 
 from itertools import chain
 
+import numpy as np
 from numpy import cumsum, ndarray
 
 #from Temp_TimeIt import num_trials
@@ -22,6 +23,62 @@ from typing import NamedTuple
 from abc import ABC, abstractmethod
 
 Num = float | int
+
+#region Randomness
+# Single source of randomness for the whole solver: operand selection, RouteSet sampling, and the
+# Metropolis coin all draw from here. Owning one explicit generator (rather than the process-wide
+# `random` module) means a run is reproducible from one seed and cannot be perturbed by unrelated
+# code -- test harnesses, notebooks, library internals -- drawing from the global stream.
+#
+# Reproducibility matters here beyond tidiness: the solver is a long random walk, so a single
+# extra draw anywhere permanently diverges the trajectory. That is what makes an intermittent
+# bug non-bisectable, and it is why instrumenting a failing run can make the failure disappear.
+solver_rng: np.random.Generator = np.random.default_rng()
+
+
+def seed_solver_rng(seed) -> np.random.Generator:
+    """Reseed the shared generator. Call once before a solve to make it reproducible."""
+    global solver_rng
+    solver_rng = np.random.default_rng(seed)
+    return solver_rng
+
+
+def rand_unit() -> float:
+    """Uniform float in [0, 1). Replaces random.random()."""
+    return float(solver_rng.random())
+
+
+def rand_index(num_options: int) -> int:
+    """Uniform index in [0, num_options). Replaces random.randrange(num_options)."""
+    return int(solver_rng.integers(num_options))
+
+
+def rand_int_inclusive(low: int, high: int) -> int:
+    """Uniform int in [low, high]. Mirrors random.randint's INCLUSIVE upper bound."""
+    return int(solver_rng.integers(low, high + 1))
+
+
+def rand_choice(sequence):
+    """
+    Uniform element of an indexable sequence.
+
+    Deliberately not Generator.choice: that coerces its argument to an ndarray, which mangles
+    sequences of objects (Routes, Depots) and is far slower than one integer draw.
+    """
+    return sequence[int(solver_rng.integers(len(sequence)))]
+
+
+def rand_distinct_indices(num_options: int, count: int) -> list[int]:
+    """`count` distinct indices from [0, num_options). Replaces random.sample(range(n), k)."""
+    return [int(index) for index in solver_rng.choice(num_options, size=count, replace=False)]
+
+
+def rand_shuffle(items: list) -> None:
+    """In-place Fisher-Yates. Generator.shuffle expects array-likes, not plain object lists."""
+    for i in range(len(items) - 1, 0, -1):
+        j = int(solver_rng.integers(i + 1))
+        items[i], items[j] = items[j], items[i]
+#endregion
 
 #region Global helper functions
 
@@ -2883,7 +2940,7 @@ class RouteSet:
         """Return a random element in O(1) time."""
         if not self._items:
             raise IndexError("Cannot select from an empty RandomSet")
-        return random.choice(self._items)
+        return rand_choice(self._items)
 
     def pop_random(self) -> Route:
         """Remove and return a random element in O(1) time."""
@@ -2894,7 +2951,7 @@ class RouteSet:
 
     def choose_n(self, n: int) -> list[Route]:
         """Return n distinct random elements without removing them."""
-        indices = random.sample(range(len(self._items)), n)
+        indices = rand_distinct_indices(len(self._items), n)
         return [self._items[i] for i in indices]
 
     def pop_n(self, n: int) -> list[Route]:
@@ -3609,7 +3666,7 @@ class FullSolution:
 
         while True:
             # >=1 vehicle so eventually num_routes=0, num_options>0, and a vehicle's end is selected.
-            idx = random.randrange(0, num_options)
+            idx = rand_index(num_options)
             if idx >= num_routes:
                 route = vehicles[idx-num_routes].last_route
                 break
