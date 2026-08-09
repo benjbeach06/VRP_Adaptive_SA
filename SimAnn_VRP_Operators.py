@@ -82,6 +82,8 @@ class Operator(ABC):
         return move
 
     def apply(self, move: Move) -> bool:
+        # Caller (the solver loop) only calls this for a move that isn't already applied --
+        # see OperatorBL.apply()'s own assert.
         t0 = time.perf_counter()
         ok = self.base_operator.apply(move)
         dt = time.perf_counter() - t0
@@ -154,13 +156,12 @@ class Operator(ABC):
 
 class BestOfCandidates(Operator):
     """
-    Evaluates candidate operand tuples purely and returns the argmax. Because _evaluate_impl
-    never mutates (for non-escape-hatch operators), this is exact and works with any pure
-    BL operator with no bespoke logic per operator.
+    Evaluates candidate operand tuples and returns the argmax. Works with any BL operator, pure
+    or escape-hatch: a candidate whose evaluate() mutated the solution (move.already_applied) is
+    reverted immediately, before the next candidate is evaluated, so every candidate is always
+    priced against the same true baseline.
     """
     def __init__(self, sln: FullSolution, base_operator: OperatorBL, candidate_source, k: int | None = None):
-        assert not base_operator._evaluates_by_applying, (
-            f"{type(base_operator).__name__} mutates during evaluation; incompatible with BestOfCandidates.")
         super().__init__(sln, base_operator)
         self.candidate_source = candidate_source   # callable(sln) -> Iterable[operand tuple]
         self.k = k
@@ -169,6 +170,11 @@ class BestOfCandidates(Operator):
         raise NotImplementedError("BestOfCandidates overrides propose() directly.")
 
     def propose(self) -> Move:
+        # We're only ever evaluating candidates here, never committing to one -- so every
+        # candidate is reverted immediately after being measured, unconditionally (a no-op for
+        # pure operators, undoes the mutation for escape-hatch ones). That keeps every candidate
+        # priced against the same true baseline, and means the move we hand back is always
+        # not-yet-applied, same as a plain Operator's.
         t0 = time.perf_counter()
         best, best_imp = Move(MoveKind.NOOP), -float('inf')
         for i, operands in enumerate(self.candidate_source(self.sln)):
@@ -177,8 +183,15 @@ class BestOfCandidates(Operator):
             move = self.base_operator.evaluate(*operands)
             if move.is_actionable and move.improvement > best_imp:
                 best, best_imp = move, move.improvement
+            self.base_operator.revert()
         self.segment_time += time.perf_counter() - t0
         self.segment_proposals += 1
+        # best was reverted like every other candidate above, so it's not applied -- even though
+        # its own already_applied field (baked in at evaluate() time) may still say True.
+        # sln.version also moved on since `best` was evaluated (every candidate's evaluate+revert
+        # bumps it), so re-stamp that too: the solution content is identical to what it was when
+        # `best` was measured (everything got reverted), just under a later version number.
+        best = best._replace(already_applied=False, eval_version=self.sln.version)
         self.prev_operands = best.operands
         self.last_move = best
         self._update_reporting_stats(best)

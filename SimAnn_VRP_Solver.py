@@ -12,17 +12,17 @@ def argmin(values):
     return min(range(len(values)), key=values.__getitem__)
 
 class SimAnnVRPSolver:
-    def __init__(self, sln: FullSolution):
+    def __init__(self, sln: FullSolution, max_time: int = 120):
         self.sln = sln
         self.operators: list[Operator] = []
 
         self.segment_length = 100
         self.reaction_factor = 0.2
-        self.max_time = 120
+        self.max_time = max_time
 
         #self.cooling_factor = 0.93304 # Factor per 100 iterations
         self.cooling_factor = 1-1e-2 # Factor per iteration
-        self.log_cooling_factor = math.log(self.cooling_factor, 2)
+        self.log_cooling_factor = math.log2(self.cooling_factor)
         self.temperature = 0.0
         self.log_temperature = -100.0
 
@@ -205,7 +205,7 @@ class SimAnnVRPSolver:
             self.curr_objective -= move.improvement
             self.best_objective = min(self.best_objective, self.curr_objective)
 
-    def _check_solution_invariants(self, sln) -> list[str]:
+    def _check_solution_invariants(self, sln: FullSolution) -> list[str]:
         # debug_level >= 2 structural checks, lifted from the old inline blocks and adapted to
         # walk prev_route/next_route chains instead of RouteSet.index (which doesn't exist).
         problems = []
@@ -241,7 +241,7 @@ class SimAnnVRPSolver:
 
         return problems
 
-    def solve(self):
+    def solve(self, debug_level: int = 0):
         sln = self.sln
         initial_temp = 0.05 * self.best_objective
         self.temperature = initial_temp
@@ -259,7 +259,10 @@ class SimAnnVRPSolver:
         #     verify the rejection would have been valid had it been accepted. Only ever applies
         #     to moves that reached the accept/reject test (move.kind is VALID) -- INVALID/NOOP
         #     moves never reach that branch and must never be applied.
-        debug_level = 0
+        #debug_level = 0
+
+        pre_propose_obj = 0
+        #post_propose_obj = 0
 
         while elapsed_time < self.max_time:
             self.log_temperature += self.log_cooling_factor
@@ -278,11 +281,12 @@ class SimAnnVRPSolver:
             move = op.propose()
 
             if not move.is_actionable:
-                op.revert()   # no-op unless op's base operator mutated during propose() (escape hatch)
+                if move.already_applied:
+                    op.revert()
                 elapsed_time = time.time() - start_time
                 continue
 
-            if debug_level >= 1 and getattr(op.base_operator, "_evaluates_by_applying", False):
+            if debug_level >= 1 and move.already_applied:
                 post_propose_obj = sln.solution_cost()
                 if abs(move.improvement - (pre_propose_obj - post_propose_obj)) >= 1e-6:
                     print(f"[debug] {type(op).__name__} (escape-hatch): reported improvement {move.improvement} "
@@ -296,18 +300,20 @@ class SimAnnVRPSolver:
                 if improvement < 0 and self.curr_objective <= self.best_objective + 1e-12:
                     # Error-safe comparison of current and best objectives - relative error as abs/ave
                     # If we're disimproving from our running global optimum: take a snapshot
-                    # BEFORE stepping away from it. No revert/re-apply dance needed.
+                    # BEFORE stepping away from it.
                     self.take_sln_snapshot()
 
-                if debug_level >= 1 and not getattr(op.base_operator, "_evaluates_by_applying", False):
-                    preop_obj = sln.solution_cost()
-                    op.apply(move)
-                    postop_obj = sln.solution_cost()
-                    if abs(improvement - (preop_obj - postop_obj)) >= 1e-6:
-                        print(f"[debug] {type(op).__name__}: reported improvement {improvement} "
-                              f"!= measured {preop_obj - postop_obj}")
-                else:
-                    op.apply(move)
+                if not move.already_applied:
+                    if debug_level >= 1:
+                        pre_op_obj = sln.solution_cost()
+                        op.apply(move)
+                        post_op_obj = sln.solution_cost()
+                        if abs(improvement - (pre_op_obj - post_op_obj)) >= 1e-6:
+                            print(f"[debug] {type(op).__name__}: reported improvement {improvement} "
+                                  f"!= measured {pre_op_obj - post_op_obj}")
+                    else:
+                        op.apply(move)
+                # else: already mutated during propose() -- nothing left to operate.
 
                 if debug_level >= 2:
                     problems = self._check_solution_invariants(sln)
@@ -322,23 +328,30 @@ class SimAnnVRPSolver:
             else:
                 if debug_level >= 3:
                     # move.kind is VALID here (checked above) -- never force-apply an INVALID/NOOP move.
-                    preop_obj = sln.solution_cost()
-                    op.apply(move)
-                    postop_obj = sln.solution_cost()
-                    if abs(improvement - (preop_obj - postop_obj)) >= 1e-6:
+                    if move.already_applied:
+                        # Already mutated during propose() -- nothing to force-apply. Baseline is
+                        # from before THAT mutation, i.e. pre_propose_obj.
+                        pre_op_obj = pre_propose_obj
+                    else:
+                        pre_op_obj = sln.solution_cost()
+                        op.apply(move)
+                    post_op_obj = sln.solution_cost()
+                    if abs(improvement - (pre_op_obj - post_op_obj)) >= 1e-6:
                         print(f"[debug] {type(op).__name__} (rejected): reported improvement {improvement} "
-                              f"!= measured {preop_obj - postop_obj}")
+                              f"!= measured {pre_op_obj - post_op_obj}")
                     if debug_level >= 2:
                         problems = self._check_solution_invariants(sln)
                         if problems:
                             print(f"[debug] invariant violations mid-rejection-check for {type(op).__name__}: {problems}")
-                    op.revert()
+                    op.revert()   # something is applied at this point either way -- always revert
                     reverted_obj = sln.solution_cost()
-                    if abs(reverted_obj - preop_obj) >= 1e-6:
+                    if abs(reverted_obj - pre_op_obj) >= 1e-6:
                         print(f"[debug] {type(op).__name__}: revert() did not restore objective "
-                              f"({reverted_obj} != {preop_obj})")
+                              f"({reverted_obj} != {pre_op_obj})")
                 else:
-                    op.revert()   # move was never applied (unless escape-hatch, in which case this undoes it)
+                    if move.already_applied:
+                        op.revert()
+                    # else: never applied, nothing to revert
 
                 if debug_level >= 2:
                     problems = self._check_solution_invariants(sln)

@@ -704,9 +704,18 @@ class LastRouteVisit(Depot, RouteVisit):
         return self.source_depot == node
 
     def get_replacement_travel_delta(self, new_depot: Depot):
-        # Change to src_route travel distance if replacing the node here with a new one
+        # Travel delta if replacing own end depot in place:
+        # 1) Relink depot for this route's last move
+        # 2) Relink depot for next route's first move
         old_length = self.distance_in
         new_length = self.prev_visit.distance(new_depot)
+
+        travel_delta = new_length - old_length
+
+        next_first_visit = self.next_visit
+        if next_first_visit is not None:
+            travel_delta += next_first_visit.start_travel_delta_if_depot_swapped(new_depot)
+
         return new_length - old_length
 
     def travel_delta_if_inserting_customer_before_this(self, new_customer: Customer):
@@ -1331,36 +1340,22 @@ class Route(VehicleNode):
         #region Basic operations
 
         #region Changing end depot
-        def travel_delta_if_end_depot_changes(self, new_end_depot: Depot):
-            if self.is_inactive:
-                return 0 # We don't operate with inactive routes except for removal! So return 0 change
-
-            # Own last edge only: last_customer -> old_end becomes last_customer -> new_end.
-            # NOTE: deliberately does NOT include the successor's first-edge change (its start_depot
-            # must always equal our end_depot) -- travel_delta_for_combine_with_prev's empty-self
-            # branch reuses this function under a different equivalence where that term doesn't
-            # apply. cost_deltas_if_end_depot_changes (the actual ChangeEndDepot entry point) adds
-            # the successor term itself instead of folding it in here.
+        def travel_delta_if_end_depot_changes(self, new_end_depot: Depot) -> Num:
+            # Includes relinking the depot for the last move of this route and the first move of any next route
             return self.last_visit.get_replacement_travel_delta(new_end_depot)
 
         # Since we don't allow operations (except removal and customer insertion) for empty routes:
         #   if we're changing the end depot, this src_route is nonempty, and so our vehicle is active and will remain so.
 
-        def depot_activation_delta_if_end_depot_changes(self, new_end_depot: Depot):
+        def depot_activation_delta_if_end_depot_changes(self, new_end_depot: Depot) -> int:
             if self.is_empty:
                 return 0 # We don't operate with empty routes except for removal! So return 0 change
 
             depot_num_usage_deltas = self.depot_num_usage_deltas_if_end_depot_changes(new_end_depot)
             return self.depot_activation_delta_from_depot_num_usage_deltas(depot_num_usage_deltas, depot_num_uses=self.depot_num_uses)
 
-        def cost_deltas_if_end_depot_changes(self, new_end_depot: Depot):
+        def cost_deltas_if_end_depot_changes(self, new_end_depot: Depot) -> ObjectiveTermDelta:
             travel_delta = self.travel_delta_if_end_depot_changes(new_end_depot)
-
-            # The successor's first edge also changes (its start_depot must always equal our
-            # end_depot), unless we're the last real route in our vehicle (LastRoute sentinel).
-            next_route = self.next_route
-            if isinstance(next_route, Route):
-                travel_delta += next_route.first_visit.start_travel_delta_if_depot_swapped(new_end_depot)
 
             depot_activation_delta = self.depot_activation_delta_if_end_depot_changes(new_end_depot)
 
@@ -1372,14 +1367,14 @@ class Route(VehicleNode):
         #   Depot could be activated/deactivated. Amount of src_route overload could change.
 
         #region Travel-related computations
-        def travel_delta_if_removed(self):
+        def travel_delta_if_removed(self) -> Num:
             if self.is_trivial or not self.is_assigned:
                 return 0
 
             # Travel deltas are: from removing the first move, and from changing the start depot of the next src_route
             return self.first_visit.start_travel_delta_if_route_removed() + self.last_visit.end_travel_delta_if_route_removed()
 
-        def travel_delta_if_inserted_before(self, next_route: Route | LastRoute):
+        def travel_delta_if_inserted_before(self, next_route: Route | LastRoute) -> Num:
             # REQUIRE adjacent case to be gatekept by parent, calling full delta-comp fcn for swapping adjacent routes.
             assert not self.is_adjacent_with(next_route), "Wrong function for adjacent routes."
             if self.is_empty or next_route is self:
@@ -1858,7 +1853,7 @@ class Route(VehicleNode):
         #endregion
 
         #region Combining another src_route with this one
-        def travel_delta_for_combine_with(self, other: Route):
+        def travel_delta_for_combine_with(self, other: Route) -> Num:
             # Note: new end depot comes from dest_route src_route. And we don't combine routes with themselves.
             if self is other:
                 return 0
@@ -1873,7 +1868,7 @@ class Route(VehicleNode):
             # prev_start->...->prev_last->start->last becomes prev_start->...->last. So must treat combines with previous src_route differently for travel computations.
             return self.travel_delta_for_combine_with_nonadjacent(other)
 
-        def travel_delta_for_combine_with_nonadjacent(self, other: Route):
+        def travel_delta_for_combine_with_nonadjacent(self, other: Route) -> Num:
             # Note: new end depot comes from dest_route src_route.
             assert self is not other, "Cannot combine with self"
 
@@ -1898,20 +1893,22 @@ class Route(VehicleNode):
 
             return travel_delta
 
-        def travel_delta_for_combine_with_next(self):
+        def travel_delta_for_combine_with_next(self) -> Num:
             other = self.next_route
             # Note: new end depot comes from dest_route src_route. And we don't combine inactive routes.
             assert other is not None, "Next src_route does not exist."
             assert self is not other, "Cannot combine with self"
+            assert isinstance(other, Route), "Can only combine with Routes"
 
             # We're just removing the current end depot stop.
             return self.last_visit.travel_delta_if_removed
 
-        def travel_delta_for_combine_with_prev(self):
+        def travel_delta_for_combine_with_prev(self) -> Num:
             other = self.prev_route
             # Note: new end depot comes from dest_route src_route.
             assert other is not None, "Previous src_route does not exist."
             assert self is not other, "Cannot combine with self"
+            assert isinstance(other, Route), "Can only combine with Routes"
 
             # This one is by far the most complicated because of empty src_route interactions. Appending prev to end of self is a bit messy.
 
@@ -1929,7 +1926,8 @@ class Route(VehicleNode):
             # After:  other_start->other_start+1->...->other_end->next_start+1 -> Equal to replacing self end depot with other_end!
 
             if self.is_empty:
-                return self.travel_delta_if_end_depot_changes(other.end_depot)
+                # Then combine_with_prev just removes this route, in effect: other_end->end pops out.
+                return self.travel_delta_if_removed()
 
             # If self is not empty, Break it down:
             # 1) Route starts: Lose other_start->other_start+1 and other_end->start+1, gain other_start->start+1
@@ -1996,6 +1994,7 @@ class Route(VehicleNode):
             # Explicitly assume that valid swap vetting is done before this stage. We don't want to double-check these conditions again in production
             assert other is not None, "No next src_route to combine with"# If dest_route is None the operation is illegal.
             assert self is not other, "Cannot combine with self"
+            assert isinstance(other, Route), "Can only combine with Routes"
 
             # Why is it different? When dest_route is removed, the next src_route's start depot changes, and on combination, it changes again.
             # That is: the "sum of changes" approach calculates outcomes with the wrong predicted data, and

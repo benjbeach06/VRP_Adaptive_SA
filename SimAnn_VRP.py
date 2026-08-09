@@ -7,22 +7,23 @@ def build_vrp_model():
     # Random seed for reproducibility
     np.random.seed(42)
 
-    # Depot locations (x, y), and supply limits
-    depot_data = [
-        {"location": (10, 10), "supply_limit": 35, "vehicle_count": 1},
-        {"location": (50, 50), "supply_limit": 35, "vehicle_count": 1},
-        {"location": (90, 10), "supply_limit": 35, "vehicle_count": 1},
+    # Depots
+    depots = [
+        Depot(location = (10, 10), supply_limit = 35, vehicle_count = 1),
+        Depot(location = (50, 50), supply_limit = 35, vehicle_count = 1),
+        Depot(location = (90, 10), supply_limit = 35, vehicle_count = 1),
     ]
 
-    # Customer data: cID -> (x, y, demand)
+    # Customers
     num_customers = 200#5000
-    customer_data = [
-        {
-            "location": tuple(np.random.randint(0, 100, size=2)),
-            "demand": np.random.randint(1, 11)
-        }
-        for i in range(num_customers)
-    ]
+    generator = np.random.default_rng()
+
+    gen_customer_location = lambda : tuple(generator.uniform(low = 0, high = 2, size=2))
+    gen_customer_demand = lambda : int(generator.integers(1, 11))
+
+    customers: list[Customer] = [Customer(cID = i, location = gen_customer_location(),
+                                          demand = gen_customer_demand()) for i in range(num_customers)]
+
 
     base_supply_limit = 35
     base_vehicles_per_depot = 1
@@ -32,10 +33,6 @@ def build_vrp_model():
     cost_per_vehicle = 10
     cost_per_depot = 20
     unit_travel_cost = 1
-
-
-    depots = [Depot(i, depot["location"], depot["supply_limit"], depot["vehicle_count"]) for (i, depot) in enumerate(depot_data)]
-    customers = [Customer(i, customer["location"], customer["demand"]) for (i, customer) in enumerate(customer_data)]
 
 
     sln = FullSolution()
@@ -48,7 +45,7 @@ def build_vrp_model():
 
     sln.set_objectives(cost_per_depot = cost_per_depot, cost_per_vehicle = cost_per_vehicle, unit_travel_cost = unit_travel_cost)
 
-    solver = SimAnnVRPSolver(sln)
+    solver = SimAnnVRPSolver(sln, max_time=10)
 
     """
     route1 = Route([customers[cID] for cID in [1, 15, 18, 17, 5]], depots[2])
@@ -91,7 +88,7 @@ def build_vrp_model():
     """
 
     solver.make_initial_solution()
-    solver.solve()
+    solver.solve(debug_level=3)
 
     (obj, sln) = solver.get_best_snapshot()
 
@@ -102,16 +99,16 @@ def build_vrp_model():
     curr_obj = solver.curr_objective
 
     print('\n'.join(f"{key}, {value}" for (key,value) in
-                    {i: {"Path": ["d" + str(route.start_depot.cID)] +
+                    {i: {"Path": ["d" + str(route.start_depot.dID)] +
                                  [customer.cID for customer in route.path] +
-                                 ["d" + str(route.end_depot.cID)],
+                                 ["d" + str(route.end_depot.dID)],
                          "Vehicle": route.vehicle.cID,
                          "Cost": route.total_distance()}
                      for (i,route) in enumerate(all_routes)}.items()
                     )
     )
 
-    print('\n'.join(f"Total distance traveled for vehicle {vehicle.cID}: "
+    print('\n'.join(f"Total distance traveled for vehicle {vehicle.vID}: "
                     f"{vehicle.get_total_distance()}" for vehicle in vehicles))
 
     print(f"Total cost: "
@@ -121,9 +118,9 @@ def build_vrp_model():
           f"{sln.solution_cost()}")
 
     print(f"Infeasibility routes - {sln.total_overload()} total units:\n" +
-          "\n".join("[" +', '.join(["d" + str(route.start_depot.cID)] +
+          "\n".join("[" +', '.join(["d" + str(route.start_depot.dID)] +
                                    [str(customer.cID) for customer in route.path] +
-                                   ["d" + str(route.end_depot.cID)]) + f"], load={route.current_load}, cap={route.vehicle.capacity}" for route in all_routes))
+                                   ["d" + str(route.end_depot.dID)]) + f"], load={route.current_load}, cap={route.vehicle.capacity}" for route in all_routes))
 
 
     #print(vehicle_usage_count.value)

@@ -16,12 +16,19 @@ class MoveKind(Enum):
 
 
 class Move(NamedTuple):
-    """An evaluated, not-yet-applied move. Immutable; safe to hold N of them at once."""
+    """
+    A move, as returned by evaluate(). Carries its own applied/not-applied state so callers
+    (the solver, BestOfCandidates) never have to infer it out-of-band from the operator's class.
+    """
     kind: MoveKind = MoveKind.INVALID
     operands: tuple = ()
     deltas: ObjectiveTermDelta = ObjectiveTermDelta()
     improvement: Num = 0.0
     eval_version: int = -1
+    # True iff evaluate() itself already performed the mutation (an _evaluates_by_applying
+    # operator). When True, the solution currently reflects this move; apply() must NOT call
+    # _apply_impl again, and revert() undoes it exactly like any other applied move.
+    already_applied: bool = False
 
     @property
     def is_actionable(self) -> bool:
@@ -87,11 +94,15 @@ class OperatorBL(ABC):
                     self.improvement_from_deltas(result), self.sln.version)
 
     def apply(self, move: Move) -> bool:
-        if self._applied is move:
-            return True                        # _evaluate_by_applying already did it
-        assert not self.is_applied, f"{type(self).__name__}.apply() called with another move already applied."
+        # Callers must not call this for a move.already_applied move -- there's nothing left to
+        # operate (evaluate() already did it); the caller should skip straight to commit()/revert()
+        # instead. That gating lives in the caller (the solver loop), not here.
+        assert not move.already_applied, (
+            f"{type(self).__name__}.apply() called on an already-applied move -- caller should "
+            f"have skipped this call and gone straight to commit()/revert().")
         if not move.is_actionable:
             return False                        # never apply an INVALID/NOOP move
+        assert not self.is_applied, f"{type(self).__name__}.apply() called with another move already applied."
         assert move.eval_version == self.sln.version, (
             f"Stale move for {type(self).__name__}: evaluated at version {move.eval_version}, "
             f"solution is now at {self.sln.version}.")
@@ -122,20 +133,18 @@ class OperatorBL(ABC):
 
     # ----------------------------------------------------------- escape hatch
     def _evaluate_by_applying(self, *operands) -> Move:
-        before = self._measure(*operands)
-        self._revert_info = self._apply_impl(*operands)
-        after = self._measure(*operands)
-        deltas = after - before
-        move = Move(MoveKind.VALID, operands, deltas,
-                    self.improvement_from_deltas(deltas), self.sln.version)
-        self._applied = move
-        self.sln.version += 1
-        return move
+        """
+        Override this (not _evaluate_impl) for operators that genuinely cannot price a move
+        without performing it (_evaluates_by_applying = True). No shared "measure before/after"
+        template here -- each such operator knows its own cheapest way to measure, and there's
+        only ever going to be a couple of these, so a generic hook buys nothing.
 
-    def _measure(self, *operands) -> ObjectiveTermDelta:
-        """Default measurement for _evaluate_by_applying: whole-solution snapshot (safe, O(all
-        routes)). Override for a cheaper, operator-local measurement (see PermuteRoute)."""
-        return self.sln.objective_terms()
+        MUST: apply the move, set self._revert_info, set self._applied to the returned Move,
+        bump self.sln.version by 1, and return a Move with kind=VALID and already_applied=True.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} sets _evaluates_by_applying=True but doesn't override "
+            f"_evaluate_by_applying().")
 
     # ---------------------------------------------------------------- pricing
     def improvement_from_deltas(self, deltas: ObjectiveTermDelta) -> Num:
@@ -244,7 +253,7 @@ class ReassignCustomerToNewRouteBefore(OperatorBL):
         new_route.link_depot_uses_except_customers(sln.depot_num_uses)
         new_route.link_to_vehicle_before(dest_route)
         sln.all_routes.add(new_route)
-        return (src_route, src_index, new_route)
+        return src_route, src_index, new_route
 
     def _revert_impl(self, revert_info):
         sln = self.sln
@@ -272,7 +281,7 @@ class SwapCustomersAt(OperatorBL):
 
     def _apply_impl(self, route1: Route, index1: int, route2: Route, index2):
         route1.swap_customers_with(index1, route2, index2)
-        return (route1, index1, route2, index2)
+        return route1, index1, route2, index2
 
     def _revert_impl(self, revert_info):
         # Reapplying the swap just swaps back.
@@ -290,20 +299,28 @@ class PermuteRoute(OperatorBL):
     # by actually applying the permutation and measuring the change, via the escape hatch.
     _evaluates_by_applying = True
 
-    def _measure(self, route: Route, permutation: Sequence[int]) -> ObjectiveTermDelta:
-        # Route-local O(path length) measurement, not a full-solution objective_terms() diff.
-        return ObjectiveTermDelta(travel_distance=route.total_distance())
-
     def _evaluate_impl(self, route: Route, permutation: Sequence[int]):
         pass   # unused: _evaluates_by_applying routes evaluate() through _evaluate_by_applying instead
 
     def _apply_impl(self, route: Route, permutation: Sequence[int]):
         route.permute(permutation)
-        return (route, invert_permutation(permutation))
+        return route, invert_permutation(permutation)
 
     def _revert_impl(self, revert_info):
         route, inv_permutation = revert_info
         route.permute(inv_permutation)
+
+    def _evaluate_by_applying(self, route: Route, permutation: Sequence[int]) -> Move:
+        # Route-local O(path length) measurement, not a full-solution objective_terms() diff.
+        before = route.total_distance()
+        self._revert_info = self._apply_impl(route, permutation)
+        after = route.total_distance()
+        deltas = ObjectiveTermDelta(travel_distance=after - before)
+        move = Move(MoveKind.VALID, (route, permutation), deltas,
+                    self.improvement_from_deltas(deltas), self.sln.version, already_applied=True)
+        self._applied = move
+        self.sln.version += 1
+        return move
 
 
 class ChangeEndDepot(OperatorBL):
@@ -320,7 +337,7 @@ class ChangeEndDepot(OperatorBL):
     def _apply_impl(self, route: Route, new_end_depot: Depot):
         old_end_depot = route.end_depot
         route.set_end_depot(new_end_depot)
-        return (route, old_end_depot)
+        return route, old_end_depot
 
     def _revert_impl(self, revert_info):
         (route, old_end_depot) = revert_info
@@ -385,7 +402,7 @@ class SplitRoute(OperatorBL):
     def _apply_impl(self, route: Route, split_index: int, intermediate_end_depot: Depot):
         new_route = route.split_at(split_index, intermediate_end_depot)
         self.sln.all_routes.add(new_route)
-        return (route, new_route)
+        return route, new_route
 
     def _revert_impl(self, revert_info):
         route, new_route = revert_info
@@ -413,7 +430,7 @@ class CombineRoutes(OperatorBL):
         # combine_with only unlinks route2 from its vehicle -- it doesn't know about
         # FullSolution.all_routes, so that bookkeeping is on us (mirrors SplitRoute's add).
         self.sln.all_routes.remove(route2)
-        return (route1, split_index, other_end_depot, other_prev_route)
+        return route1, split_index, other_end_depot, other_prev_route
 
     def _revert_impl(self, revert_info):
         route1, split_index, other_end_depot, other_prev_route = revert_info
