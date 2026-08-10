@@ -255,7 +255,7 @@ class DeltaArithmetic(SeededTestCase):
         move = operator.evaluate((route1, route2))
         self.assertTrue(move.is_actionable)
         operator.apply(move)
-        operator.revert()
+        operator.revert(move)
 
         self.assertIs(route1.end_depot, original_end_depot,
                       "revert left the absorbing route carrying the absorbed route's end depot")

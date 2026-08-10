@@ -2891,20 +2891,47 @@ class RouteSet:
             self.add(item)
 
 
+    # NOTE on ORDER: removal is swap-with-last, so a remove -> add round trip restores membership
+    # but NOT position. That matters because the solver picks operands positionally
+    # (rand_choice indexes _items), so a permutation of this list silently changes which route a
+    # random draw returns -- i.e. an operator's revert can be perfectly value-correct and still
+    # divert the whole search. remove() therefore reports where it moved the displaced element,
+    # and add() can put a re-added element straight back there; see undo_remove().
+
     @staticmethod
-    def _add_given_fields(item: Route, items: list[Route], idx_map: dict[Route, int], size) -> bool:
+    def _add_given_fields(item: Route, items: list[Route], idx_map: dict[Route, int], size,
+                          post_add_swap_index: int | None = None) -> bool:
         if item in idx_map:
             return False
 
         idx_map[item] = size
         items.append(item)
+
+        # Only meaningful for a TRUE add (we returned above otherwise): put the newly appended
+        # item back at post_add_swap_index and push whatever sits there to the end -- the exact
+        # inverse of the swap-with-last that removal performs.
+        if post_add_swap_index is not None and post_add_swap_index != size:
+            displaced = items[post_add_swap_index]
+            items[post_add_swap_index] = item
+            items[size] = displaced
+            idx_map[item] = post_add_swap_index
+            idx_map[displaced] = size
+
         return True
 
-    def add(self, item: Route) -> bool:
-        return RouteSet._add_given_fields(item, self._items, self._idx_map, self.__len__())
+    def add(self, item: Route, post_add_swap_index: int | None = None) -> bool:
+        return RouteSet._add_given_fields(item, self._items, self._idx_map, self.__len__(),
+                                          post_add_swap_index)
+
+    def undo_remove(self, item: Route, swap_index: int | None) -> bool:
+        """
+        Re-add `item` at the position it occupied before a remove(), restoring this set's ORDER
+        and not just its membership. `swap_index` is remove()'s return value.
+        """
+        return self.add(item, post_add_swap_index=swap_index)
 
     @staticmethod
-    def _remove_existing_item_given_fields(item: Route, idx: int, items: List[Route], idx_map: dict[Route, int]) -> None:
+    def _remove_existing_item_given_fields(item: Route, idx: int, items: List[Route], idx_map: dict[Route, int]) -> int:
         # Not worth doing this only if needed: cpu instruction flushing is worse than just 3 ops unnecessarily
         last_item = items[-1]
 
@@ -2916,21 +2943,24 @@ class RouteSet:
         items.pop()
         del idx_map[item]
 
-    def remove(self, item: Route) -> None:
+        # Where the removed item sat, so undo_remove() can restore ordering exactly.
+        return idx
+
+    def remove(self, item: Route) -> int:
         idx_map = self._idx_map
         if item not in idx_map:
             raise KeyError(item)
 
         idx = idx_map[item]
-        RouteSet._remove_existing_item_given_fields(item, idx, self._items, idx_map)
+        return RouteSet._remove_existing_item_given_fields(item, idx, self._items, idx_map)
 
-    def discard(self, item: Route) -> None:
+    def discard(self, item: Route) -> int | None:
         idx_map = self._idx_map
         if item not in idx_map:
-            return
+            return None
 
         idx = idx_map[item]
-        RouteSet._remove_existing_item_given_fields(item, idx, self._items, idx_map)
+        return RouteSet._remove_existing_item_given_fields(item, idx, self._items, idx_map)
 
     def clear(self):
         self._items.clear()
@@ -2975,14 +3005,36 @@ class RouteSet:
         for item in iterable:
             size+=add(item, items, idx_map, size)
 
-    def difference_update(self, iterable: Iterable[Route]):
+    def difference_update(self, iterable: Iterable[Route]) -> list[tuple[Route, int]]:
+        """
+        Remove every item of `iterable` that is present.
+
+        Returns (item, swap_index) records in REMOVAL ORDER -- exactly the order and format
+        undo_difference_update() expects, so an undoable removal is just:
+            removed = routes.difference_update(victims)
+            ...
+            routes.undo_difference_update(removed)
+        """
         items = self._items
         idx_map = self._idx_map
         remove = RouteSet._remove_existing_item_given_fields
+        removed: list[tuple[Route, int]] = []
         for item in iterable:
             if item in idx_map:
                 idx = idx_map[item]
                 remove(item, idx, items, idx_map)
+                removed.append((item, idx))
+        return removed
+
+    def undo_difference_update(self, removed: list[tuple[Route, int]]) -> None:
+        """
+        Exact inverse of difference_update: restores membership AND position.
+
+        Replayed in reverse, because each recorded swap_index is only meaningful against the
+        state that immediately preceded that particular removal.
+        """
+        for item, swap_index in reversed(removed):
+            self.undo_remove(item, swap_index)
 
     def difference(self, other: Iterable[Route]) -> RouteSet:
         diff = RouteSet(self)
@@ -3820,7 +3872,20 @@ class FullSolution:
         # __new__ bypasses __init__, so EVERY field must be set explicitly here -- there are no
         # class-level defaults to fall back on any more. These two are easy to forget:
         new_sln.empty_routes = RouteSet(route for route in new_sln.all_routes if route.is_empty)
-        new_sln.version = self.version
+        # version numbers a state within ONE solution's own history, so a copy starts a new
+        # branch at 0 rather than inheriting the parent's count. A Move evaluated against the
+        # original is meaningless here anyway -- it names route objects this copy doesn't own.
+        #
+        # This is what makes a copy a genuine BRANCH ROOT rather than just a backup: it owns its
+        # whole object graph and its own version line, so it can be solved forward independently.
+        # TODO(parallel-solve): with that plus a per-branch undo stack (see OperatorBL.commit),
+        # snapshots become the natural unit of work for a parallel/portfolio solver -- fan out
+        # from the retained top-k snapshots, solve each branch, keep the best. Nothing ties a
+        # branch to THIS solver either: because a branch is just a self-contained FullSolution,
+        # each one can be driven by a different approach (a different operator roster or cooling
+        # schedule, a ruin-and-recreate pass, or an exact method on a sub-problem) and the
+        # portfolio compared on the objective they all share.
+        new_sln.version = 0
 
         # Re-link depot_num_uses.
         # IMPORTANT to do it here so all objects see the copy of depot_num_uses instead of the original.

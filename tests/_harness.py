@@ -190,7 +190,14 @@ def all_problems(sln: FullSolution) -> list[str]:
 
 
 def fingerprint(sln: FullSolution):
-    """Structural + cost identity of a solution, for exact revert round-trip checks."""
+    """
+    Structural + cost identity of a solution, for exact revert round-trip checks.
+
+    Includes all_routes ORDER, not just membership. That matters because the solver picks
+    operands positionally (rand_choice indexes into the RouteSet), so an operator whose revert
+    restores the right routes in a different order is value-correct but still diverts the entire
+    search -- a defect invisible to any cost- or membership-based comparison.
+    """
     chains = []
     for vehicle in sln.vehicles:
         sequence, current = [], vehicle.first_route.next_route
@@ -201,7 +208,10 @@ def fingerprint(sln: FullSolution):
     return (round(sln.solution_cost(), 9),
             " || ".join(chains),
             tuple(sorted((str(depot), sln.depot_num_uses[depot]) for depot in sln.depots)),
-            len(sln.all_routes))
+            # Content per position, not id(): CombineRoutes' revert legitimately rebuilds the
+            # absorbed route as a NEW object (see TODO(revert-identity) on Route.split_at), so
+            # object identity would fail there for a reason that isn't an ordering bug.
+            tuple(str(route) for route in sln.all_routes))
 
 
 def term_deltas(before: ObjectiveTermDelta, after: ObjectiveTermDelta) -> ObjectiveTermDelta:
@@ -248,11 +258,21 @@ def deterministic_clock(solver, iterations: int):
         solver_module.time.time = real_time
 
 
-def run_solver(sln: FullSolution, max_time: float, debug_level: int = 3, iterations=None):
-    """Build a solver, run it with stdout captured, and return (solver, captured_output)."""
+def run_solver(sln: FullSolution, max_time: float, debug_level: int = 3, iterations=None,
+               deterministic_weighting: bool = False):
+    """
+    Build a solver, run it with stdout captured, and return (solver, captured_output).
+
+    deterministic_weighting drops wall-clock timing out of operator weighting. Production
+    weighting scores an operator by improvement per unit time, which couples the trajectory to
+    machine speed -- correct for a stochastic solver, but it means identical seeds diverge. Set
+    this only for tests that assert reproducibility.
+    """
     from SimAnn_VRP_Solver import SimAnnVRPSolver
     solver = SimAnnVRPSolver(sln)
     solver.max_time = max_time
+    if deterministic_weighting:
+        solver.set_deterministic_weighting()
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
         solver.make_initial_solution()

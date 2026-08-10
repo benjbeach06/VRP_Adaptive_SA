@@ -130,15 +130,20 @@ class OperatorBL[Ops: tuple](ABC):
                     self.improvement_from_deltas(result), self.sln.version)
 
     def apply(self, move: Move[Ops]) -> bool:
-        # Callers must not call this for a move.already_applied move -- there's nothing left to
-        # operate (evaluate() already did it); the caller should skip straight to commit()/revert()
-        # instead. That gating lives in the caller (the solver loop), not here.
-        assert not move.already_applied, (
-            f"{type(self).__name__}.apply() called on an already-applied move -- caller should "
-            f"have skipped this call and gone straight to commit()/revert().")
+        """
+        Apply `move`, returning whether the solution now reflects it.
+
+        Gatekeeps itself: re-applying the move that is already applied is a no-op. Callers can
+        therefore drive the lifecycle uniformly -- apply/revert/commit with the move in hand --
+        without tracking which operators happen to mutate during evaluate().
+        """
         if not move.is_actionable:
             return False                        # never apply an INVALID/NOOP move
-        assert not self.is_applied, f"{type(self).__name__}.apply() called with another move already applied."
+        if self._applied is move:
+            return True                         # already applied (escape-hatch evaluate, or a repeat call)
+
+        assert not self.is_applied, (
+            f"{type(self).__name__}.apply() called while a DIFFERENT move is applied.")
         assert move.eval_version == self.sln.version, (
             f"Stale move for {type(self).__name__}: evaluated at version {move.eval_version}, "
             f"solution is now at {self.sln.version}.")
@@ -148,21 +153,33 @@ class OperatorBL[Ops: tuple](ABC):
         self.sln.version += 1
         return True
 
-    def revert(self) -> None:
-        if self._applied is None:
-            return
+    def revert(self, move: Move[Ops]) -> bool:
+        """
+        Undo `move` if it is the one currently applied; a no-op otherwise. Returns whether
+        anything was actually undone.
+        """
+        if self._applied is not move:
+            return False
+
         self._revert_impl(self._revert_info)
         self._revert_info = None
         self._applied = None
-        self.sln.version += 1
+        # DECREMENT, and only when we genuinely reverted. A revert restores the exact state the
+        # move was evaluated against, so the version has to return to that state's number too --
+        # version identifies the state, not the number of mutations performed. Incrementing here
+        # would make an apply -> revert -> apply round trip look stale and trip the guard in
+        # apply(), even though the solution is provably identical. That round trip is exactly
+        # what snapshotting does (see SimAnnVRPSolver.take_sln_snapshot).
+        self.sln.version -= 1
+        return True
 
-    def commit(self) -> Move[Ops]:
-        """Finalize the applied move as permanent (it can no longer be reverted).
+    def commit(self, move: Move[Ops]) -> Move[Ops]:
+        """Finalize `move` as permanent (it can no longer be reverted).
         TODO(undo-stack): once an undo stack exists, push (self, self._revert_info, move.deltas)
         here instead of discarding -- that's the whole reason this method exists separately
         from just clearing state on the next evaluate()."""
-        move = self._applied
-        assert move is not None, f"{type(self).__name__}.commit() with nothing applied."
+        assert self._applied is move, (
+            f"{type(self).__name__}.commit() for a move that is not the applied one.")
         self._revert_info = None
         self._applied = None
         return move
@@ -436,15 +453,19 @@ class DisposeOfEmptyRoutesBL(OperatorBL[DisposeOfEmptyRoutesOps]):
         for route in routes:
             route.dispose()
 
-        self.sln.all_routes.pop_all(routes)
-        return revert_stack
+        # Keep difference_update's record rather than using pop_all: it says where each removal
+        # displaced an element, so the revert can put all_routes back in the SAME ORDER.
+        # Membership alone isn't enough -- the solver draws operands positionally, so a
+        # permutation here silently redirects the search.
+        removed = self.sln.all_routes.difference_update(routes)
+        return revert_stack, removed
 
-    def _revert_impl(self, revert_stack):
-        all_routes = self.sln.all_routes
+    def _revert_impl(self, revert_info):
+        revert_stack, removed = revert_info
         for route, prev_route in reversed(revert_stack):
             if prev_route is not None:
                 route.link_to_vehicle_after(prev_route)
-            all_routes.add(route)
+        self.sln.all_routes.undo_difference_update(removed)
 
 
 class SplitRoute(OperatorBL[SplitRouteOps]):
@@ -499,8 +520,10 @@ class CombineRoutes(OperatorBL[CombineRoutesOps]):
         route1.combine_with(route2)
         # combine_with only unlinks route2 from its vehicle -- it doesn't know about
         # FullSolution.all_routes, so that bookkeeping is on us (mirrors SplitRoute's add).
-        self.sln.all_routes.remove(route2)
-        return route1, split_index, own_end_depot, other_prev_route
+        # Keep the slot it vacated so revert can drop the rebuilt route straight back into it,
+        # leaving all_routes in its original ORDER (the solver picks operands positionally).
+        other_slot = self.sln.all_routes.remove(route2)
+        return route1, split_index, own_end_depot, other_prev_route, other_slot
 
     def _revert_impl(self, revert_info):
         # TODO(revert-identity): restore into the ORIGINAL route2 object rather than building a
@@ -509,9 +532,9 @@ class CombineRoutes(OperatorBL[CombineRoutesOps]):
         # value-correct, not identity-correct: after an apply->revert cycle this Move's operands
         # still name the disposed route2, so re-evaluating the same Move (as the solver's
         # debug_level>=3 check does) reads a dead route.
-        route1, split_index, own_end_depot, other_prev_route = revert_info
+        route1, split_index, own_end_depot, other_prev_route, other_slot = revert_info
         new_route = route1.split_at(split_index, own_end_depot)
-        self.sln.all_routes.add(new_route)
+        self.sln.all_routes.undo_remove(new_route, other_slot)
         if other_prev_route is not None:
             # split_at already linked new_route directly after route1; move it back to route2's
             # original slot (a no-op when route2 was route1's immediate successor).

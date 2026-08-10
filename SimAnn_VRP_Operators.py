@@ -60,6 +60,10 @@ class Operator[Ops: tuple](ABC):
         self._apply_time_total = 0.0
         self._apply_count = 0
 
+        # When False, update_stats() treats every operator's mean cost per move as 1 instead of
+        # measuring it. See SimAnnVRPSolver.set_deterministic_weighting -- TESTING ONLY.
+        self.weight_by_time = True
+
         self.num_invalid_calls = 0
         self.num_noop_calls = 0
         self.num_useful_calls = 0
@@ -88,8 +92,8 @@ class Operator[Ops: tuple](ABC):
         return move
 
     def apply(self, move: Move[Ops]) -> bool:
-        # Caller (the solver loop) only calls this for a move that isn't already applied --
-        # see OperatorBL.apply()'s own assert.
+        # The BL operator gatekeeps this itself: applying an already-applied move is a no-op, so
+        # callers never have to know whether evaluate() mutated. Timing only counts real work.
         t0 = time.perf_counter()
         ok = self.base_operator.apply(move)
         dt = time.perf_counter() - t0
@@ -98,11 +102,11 @@ class Operator[Ops: tuple](ABC):
         self.mean_apply_time = self._apply_time_total / self._apply_count
         return ok
 
-    def commit(self) -> Move[Ops]:
-        return self.base_operator.commit()
+    def commit(self, move: Move[Ops]) -> Move[Ops]:
+        return self.base_operator.commit(move)
 
-    def revert(self) -> None:
-        self.base_operator.revert()
+    def revert(self, move: Move[Ops]) -> bool:
+        return self.base_operator.revert(move)
 
     def _update_reporting_stats(self, move: Move[Ops]):
         eps = 1e-9
@@ -138,7 +142,11 @@ class Operator[Ops: tuple](ABC):
             self.stats.record_use(0)
             return
 
-        mean_cost = self.segment_time / max(self.segment_proposals, 1) + self.mean_apply_time
+        # Cost-aware weighting: an operator's score is its improvement per unit of time spent,
+        # so cheap operators are preferred at equal improvement. Substituting 1 makes selection a
+        # pure function of improvements, and therefore reproducible (see set_deterministic_weighting).
+        mean_cost = (self.segment_time / max(self.segment_proposals, 1) + self.mean_apply_time
+                     if self.weight_by_time else 1.0)
         sign = -1 if move.improvement < 0 else 1
         score = max(0, sign * (abs(move.improvement) ** 1.5) / max(mean_cost, 1e-9))
         self.stats.record_use(score)
@@ -190,7 +198,7 @@ class BestOfCandidates[Ops: tuple](Operator[Ops]):
             move = self.base_operator.evaluate(operands)
             if move.is_actionable and move.improvement > best_imp:
                 best, best_imp = move, move.improvement
-            self.base_operator.revert()
+            self.base_operator.revert(move)
         self.segment_time += time.perf_counter() - t0
         self.segment_proposals += 1
         # best was reverted like every other candidate above, so it's not applied -- even though

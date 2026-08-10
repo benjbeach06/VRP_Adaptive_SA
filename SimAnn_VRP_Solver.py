@@ -109,6 +109,25 @@ class SimAnnVRPSolver:
         self.empty_route_cleanup_interval = 100
         self._dispose_bl = DisposeOfEmptyRoutesBL(sln, dispose_only_trivial_routes=False)
 
+    def set_deterministic_weighting(self, deterministic: bool = True):
+        """
+        Make operator weighting ignore wall-clock timing, so a run is reproducible from its seed.
+        FOR TESTING AND BISECTION ONLY -- leave it off in production.
+
+        Normal weighting divides an operator's score by its measured mean cost per move, which is
+        genuinely valuable: it steers selection toward the best improvement-per-second rather than
+        the best improvement-per-move. The side effect is that the search trajectory depends on
+        machine speed and CPU state, so two runs from the same seed diverge -- which is fine for a
+        stochastic solver, but makes an intermittent bug impossible to reproduce or bisect.
+
+        With this on, every operator's mean cost is taken as 1, so selection depends only on the
+        improvements achieved. Everything else (the RNG stream, the acceptance test, operand
+        selection) is already seed-determined, so this is the last input needed to make a run a
+        pure function of its seed.
+        """
+        for op in self.operators:
+            op.weight_by_time = not deterministic
+
     def update_weights(self):
         weights = [op.weight for op in self.operators]
 
@@ -227,19 +246,34 @@ class SimAnnVRPSolver:
         self.best_objective = sln.solution_cost()
         self.curr_objective = self.best_objective
 
+    def _dispose_empty_routes(self):
+        """
+        Dispose every empty route, WITHOUT committing, and return the move (None if there was
+        nothing to do). Leaving it uncommitted is what lets take_sln_snapshot() undo it again.
+        Callers that want the disposal to stick must commit it -- see _cleanup_empty_routes.
+        """
+        empty_routes = RouteSet(route for route in self.sln.all_routes if route.is_empty)
+        if not empty_routes:
+            return None
+
+        move = self._dispose_bl.evaluate((empty_routes,))
+        if not move.is_actionable:
+            return None
+
+        self._dispose_bl.apply(move)
+        return move
+
     def _cleanup_empty_routes(self):
         # Unconditional maintenance: since every objective coefficient is non-negative, removing
         # an empty route's travel/depot footprint is never a net loss. Called directly rather than
         # through weighted operator selection.
-        empty_routes = RouteSet(r for r in self.sln.all_routes if r.is_empty)
-        if not empty_routes:
+        move = self._dispose_empty_routes()
+        if move is None:
             return
-        move = self._dispose_bl.evaluate((empty_routes,))
-        if move.is_actionable:
-            self._dispose_bl.apply(move)
-            self._dispose_bl.commit()
-            self.curr_objective -= move.improvement
-            self.best_objective = min(self.best_objective, self.curr_objective)
+
+        self._dispose_bl.commit(move)
+        self.curr_objective -= move.improvement
+        self.best_objective = min(self.best_objective, self.curr_objective)
 
     @staticmethod
     def _check_solution_invariants(sln: FullSolution) -> list[str]:
@@ -318,8 +352,7 @@ class SimAnnVRPSolver:
             move = op.propose()
 
             if not move.is_actionable:
-                if move.already_applied:
-                    op.revert()
+                op.revert(move)   # gatekeeps itself: a no-op unless propose() already mutated
                 elapsed_time = time.time() - start_time
                 continue
 
@@ -334,30 +367,35 @@ class SimAnnVRPSolver:
             accept = improvement > 0 or math.log(-math.log(rand_unit()), 2) >= loglog_acceptance_threshold
 
             if accept:
+                # Apply FIRST, so the debug_level 1 check brackets a clean before/after. apply()
+                # gatekeeps itself, so this is a no-op when propose() already mutated.
+                if debug_level >= 1 and not move.already_applied:
+                    pre_op_obj = sln.solution_cost()
+                    op.apply(move)
+                    post_op_obj = sln.solution_cost()
+                    if abs(improvement - (pre_op_obj - post_op_obj)) >= 1e-6:
+                        print(f"[debug] {type(op).__name__}: reported improvement {improvement} "
+                              f"!= measured {pre_op_obj - post_op_obj}")
+                else:
+                    op.apply(move)
+
                 if improvement < 0 and self.curr_objective <= self.best_objective + 1e-12:
                     # Error-safe comparison of current and best objectives - relative error as abs/ave
-                    # If we're disimproving from our running global optimum: take a snapshot
-                    # BEFORE stepping away from it.
+                    # We're about to step away from the running global optimum, so snapshot it.
+                    # Step back off the move first: the snapshot must capture the state we are
+                    # LEAVING, not the one we're moving to. This round trip is exact -- revert()
+                    # decrements sln.version and take_sln_snapshot() undoes its own disposal, so
+                    # the re-apply lands back on move.eval_version rather than looking stale.
+                    op.revert(move)
                     self.take_sln_snapshot()
-
-                if not move.already_applied:
-                    if debug_level >= 1:
-                        pre_op_obj = sln.solution_cost()
-                        op.apply(move)
-                        post_op_obj = sln.solution_cost()
-                        if abs(improvement - (pre_op_obj - post_op_obj)) >= 1e-6:
-                            print(f"[debug] {type(op).__name__}: reported improvement {improvement} "
-                                  f"!= measured {pre_op_obj - post_op_obj}")
-                    else:
-                        op.apply(move)
-                # else: already mutated during propose() -- nothing left to operate.
+                    op.apply(move)
 
                 if debug_level >= 2:
                     problems = self._check_solution_invariants(sln)
                     if problems:
                         print(f"[debug] invariant violations after accepted {type(op).__name__}: {problems}")
 
-                op.commit()
+                op.commit(move)
                 op.update_stats()
 
                 self.curr_objective -= improvement
@@ -381,9 +419,9 @@ class SimAnnVRPSolver:
                         if problems:
                             print(f"[debug] invariant violations mid-rejection-check for {type(op).__name__}: {problems}")
                             problems = self._check_solution_invariants(sln)
-                    op.revert()   # something is applied at this point either way -- always revert
+                    op.revert(move)   # something is applied at this point either way
                     recompute = op.base_operator.evaluate(move.operands)
-                    op.revert()
+                    op.revert(recompute)
 
                     if debug_level >= 2:
                         problems = self._check_solution_invariants(sln)
@@ -396,9 +434,7 @@ class SimAnnVRPSolver:
                         print(f"[debug] {type(op).__name__}: revert() did not restore objective "
                               f"({reverted_obj} != {pre_op_obj})")
                 else:
-                    if move.already_applied:
-                        op.revert()
-                    # else: never applied, nothing to revert
+                    op.revert(move)   # gatekeeps itself: a no-op if it was never applied
 
                 if debug_level >= 2:
                     problems = self._check_solution_invariants(sln)
@@ -429,7 +465,31 @@ class SimAnnVRPSolver:
         self.pare_snapshots_to_top_k(self.max_snapshots)
 
     def take_sln_snapshot(self):
-        self.snapshots.append(self.sln.take_snapshot())
+        """
+        Store a NORMALISED copy of the current solution: every empty route disposed, and every
+        remaining route assigned to a vehicle. Anyone reading a snapshot can then rely on that
+        without filtering or special-casing.
+
+        The disposal is undone again immediately afterwards, so the live solution -- and any Move
+        evaluated against it -- is exactly as it was. Only the stored copy is normalised, which is
+        what keeps this safe to call with a move in flight: disposing empty routes would otherwise
+        invalidate operands (ReassignCustomerAt and ReassignRouteBefore both accept an empty
+        dest_route) as well as move the version out from under it.
+        """
+        dispose_move = self._dispose_empty_routes()
+        try:
+            unassigned = [route for route in self.sln.all_routes if not route.is_assigned]
+            assert not unassigned, (
+                f"Cannot snapshot: {len(unassigned)} route(s) hold customers but are not assigned "
+                f"to a vehicle ({', '.join(str(route) for route in unassigned[:3])}). Empty routes "
+                f"were just disposed, so anything left unassigned violates the solver invariant "
+                f"'between moves, every nonempty route is assigned to a vehicle'.")
+
+            self.snapshots.append(self.sln.take_snapshot())
+        finally:
+            # Restore even if the assert fires, so a failing run is still inspectable.
+            if dispose_move is not None:
+                self._dispose_bl.revert(dispose_move)
 
     def pare_snapshots_to_top_k(self, k):
         # Pares and sorts snapshots

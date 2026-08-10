@@ -67,7 +67,7 @@ class OperatorContractBase(SeededTestCase):
 
         self.assertEqual(all_problems(sln), [], f"{label}: invariants broken after apply")
 
-        operator.revert()
+        operator.revert(move)
 
         self.assertEqual(fingerprint(sln), before_fingerprint,
                          f"{label}: revert() did not restore the solution exactly")
@@ -206,8 +206,7 @@ class RandomisedOperatorContract(OperatorContractBase):
 
             move = wrapper.propose()
             if not move.is_actionable:
-                if move.already_applied:
-                    wrapper.revert()
+                wrapper.revert(move)   # gatekeeps itself
                 self.assertEqual(fingerprint(sln), before_fingerprint,
                                  f"{type(wrapper).__name__}: non-actionable proposal left a change")
                 continue
@@ -225,7 +224,7 @@ class RandomisedOperatorContract(OperatorContractBase):
                     msg=f"{label}: term '{name}' predicted {predicted} but measured {measured}")
             self.assertEqual(all_problems(sln), [], f"{label}: invariants broken after apply")
 
-            wrapper.revert()
+            wrapper.revert(move)
             self.assertEqual(fingerprint(sln), before_fingerprint,
                              f"{label}: revert() did not restore the solution exactly")
             checked += 1
