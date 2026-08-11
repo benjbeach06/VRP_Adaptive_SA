@@ -86,10 +86,14 @@ class SimAnnVRPSolver:
         self.operators.append(CustomerBestOfkSwapInRandomRoute(sln))
         self.operators.append(RandomRoutePermutation(sln))
         self.operators.append(ChangeRandomEndDepot(sln))
-        self.operators.append(DisposeOfEmptyRoutes(sln))
         self.operators.append(SplitRandomRoute(sln))
-        self.operators.append(DisposeOfTrivialRoutes(sln))
         self.operators.append(CombineRandomRoutes(sln))
+        # DisposeOfEmptyRoutes / DisposeOfTrivialRoutes are deliberately NOT in the weighted
+        # roster: disposal already happens unconditionally every empty_route_cleanup_interval
+        # iterations and again before every snapshot (see _cleanup_empty_routes and
+        # take_sln_snapshot), so selecting them here only re-does work that is already guaranteed.
+        # Their operand selection is also O(routes) -- it rescans all_routes on every proposal --
+        # so they were consuming a large share of iterations to accomplish nothing new.
         # TODO(known-bug): ReassignCustomerToNewRouteBefore's pricing is wrong for the throwaway
         # new-route case (it prices a "swap" from a VirtualDepot placeholder start, but a brand
         # new route never had a real old start to swap from). Needs a purpose-built Core delta

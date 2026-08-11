@@ -161,11 +161,8 @@ class OperatorBL[Ops: tuple](ABC):
         assert move.is_actionable, f"{type(self).__name__}.apply() called on a non-actionable move."
         assert not move.already_applied, f"{type(self).__name__}.apply() called on an already-applied move."
 
-        if self._applied is move:
-            print("kalsdjf;dlksajfd;lkasjdf")
-        assert self._applied is not move, f"{type(self).__name__}.apply() called while a DIFFERENT move is applied."
-        assert not self.is_applied, (
-            f"{type(self).__name__}.apply() called while called while no move is applied.")
+        assert not move.already_applied and not self.is_applied, \
+            f"{type(self).__name__}.apply() called but the move is already applied!."
         assert move.eval_version == self.sln.version, (
             f"Stale move for {type(self).__name__}: attempted to apply at version {move.eval_version}, "
             f"solution is now at {self.sln.version}.")
@@ -202,8 +199,6 @@ class OperatorBL[Ops: tuple](ABC):
         TODO(undo-stack): once an undo stack exists, push (self, self._revert_info, move.deltas)
         here instead of discarding -- that's the whole reason this method exists separately
         from just clearing state on the next evaluate()."""
-        if self._applied is not move:
-            print("aksdjpflodksjapflksdjaflik")
         assert self._applied is move, (
             f"{type(self).__name__}.commit() for a move that is not the applied one.")
         self._revert_info = None

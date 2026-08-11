@@ -192,6 +192,18 @@ class Operator[Ops: tuple](ABC):
         move = self.last_move
         assert move is not None # We never accept a None or non-actionable move
 
+        # TODO(rescore): re-evaluate this scoring once the stats above are rebuilt. The two terms
+        #  answer deliberately different questions -- SCORE is average nonnegative improvement per
+        #  ACCEPT ("if accepted, how much do I expect to gain?"), COST is average time per
+        #  PROPOSAL ("if I call this, how long will it take?") -- so the differing denominators are
+        #  intentional, not an oversight. The problem is that the current stats can't express it
+        #  properly: this refactor shifted the solver to "apply only when accepting, or when
+        #  applying-to-evaluate", so proposal time and apply/revert time are no longer the same
+        #  quantity, and neither segment_time nor mean_apply_time has been re-derived for that
+        #  split. Fix the statistics first (see the TODO in update_stats_for_reject), then decide
+        #  what the score should divide by -- don't tune the formula against numbers that are
+        #  measuring the wrong thing.
+
         # Cost-aware weighting: an operator's score is its improvement per unit of time spent,
         # so cheap operators are preferred at equal improvement. Substituting 1 makes selection a
         # pure function of improvements, and therefore reproducible (see set_deterministic_weighting).
