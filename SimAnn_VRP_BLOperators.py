@@ -280,7 +280,7 @@ class ReassignCustomerAt(OperatorBL[ReassignCustomerAtOps]):
             return MoveKind.NOOP
 
         customer = src_route.get_visit_at(src_index)
-        insert_visit = dest_route.get_visit_at(dest_index)
+        insert_visit = dest_route.get_visit_at(dest_index if src_route != dest_route or src_index > dest_index else dest_index + 1)
         # We already gated for validity of src_index and dest_index, so we can now assert they're the desired types.
         assert isinstance(customer, CustomerVisit)
         assert isinstance(insert_visit, CustomerVisit|LastRouteVisit)

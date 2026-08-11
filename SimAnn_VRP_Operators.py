@@ -172,7 +172,8 @@ class Operator[Ops: tuple](ABC):
               f"LogWeight: {math.log(self.weight, 10)}, Total calls: {total_calls}, "
               f"Invalid: {self.num_invalid_calls}, Noop: {self.num_noop_calls}, Useful: {self.num_useful_calls}\n"
               f"Num improving calls: {self.num_improving_calls}, Mean improvement: {self.mean_improving_improvement}\n"
-              f"Num degrading calls: {self.num_degrading_calls}, Mean degradation: {self.mean_degrading_degradation}\n")
+              f"Num degrading calls: {self.num_degrading_calls}, Mean degradation: {self.mean_degrading_degradation}\n"
+              f"Average apply time: {self.mean_apply_time}")
 
     def update_stats_for_reject(self):
         self.stats.record_reject()

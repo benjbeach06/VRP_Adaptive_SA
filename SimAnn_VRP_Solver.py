@@ -140,7 +140,7 @@ class SimAnnVRPSolver:
             weight = op.weight
             (num_proposals, num_accepts, num_improvements, score_sum) = op.get_stats()
             p = self.reaction_factor
-            if num_accepts > 0:
+            if num_proposals > 0:
                 average_score = score_sum / num_accepts if score_sum > 0 else 0
                 op.weight =  (1 - p) * weight + p * average_score
             else:

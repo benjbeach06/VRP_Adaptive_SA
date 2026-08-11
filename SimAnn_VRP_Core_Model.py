@@ -1796,10 +1796,17 @@ class Route(VehicleNode):
             if same_route:
                 return 0
             else:
-                start_depot_activates = self.activates_after_customer_insert() and self.first_visit.num_routes_starting_here == 0
-                customer_start_depot_deactivates = customer_route.depot_deactivates_if_customer_removed()
+                start_depot = self.start_depot
+                customer_route_start_depot = customer_route.start_depot
+                if start_depot != customer_route_start_depot:
+                    start_depot_activates = self.activates_after_customer_insert() and self.first_visit.num_routes_starting_here == 0
+                    customer_start_depot_deactivates = customer_route.depot_deactivates_if_customer_removed()
 
-                return start_depot_activates - customer_start_depot_deactivates
+                    return start_depot_activates - customer_start_depot_deactivates
+                else:
+                    return 0
+
+
         #endregion
 
         #region Overload-related deltas

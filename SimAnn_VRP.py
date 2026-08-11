@@ -7,23 +7,45 @@ def build_vrp_model():
     # Random seed for reproducibility
     np.random.seed(42)
 
-    # Depots
-    depots = [
-        Depot(location = (10, 10), supply_limit = 35, vehicle_count = 1, dID = 0),
-        Depot(location = (50, 50), supply_limit = 35, vehicle_count = 1, dID = 1),
-        Depot(location = (90, 10), supply_limit = 35, vehicle_count = 1, dID = 2),
-    ]
+    use_pre_refactor_data = True
 
-    # Customers
-    num_customers = 200#5000
-    generator = np.random.default_rng()
+    if use_pre_refactor_data:
+        # Depot locations (x, y), and supply limits
+        depot_data = [
+            {"location": (10, 10), "supply_limit": 35, "vehicle_count": 1},
+            {"location": (50, 50), "supply_limit": 35, "vehicle_count": 1},
+            {"location": (90, 10), "supply_limit": 35, "vehicle_count": 1},
+        ]
 
-    gen_customer_location = lambda : tuple(generator.integers(low = 0, high = 2, size=2))
-    gen_customer_demand = lambda : int(generator.integers(1, 11))
+        # Customer data: id -> (x, y, demand)
+        num_customers = 200  # 5000
+        customer_data = [
+            {
+                "location": tuple(np.random.randint(0, 100, size=2)),
+                "demand": np.random.randint(1, 11)
+            }
+            for i in range(num_customers)
+        ]
 
-    customers: list[Customer] = [Customer(cID = i, location = gen_customer_location(),
-                                          demand = gen_customer_demand()) for i in range(num_customers)]
+        depots = [Depot(i, depot["location"], depot["supply_limit"], depot["vehicle_count"]) for (i, depot) in
+                  enumerate(depot_data)]
+        customers = [Customer(i, customer["location"], customer["demand"]) for (i, customer) in enumerate(customer_data)]
+    else:
+        depots = [
+            Depot(location=(10, 10), supply_limit=35, vehicle_count=1, dID=0),
+            Depot(location=(50, 50), supply_limit=35, vehicle_count=1, dID=1),
+            Depot(location=(90, 10), supply_limit=35, vehicle_count=1, dID=2),
+        ]
 
+        # Customers
+        num_customers = 200  # 5000
+        generator = np.random.default_rng()
+
+        gen_customer_location = lambda: tuple(generator.integers(low=0, high=100, size=2))
+        gen_customer_demand = lambda: int(generator.integers(1, 11))
+
+        customers: list[Customer] = [Customer(cID=i, location=gen_customer_location(),
+                                              demand=gen_customer_demand()) for i in range(num_customers)]
 
     base_supply_limit = 35
     base_vehicles_per_depot = 1
@@ -33,7 +55,6 @@ def build_vrp_model():
     cost_per_vehicle = 10
     cost_per_depot = 20
     unit_travel_cost = 1
-
 
     sln = FullSolution()
     sln.set_customers(customers)
@@ -45,7 +66,7 @@ def build_vrp_model():
 
     sln.set_objectives(cost_per_depot = cost_per_depot, cost_per_vehicle = cost_per_vehicle, unit_travel_cost = unit_travel_cost)
 
-    solver = SimAnnVRPSolver(sln, max_time=10)
+    solver = SimAnnVRPSolver(sln, max_time=60)
 
     """
     route1 = Route([customers[cID] for cID in [1, 15, 18, 17, 5]], depots[2])
