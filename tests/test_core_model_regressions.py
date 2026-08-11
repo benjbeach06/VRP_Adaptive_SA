@@ -40,7 +40,7 @@ class DepotUsageAccounting(SeededTestCase):
     def test_decrement_happens_even_when_depot_has_other_users(self):
         """
         Removing a route's last customer makes it inactive, so its start depot loses a use --
-        ALWAYS, not only when that depot drops to zero uses.
+        ALWAYS, not only when that depot drops to zero accepts.
 
         The decrement used to be gated on will_deactivate_depot_if_removed(), which additionally
         requires num_routes_starting_here == 1. That is the depot-ACTIVATION question, not the
@@ -83,7 +83,7 @@ class DepotUsageAccounting(SeededTestCase):
 
     def test_increment_for_empty_route_whose_start_and_end_differ(self):
         """
-        A route "uses" its depot when it is ACTIVE (has customers and is assigned). Insertion
+        A route "accepts" its depot when it is ACTIVE (has customers and is assigned). Insertion
         used to gate the increment on is_trivial (empty AND start == end), so inserting into an
         empty route whose start != end never incremented -- drift in the opposite direction.
         """

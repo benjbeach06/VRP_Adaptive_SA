@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 3.14 is a hard requirement, not a preference: the model uses PEP 695 generics
+      # 3.14 is a hard requirement, not a preference: the model accepts PEP 695 generics
       # (class Foo[T], type X = ...) which need 3.12+, and relies on PEP 649 deferred annotation
       # evaluation for the forward references throughout the core model, which needs 3.14.
       - uses: actions/setup-python@v5

@@ -1738,24 +1738,26 @@ class Route(VehicleNode):
 
         #region Travel-related deltas
         @staticmethod
-        def travel_delta_if_customer_removed(customer: CustomerVisit):
+        def travel_delta_if_customer_removed(customer: CustomerVisit) -> Num:
             return customer.travel_delta_if_removed
 
-        def travel_delta_if_customer_popped(self, index: int):
+        def travel_delta_if_customer_popped(self, index: int) -> Num:
             if index >= self.path_len:
                 raise IndexError("Customer index out of range.")
             return self.travel_delta_if_customer_removed(self.path[index])
 
-        def travel_delta_if_customer_inserted(self, customer: CustomerVisit, index: int):
-            # Returns the travel time cost incurred by inserting a customer at the given index
-            # Robust to out-of-bounds: returns start or end visit as appropriate in this case
-            next_visit = self.get_visit_at(index)
+        @staticmethod
+        def travel_delta_if_customer_inserted_before(customer: CustomerVisit, insert_visit: CustomerVisit | LastRouteVisit,
+                                                     customer_route: Route) -> Num:
+            # For efficiency: callers need to gate for no-ops
+            assert insert_visit is not customer and insert_visit.prev_visit is not customer, "Travel delta mini-method called on no-op."
+            adjacent = customer.is_adjacent_with(insert_visit)
 
-            # Pattern is "visit gets delta if inserting a new customer before itself"
-            return next_visit.travel_delta_if_inserting_customer_before_this(customer)
+            return (customer.travel_delta_if_swapped_with(insert_visit)) if adjacent and isinstance(insert_visit, CustomerVisit) \
+                else customer_route.travel_delta_if_customer_removed(customer) + insert_visit.travel_delta_if_inserting_customer_before_this(customer)
 
-        def travel_delta_if_customer_appended(self, customer: CustomerVisit):
-            return self.last_visit.travel_delta_if_inserting_customer_before_this(customer)
+        def travel_delta_if_unassigned_customer_appended(self, customer: CustomerVisit, customer_route: Route) -> Num:
+            return Route.travel_delta_if_customer_inserted_before(customer, self.last_visit, customer_route)
         #endregion
 
         #region Vehicle activation deltas
@@ -1763,26 +1765,41 @@ class Route(VehicleNode):
         # NOTE: Active routes does not imply an active vehicle.
         # Active vehicle = "vehicle has customers"
         # Active src_route = "src_route moves something and it's assigned to an active vehicle"
-        @property
-        def vehicle_deactivates_if_customer_removed(self):
+        def vehicle_deactivates_if_customer_removed(self) -> bool:
             # For a customer removal to deactivate our vehicle:
             #   It must make us trivial, and this must be the only nontrivial src_route.
             vehicle = self.vehicle
             return vehicle is not None and vehicle.num_customers == 1
 
-        def vehicle_activates_if_customer_added(self):
+        def vehicle_activation_delta_if_customer_added(self, customer_route: Route, customer_vehicle: Vehicle|None) -> int:
             vehicle = self.vehicle
 
-            # Adding a customer to any inactive vehicle activates it
-            return vehicle is not None and vehicle.is_inactive
+            same_vehicle = vehicle is not None and customer_vehicle == vehicle
+
+            if same_vehicle:
+                # Move in same vehicle has no effect on activation
+                return 0
+            else:
+                vehicle_activates = vehicle is not None and vehicle.is_inactive
+                customer_vehicle_deactivates = customer_route is not None and customer_route.vehicle_deactivates_if_customer_removed()
+
+                return vehicle_activates - customer_vehicle_deactivates
+
         #endregion
 
         #region Depot activation deltas
-        def depot_deactivates_if_customer_removed(self):
+        def depot_deactivates_if_customer_removed(self) -> bool:
             return self.deactivates_after_customer_remove() and self.first_visit.num_routes_starting_here == 1
 
-        def depot_activates_if_customer_added(self):
-            return self.activates_after_customer_insert() and self.first_visit.num_routes_starting_here == 0
+        def depot_activation_delta_if_customer_added(self, customer_route: Route) -> int:
+            same_route = customer_route == self
+            if same_route:
+                return 0
+            else:
+                start_depot_activates = self.activates_after_customer_insert() and self.first_visit.num_routes_starting_here == 0
+                customer_start_depot_deactivates = customer_route.depot_deactivates_if_customer_removed()
+
+                return start_depot_activates - customer_start_depot_deactivates
         #endregion
 
         #region Overload-related deltas
@@ -1797,22 +1814,28 @@ class Route(VehicleNode):
         def overload_deltas_if_customer_popped(self, index: int) -> tuple[Num, int]:
             return self.overload_deltas_if_customer_removed(self.path[index])
 
-        def overload_deltas_if_customer_inserted(self, customer: CustomerVisit) -> tuple[Num, int]:
+        def overload_deltas_if_customer_added(self, customer: CustomerVisit, customer_route: Route) -> tuple[Num, int]:
+            same_route = customer_route == self
+
+            if same_route:
+                # Inter-route move! No change.
+                return 0, 0
+
             load_delta = customer.demand
 
-            overload_delta = self.overload_delta_if_load_changes(load_delta)
-            vehicles_overloaded_delta = self.is_vehicle_overloaded_delta_if_load_changes(load_delta)
+            route_overload_delta = self.overload_delta_if_load_changes(load_delta)
+            customer_route_overload_delta = customer_route.overload_delta_if_load_changes(-load_delta)
+            overload_delta = route_overload_delta + customer_route_overload_delta
+
+            vehicles_overloaded_delta = self.is_vehicle_overloaded_delta_if_load_changes_from_other_route(load_delta, customer_route)
 
             return overload_delta, vehicles_overloaded_delta
-
-        def overload_deltas_if_customer_appended(self, customer: CustomerVisit) -> tuple[Num, int]:
-            return self.overload_deltas_if_customer_inserted(customer)
         #endregion
 
         #region Full deltas
         def cost_deltas_if_customer_removed(self, customer):
             travel_delta = self.travel_delta_if_customer_removed(customer)
-            vehicle_delta = -self.vehicle_deactivates_if_customer_removed
+            vehicle_delta = -self.vehicle_deactivates_if_customer_removed()
             depot_delta = -self.depot_deactivates_if_customer_removed()
 
             overload_delta, num_vehicles_overloaded_delta = self.overload_deltas_if_customer_removed(customer)
@@ -1821,30 +1844,40 @@ class Route(VehicleNode):
 
         def cost_deltas_if_customer_popped(self, index):
             travel_delta = self.travel_delta_if_customer_popped(index)
-            vehicle_delta = -self.vehicle_deactivates_if_customer_removed
+            vehicle_delta = -self.vehicle_deactivates_if_customer_removed()
             depot_delta = -self.depot_deactivates_if_customer_removed()
 
             overload_delta, num_vehicles_overloaded_delta = self.overload_deltas_if_customer_popped(index)
 
             return ObjectiveTermDelta(travel_delta, vehicle_delta, depot_delta, overload_delta, num_vehicles_overloaded_delta)
 
-        def cost_deltas_if_customer_inserted(self, customer, index):
-            travel_delta = self.travel_delta_if_customer_inserted(customer, index)
-            vehicle_delta = self.vehicle_activates_if_customer_added()
-            depot_delta = self.depot_activates_if_customer_added()
+        def cost_deltas_if_customer_inserted_before(self, customer: CustomerVisit, insert_visit: CustomerVisit | LastRouteVisit) -> ObjectiveTermDelta:
+            if insert_visit is customer or insert_visit is customer.next_visit:
+                return ObjectiveTermDelta() # No-op!
 
-            overload_delta, num_vehicles_overloaded_delta = self.overload_deltas_if_customer_inserted(customer)
+            customer_route: Route | None = customer.route
+            customer_vehicle = None if customer_route is None else customer_route.vehicle
 
-            return ObjectiveTermDelta(travel_delta, vehicle_delta, depot_delta, overload_delta, num_vehicles_overloaded_delta)
+            assert isinstance(insert_visit, CustomerVisit|LastRouteVisit)
+            assert isinstance(customer_route, Route)
+
+            # DECISION: We don't compute full cost deltas explicitly for unassigned customers.
+            # IN THE EVENT we choose to add support for this (e.g. for multi-day delivery plans where some customers don't get deliveries):
+            # We will split into "Unassigned" and "Assigned" versions for add/insert operations, and this method
+            # will triage between the two.
+
+            travel_delta = Route.travel_delta_if_customer_inserted_before(customer, insert_visit, customer_route)
+            depot_delta = self.depot_activation_delta_if_customer_added(customer_route)
+            vehicle_activation_delta = self.vehicle_activation_delta_if_customer_added(customer_route, customer_vehicle)
+            (overload_delta, num_vehicles_overloaded_delta) = self.overload_deltas_if_customer_added(customer, customer_route)
+
+            return ObjectiveTermDelta(travel_distance=travel_delta, depots_activated=depot_delta,
+                                      vehicles_activated=vehicle_activation_delta, total_route_overload=overload_delta,
+                                      vehicles_overloaded=num_vehicles_overloaded_delta)
+
 
         def cost_deltas_if_customer_appended(self, customer):
-            travel_delta = self.travel_delta_if_customer_appended(customer)
-            vehicle_delta = self.vehicle_activates_if_customer_added()
-            depot_delta = self.depot_activates_if_customer_added()
-
-            overload_delta, num_vehicles_overloaded_delta = self.overload_deltas_if_customer_appended(customer)
-
-            return ObjectiveTermDelta(travel_delta, vehicle_delta, depot_delta, overload_delta, num_vehicles_overloaded_delta)
+            return self.cost_deltas_if_customer_inserted_before(customer, self.last_visit)
         #endregion
 
         #endregion
@@ -2911,6 +2944,7 @@ class RouteSet:
         # item back at post_add_swap_index and push whatever sits there to the end -- the exact
         # inverse of the swap-with-last that removal performs.
         if post_add_swap_index is not None and post_add_swap_index != size:
+            assert post_add_swap_index is not None # Linter is dumb hurr durr
             displaced = items[post_add_swap_index]
             items[post_add_swap_index] = item
             items[size] = displaced
@@ -3894,12 +3928,12 @@ class FullSolution:
         return new_sln
 
 
-    def take_snapshot(self):
+    def take_snapshot(self, obj: Num | None):
         # copy.copy invokes FullSolution.__copy__, which is much cheaper than deepcopy for a
         # solution of any real size. Only safe now that the Vehicle.__copy__ linkage bug is fixed
         # (see Phase 0) -- before that fix, copies had corrupted prev_route backlinks.
+        obj = obj if obj is not None else self.solution_cost()
         snapshot = copy.copy(self)
-        obj = snapshot.solution_cost()
         return obj, snapshot
 
     def __str__(self) -> str:

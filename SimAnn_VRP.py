@@ -18,7 +18,7 @@ def build_vrp_model():
     num_customers = 200#5000
     generator = np.random.default_rng()
 
-    gen_customer_location = lambda : tuple(generator.uniform(low = 0, high = 2, size=2))
+    gen_customer_location = lambda : tuple(generator.integers(low = 0, high = 2, size=2))
     gen_customer_demand = lambda : int(generator.integers(1, 11))
 
     customers: list[Customer] = [Customer(cID = i, location = gen_customer_location(),
@@ -88,7 +88,7 @@ def build_vrp_model():
     """
 
     solver.make_initial_solution()
-    solver.solve(debug_level=3)
+    solver.solve(debug_level=0)
 
     (obj, sln) = solver.get_best_snapshot()
 
@@ -102,7 +102,7 @@ def build_vrp_model():
                     {i: {"Path": ["d" + str(route.start_depot.dID)] +
                                  [customer.cID for customer in route.path] +
                                  ["d" + str(route.end_depot.dID)],
-                         "Vehicle": route.vehicle.cID,
+                         "Vehicle": route.vehicle.vID,
                          "Cost": route.total_distance()}
                      for (i,route) in enumerate(all_routes)}.items()
                     )

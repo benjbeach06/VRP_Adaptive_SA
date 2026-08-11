@@ -10,18 +10,24 @@ from typing import Callable, Iterable, Iterator
 
 class OperatorStats:
     def __init__(self):
-        self.uses = 0
-        self.score_sum = 0
-        self.improvements = 0
+        self.proposals: int = 0
+        self.accepts: int = 0
+        self.score_sum: Num = 0
+        self.improvements: int = 0
 
-    def record_use(self, score):
+    def record_reject(self) -> None:
+        self.proposals += 1
+
+    def record_accept(self, score: Num):
         if score > 0:
             self.improvements += 1
-        self.uses += 1
-        self.score_sum += max(0,score)
+        self.accepts += 1
+        self.proposals += 1
+        self.score_sum += max(0, score)
 
     def reset(self):
-        self.uses = 0
+        self.proposals = 0
+        self.accepts = 0
         self.improvements = 0
         self.score_sum = 0
 
@@ -54,8 +60,8 @@ class Operator[Ops: tuple](ABC):
         # Segment-granularity timing: time.time()/perf_counter() has ~15ms resolution on Windows,
         # while these operators run in single-digit microseconds, so per-call timing is useless.
         # Accumulate over a whole segment (see SimAnnVRPSolver.update_weights) instead.
-        self.segment_time = 0.0
         self.segment_proposals = 0
+        self.segment_time = 0.0
         self.mean_apply_time = 0.0
         self._apply_time_total = 0.0
         self._apply_count = 0
@@ -91,22 +97,54 @@ class Operator[Ops: tuple](ABC):
         self._update_reporting_stats(move)
         return move
 
-    def apply(self, move: Move[Ops]) -> bool:
-        # The BL operator gatekeeps this itself: applying an already-applied move is a no-op, so
-        # callers never have to know whether evaluate() mutated. Timing only counts real work.
+    def evaluate(self, operands: Ops) -> Move[Ops]:
+        # Re-evaluation without timing, used for debugging and testing only
+        return self.base_operator.evaluate(operands)
+
+    def apply_for_acceptance(self, move: Move[Ops]):
+        # Core accept path within solver: Apply, and do necessary timing/accounting
+        if move.already_applied or not move.is_actionable:
+            return
+
         t0 = time.perf_counter()
-        ok = self.base_operator.apply(move)
+        self.base_operator.apply(move)
         dt = time.perf_counter() - t0
         self._apply_count += 1
         self._apply_time_total += dt
         self.mean_apply_time = self._apply_time_total / self._apply_count
-        return ok
+        move.mark_applied(True)
 
-    def commit(self, move: Move[Ops]) -> Move[Ops]:
-        return self.base_operator.commit(move)
+    def apply(self, move: Move[Ops]):
+        # Pure re-application of a move, used for debugging and testing only
+        if move.already_applied:
+            return
 
-    def revert(self, move: Move[Ops]) -> bool:
-        return self.base_operator.revert(move)
+        self.base_operator.apply(move)
+        move.mark_applied(True)
+
+    def commit(self, move: Move[Ops]):
+        self.base_operator.commit(move)
+
+    def revert_and_reject(self, move: Move[Ops]):
+        # Revert a rejected move and count reversion time for operators that operated-to-compute
+        if not move.already_applied:
+            return
+
+        t0 = time.perf_counter()
+        self.base_operator.revert(move)
+        self.segment_time += time.perf_counter() - t0
+        move.mark_applied(False)
+
+        return
+
+    def revert(self, move: Move[Ops]):
+        # Pure reversion of a move, used for debugging and testing only
+        if not move.already_applied:
+            return
+
+        self.base_operator.revert(move)
+        move.mark_applied(False)
+        return
 
     def _update_reporting_stats(self, move: Move[Ops]):
         eps = 1e-9
@@ -136,29 +174,40 @@ class Operator[Ops: tuple](ABC):
               f"Num improving calls: {self.num_improving_calls}, Mean improvement: {self.mean_improving_improvement}\n"
               f"Num degrading calls: {self.num_degrading_calls}, Mean degradation: {self.mean_degrading_degradation}\n")
 
-    def update_stats(self):
+    def update_stats_for_reject(self):
+        self.stats.record_reject()
+
+        # TODO: MISSING STATISTICS - Operator times for proposals must be separated from operator times for accepts.
+        #  IF move rejected:
+        #  1) IF move operated yet: We need to ADD IN revert time on because it's a real cost of trying out the operator.
+        #  2) IF move not operated yet: We can just keep pure compute time
+        #  IF move accepted:
+        #  1) IF move operated yet: Committing is essentially free so we can just keep that cost.
+        #  2) IF move not operated yet: We operate, add in time to operate, and record that.
+        #  ALSO: Debugging operations CANNOT affect operator statistics.
+        #  All operator methods that record statistics MUST only update stats like segment_time and segment_proposals on accept.
+
+    def update_stats_for_accept(self):
         move = self.last_move
-        if move is None or not move.is_actionable:
-            self.stats.record_use(0)
-            return
+        assert move is not None # We never accept a None or non-actionable move
 
         # Cost-aware weighting: an operator's score is its improvement per unit of time spent,
         # so cheap operators are preferred at equal improvement. Substituting 1 makes selection a
         # pure function of improvements, and therefore reproducible (see set_deterministic_weighting).
         mean_cost = (self.segment_time / max(self.segment_proposals, 1) + self.mean_apply_time
                      if self.weight_by_time else 1.0)
+
         sign = -1 if move.improvement < 0 else 1
         score = max(0, sign * (abs(move.improvement) ** 1.5) / max(mean_cost, 1e-9))
-        self.stats.record_use(score)
+        self.stats.record_accept(score)
 
     def get_stats(self):
         stats = self.stats
-        return stats.uses, stats.improvements, stats.score_sum
+        return stats.proposals, stats.accepts, stats.improvements, stats.score_sum
 
     def reset_stats(self):
         self.stats.reset()
         self.segment_time = 0.0
-        self.segment_proposals = 0
 
     @abstractmethod
     def _operand_selection_impl(self) -> Ops:
@@ -195,18 +244,12 @@ class BestOfCandidates[Ops: tuple](Operator[Ops]):
         for i, operands in enumerate(self.candidate_source(self.sln)):
             if self.k is not None and i >= self.k:
                 break
-            move = self.base_operator.evaluate(operands)
+            move = self.evaluate(operands)
             if move.is_actionable and move.improvement > best_imp:
                 best, best_imp = move, move.improvement
-            self.base_operator.revert(move)
+            self.revert(move)
         self.segment_time += time.perf_counter() - t0
         self.segment_proposals += 1
-        # best was reverted like every other candidate above, so it's not applied -- even though
-        # its own already_applied field (baked in at evaluate() time) may still say True.
-        # sln.version also moved on since `best` was evaluated (every candidate's evaluate+revert
-        # bumps it), so re-stamp that too: the solution content is identical to what it was when
-        # `best` was measured (everything got reverted), just under a later version number.
-        best = best._replace(already_applied=False, eval_version=self.sln.version)
         self.prev_operands = best.operands
         self.last_move = best
         self._update_reporting_stats(best)

@@ -57,7 +57,7 @@ class OperatorContractBase(SeededTestCase):
         if not move.already_applied:
             self.assertEqual(sln.objective_terms(), before_terms,
                              f"{label}: evaluate() mutated the solution (not pure)")
-            operator.apply(move)
+            operator.apply_and_commit(move)
 
         actual = term_deltas(before_terms, sln.objective_terms())
         for name, predicted, measured in zip(type(actual)._fields, move.deltas, actual):
@@ -67,7 +67,7 @@ class OperatorContractBase(SeededTestCase):
 
         self.assertEqual(all_problems(sln), [], f"{label}: invariants broken after apply")
 
-        operator.revert(move)
+        operator.revert_and_reject(move)
 
         self.assertEqual(fingerprint(sln), before_fingerprint,
                          f"{label}: revert() did not restore the solution exactly")
@@ -182,7 +182,7 @@ class CombineRoutesMatrix(OperatorContractBase):
 class RandomisedOperatorContract(OperatorContractBase):
     """
     Drives the real Operator wrappers so operands come from the same selection logic the solver
-    uses, then checks the BL contract on whatever they produce. Covers operators (and operand
+    accepts, then checks the BL contract on whatever they produce. Covers operators (and operand
     shapes) the hand-built matrices above don't enumerate.
     """
 
@@ -206,7 +206,7 @@ class RandomisedOperatorContract(OperatorContractBase):
 
             move = wrapper.propose()
             if not move.is_actionable:
-                wrapper.revert(move)   # gatekeeps itself
+                wrapper.revert_and_reject(move)   # gatekeeps itself
                 self.assertEqual(fingerprint(sln), before_fingerprint,
                                  f"{type(wrapper).__name__}: non-actionable proposal left a change")
                 continue
@@ -215,7 +215,7 @@ class RandomisedOperatorContract(OperatorContractBase):
             if not move.already_applied:
                 self.assertEqual(sln.objective_terms(), before_terms,
                                  f"{label}: propose() mutated the solution")
-                wrapper.apply(move)
+                wrapper.apply_and_commit(move)
 
             actual = term_deltas(before_terms, sln.objective_terms())
             for name, predicted, measured in zip(type(actual)._fields, move.deltas, actual):
@@ -224,7 +224,7 @@ class RandomisedOperatorContract(OperatorContractBase):
                     msg=f"{label}: term '{name}' predicted {predicted} but measured {measured}")
             self.assertEqual(all_problems(sln), [], f"{label}: invariants broken after apply")
 
-            wrapper.revert(move)
+            wrapper.revert_and_reject(move)
             self.assertEqual(fingerprint(sln), before_fingerprint,
                              f"{label}: revert() did not restore the solution exactly")
             checked += 1

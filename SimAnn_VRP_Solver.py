@@ -132,21 +132,23 @@ class SimAnnVRPSolver:
         weights = [op.weight for op in self.operators]
 
         geom_mean_weight = math.exp(math.fsum([math.log(w) for w in weights]) / len(weights))
-        total_moves = 0
+        total_proposals = 0
+        total_accepts = 0
         improving_moves = 0
 
         for op in self.operators:
             weight = op.weight
-            (num_uses, num_improvements, score_sum) = op.get_stats()
+            (num_proposals, num_accepts, num_improvements, score_sum) = op.get_stats()
             p = self.reaction_factor
-            if num_uses > 0:
-                op.weight =  (1 - p) * weight + p * (score_sum / num_uses)
-                total_moves += 1
+            if num_accepts > 0:
+                average_score = score_sum / num_accepts if score_sum > 0 else 0
+                op.weight =  (1 - p) * weight + p * average_score
             else:
                 op.weight = max(weight, (weight / geom_mean_weight) ** 0.997 * geom_mean_weight)
 
-            if num_improvements > 0:
-                improving_moves += 1
+            total_proposals += num_proposals
+            total_accepts += num_accepts
+            improving_moves += num_improvements
 
             op.reset_stats()
 
@@ -327,7 +329,7 @@ class SimAnnVRPSolver:
         #     apply() (or before/after propose() for escape-hatch operators, which mutate there).
         # 2 = also run _check_solution_invariants() after every accepted/rejected move.
         # 3 = also force a rejected move through apply -> recompute -> revert -> recompute, to
-        #     verify the rejection would have been valid had it been accepted. Only ever applies
+        #     verify the rejection would have been valid had it been accepted. Only ever accepts
         #     to moves that reached the accept/reject test (move.kind is VALID) -- INVALID/NOOP
         #     moves never reach that branch and must never be applied.
         #debug_level = 0
@@ -352,7 +354,7 @@ class SimAnnVRPSolver:
             move = op.propose()
 
             if not move.is_actionable:
-                op.revert(move)   # gatekeeps itself: a no-op unless propose() already mutated
+                assert not move.already_applied, f"{type(op).__name__}: A non-actionable move was applied!"
                 elapsed_time = time.time() - start_time
                 continue
 
@@ -366,20 +368,28 @@ class SimAnnVRPSolver:
             loglog_acceptance_threshold = -float('inf') if improvement >= 0 else math.log(-improvement, 2) - self.log_temperature
             accept = improvement > 0 or math.log(-math.log(rand_unit()), 2) >= loglog_acceptance_threshold
 
+            if isinstance(op, CombineRandomRoutes):
+                pass
+
             if accept:
                 # Apply FIRST, so the debug_level 1 check brackets a clean before/after. apply()
                 # gatekeeps itself, so this is a no-op when propose() already mutated.
+                if isinstance(op, CombineRandomRoutes):
+                    pass
+
                 if debug_level >= 1 and not move.already_applied:
                     pre_op_obj = sln.solution_cost()
-                    op.apply(move)
+                    op.apply_for_acceptance(move)
                     post_op_obj = sln.solution_cost()
                     if abs(improvement - (pre_op_obj - post_op_obj)) >= 1e-6:
                         print(f"[debug] {type(op).__name__}: reported improvement {improvement} "
                               f"!= measured {pre_op_obj - post_op_obj}")
                 else:
-                    op.apply(move)
+                    op.apply_for_acceptance(move)
 
-                if improvement < 0 and self.curr_objective <= self.best_objective + 1e-12:
+                curr_objective = self.curr_objective
+                best_objective = self.best_objective
+                if improvement < 0 and curr_objective <= best_objective + 1e-12:
                     # Error-safe comparison of current and best objectives - relative error as abs/ave
                     # We're about to step away from the running global optimum, so snapshot it.
                     # Step back off the move first: the snapshot must capture the state we are
@@ -387,7 +397,7 @@ class SimAnnVRPSolver:
                     # decrements sln.version and take_sln_snapshot() undoes its own disposal, so
                     # the re-apply lands back on move.eval_version rather than looking stale.
                     op.revert(move)
-                    self.take_sln_snapshot()
+                    self.take_sln_snapshot(curr_objective, debug_level = debug_level)
                     op.apply(move)
 
                 if debug_level >= 2:
@@ -396,10 +406,10 @@ class SimAnnVRPSolver:
                         print(f"[debug] invariant violations after accepted {type(op).__name__}: {problems}")
 
                 op.commit(move)
-                op.update_stats()
+                op.update_stats_for_accept()
 
                 self.curr_objective -= improvement
-                self.best_objective = min(self.best_objective, self.curr_objective)
+                self.best_objective = min(best_objective, curr_objective)
             else:
                 if debug_level >= 3:
                     # move.kind is VALID here (checked above) -- never force-apply an INVALID/NOOP move.
@@ -419,8 +429,8 @@ class SimAnnVRPSolver:
                         if problems:
                             print(f"[debug] invariant violations mid-rejection-check for {type(op).__name__}: {problems}")
                             problems = self._check_solution_invariants(sln)
-                    op.revert(move)   # something is applied at this point either way
-                    recompute = op.base_operator.evaluate(move.operands)
+                    op.revert_and_reject(move)   # something is applied at this point either way
+                    recompute = op.evaluate(move.operands)
                     op.revert(recompute)
 
                     if debug_level >= 2:
@@ -434,12 +444,14 @@ class SimAnnVRPSolver:
                         print(f"[debug] {type(op).__name__}: revert() did not restore objective "
                               f"({reverted_obj} != {pre_op_obj})")
                 else:
-                    op.revert(move)   # gatekeeps itself: a no-op if it was never applied
+                    op.revert_and_reject(move)   # gatekeeps itself: a no-op if it was never applied
 
                 if debug_level >= 2:
                     problems = self._check_solution_invariants(sln)
                     if problems:
                         print(f"[debug] invariant violations after rejected {type(op).__name__}: {problems}")
+
+                op.update_stats_for_reject()
 
             if len(self.snapshots) > 2*self.max_snapshots:
                 self.pare_snapshots_to_top_k(self.max_snapshots)
@@ -461,10 +473,11 @@ class SimAnnVRPSolver:
         for op in self.operators:
             op.report_stats()
 
-        self.take_sln_snapshot()
+        self.take_sln_snapshot(self.curr_objective, debug_level=debug_level)
+
         self.pare_snapshots_to_top_k(self.max_snapshots)
 
-    def take_sln_snapshot(self):
+    def take_sln_snapshot(self, curr_objective: Num | None = None, debug_level: int = 0):
         """
         Store a NORMALISED copy of the current solution: every empty route disposed, and every
         remaining route assigned to a vehicle. Anyone reading a snapshot can then rely on that
@@ -485,7 +498,18 @@ class SimAnnVRPSolver:
                 f"were just disposed, so anything left unassigned violates the solver invariant "
                 f"'between moves, every nonempty route is assigned to a vehicle'.")
 
-            self.snapshots.append(self.sln.take_snapshot())
+            # If a route was disposed and an objective was passed in: subtract off the cost savings from disposal
+            curr_objective = curr_objective if curr_objective is None or dispose_move is None else curr_objective - dispose_move.improvement
+
+            if debug_level >= 1 and curr_objective is not None:
+                # Validate current objective values for all snapshots
+                if curr_objective != self.sln.solution_cost():
+                    assert curr_objective is not None # Linter is dum-dum so add this dum-dum assert for dum-dum linter
+                    print(
+                        f"WARNING: Computed objective for a stored snapshot does NOT match its stored objective:\n"
+                        f"Stored: {curr_objective}, Actual: {self.sln.solution_cost()}")
+
+            self.snapshots.append(self.sln.take_snapshot(curr_objective))
         finally:
             # Restore even if the assert fires, so a failing run is still inspectable.
             if dispose_move is not None:

@@ -3,7 +3,8 @@ from typing import Sequence
 from SimAnn_VRP_Core_Model import *
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import Any, ClassVar, NamedTuple, cast
+from dataclasses import dataclass
+from typing import Any, ClassVar, cast
 import numpy as np
 
 from SimAnn_VRP_Core_Model import Vehicle, Route
@@ -39,14 +40,25 @@ type CombineRoutesOps                 = tuple[Route, Route]
 #endregion
 
 
-class Move[Ops: tuple](NamedTuple):
+@dataclass(frozen=True, slots=True, eq=False)
+class Move[Ops: tuple]:
     """
     A move, as returned by evaluate(). Carries its own applied/not-applied state so callers
-    (the solver, BestOfCandidates) never have to infer it out-of-band from the operator's class.
+    (the solver, BestOfCandidates) never have to infer it out-of-band from the operator's class:
+    "was this move applied?" is answered by asking the move, not by interrogating the operator.
+    That's what lets Operator gatekeep the lifecycle without threading boolean returns back out
+    of apply()/revert().
 
     Generic in Ops so the operand tuple stays typed all the way through
     evaluate() -> apply() -> revert(): a Move[CombineRoutesOps] can only be handed back to an
     operator that consumes CombineRoutesOps.
+
+    MUTABILITY: exactly one field, already_applied, is mutable, and only via mark_applied().
+    Everything else is frozen -- the priced result of evaluate() must never drift after the fact.
+    Mutating in place rather than rebuilding is load-bearing, not a convenience: OperatorBL
+    gatekeeps on `self._applied is move`, so producing a new object to change the flag silently
+    breaks that identity check (which is exactly how a committed move stopped matching the
+    applied one). eq=False keeps == as identity too, so there is no second notion of "same move".
     """
     kind: MoveKind = MoveKind.INVALID
     # cast: the empty tuple is the only sensible default but isn't a valid value of an arbitrary
@@ -54,16 +66,25 @@ class Move[Ops: tuple](NamedTuple):
     operands: Ops = cast(Any, ())
     deltas: ObjectiveTermDelta = ObjectiveTermDelta()
     improvement: Num = 0.0
+    # Solution version recorded BEFORE the move is applied
     eval_version: int = -1
-    # True iff evaluate() itself already performed the mutation (an _evaluates_by_applying
-    # operator). When True, the solution currently reflects this move; apply() must NOT call
-    # _apply_impl again, and revert() undoes it exactly like any other applied move.
+    # True iff the solution currently reflects this move -- either because an
+    # _evaluates_by_applying operator mutated during evaluate(), or because apply() ran since.
     already_applied: bool = False
 
     @property
     def is_actionable(self) -> bool:
         return self.kind is MoveKind.VALID
 
+    def mark_applied(self, applied: bool) -> None:
+        """
+        The ONLY sanctioned mutation on a Move; every other field raises FrozenInstanceError.
+
+        object.__setattr__ is the standard frozen-dataclass escape hatch. It's deliberate and
+        deliberately narrow: one named method, trivial to grep, so any future divergence between
+        a move's own state and OperatorBL._applied has exactly one place to have come from.
+        """
+        object.__setattr__(self, "already_applied", applied)
 
 class OperatorBL[Ops: tuple](ABC):
     """
@@ -129,7 +150,7 @@ class OperatorBL[Ops: tuple](ABC):
         return Move(MoveKind.VALID, operands, result,
                     self.improvement_from_deltas(result), self.sln.version)
 
-    def apply(self, move: Move[Ops]) -> bool:
+    def apply(self, move: Move[Ops]):
         """
         Apply `move`, returning whether the solution now reflects it.
 
@@ -137,29 +158,33 @@ class OperatorBL[Ops: tuple](ABC):
         therefore drive the lifecycle uniformly -- apply/revert/commit with the move in hand --
         without tracking which operators happen to mutate during evaluate().
         """
-        if not move.is_actionable:
-            return False                        # never apply an INVALID/NOOP move
-        if self._applied is move:
-            return True                         # already applied (escape-hatch evaluate, or a repeat call)
+        assert move.is_actionable, f"{type(self).__name__}.apply() called on a non-actionable move."
+        assert not move.already_applied, f"{type(self).__name__}.apply() called on an already-applied move."
 
+        if self._applied is move:
+            print("kalsdjf;dlksajfd;lkasjdf")
+        assert self._applied is not move, f"{type(self).__name__}.apply() called while a DIFFERENT move is applied."
         assert not self.is_applied, (
-            f"{type(self).__name__}.apply() called while a DIFFERENT move is applied.")
+            f"{type(self).__name__}.apply() called while called while no move is applied.")
         assert move.eval_version == self.sln.version, (
-            f"Stale move for {type(self).__name__}: evaluated at version {move.eval_version}, "
+            f"Stale move for {type(self).__name__}: attempted to apply at version {move.eval_version}, "
             f"solution is now at {self.sln.version}.")
 
         self._revert_info = self._apply_impl(move.operands)
         self._applied = move
         self.sln.version += 1
-        return True
 
-    def revert(self, move: Move[Ops]) -> bool:
+    def revert(self, move: Move[Ops]):
         """
         Undo `move` if it is the one currently applied; a no-op otherwise. Returns whether
         anything was actually undone.
         """
-        if self._applied is not move:
-            return False
+        assert move.already_applied, f"{type(self).__name__}.revert() called on a move that has not been applied."
+        assert self._applied is move, f"{type(self).__name__}.revert() called on a move that mismatches last move."
+        assert move.is_actionable, f"{type(self).__name__}.revert() called on a non-actionable move."
+        assert move.eval_version == self.sln.version - 1, (
+            f"Stale move for {type(self).__name__}: attempted to revert at version {move.eval_version}, "
+            f"solution is now at {self.sln.version}.")
 
         self._revert_impl(self._revert_info)
         self._revert_info = None
@@ -171,18 +196,18 @@ class OperatorBL[Ops: tuple](ABC):
         # apply(), even though the solution is provably identical. That round trip is exactly
         # what snapshotting does (see SimAnnVRPSolver.take_sln_snapshot).
         self.sln.version -= 1
-        return True
 
-    def commit(self, move: Move[Ops]) -> Move[Ops]:
+    def commit(self, move: Move[Ops]) -> None:
         """Finalize `move` as permanent (it can no longer be reverted).
         TODO(undo-stack): once an undo stack exists, push (self, self._revert_info, move.deltas)
         here instead of discarding -- that's the whole reason this method exists separately
         from just clearing state on the next evaluate()."""
+        if self._applied is not move:
+            print("aksdjpflodksjapflksdjaflik")
         assert self._applied is move, (
             f"{type(self).__name__}.commit() for a move that is not the applied one.")
         self._revert_info = None
         self._applied = None
-        return move
 
     # ----------------------------------------------------------- escape hatch
     def _evaluate_by_applying(self, operands: Ops) -> Move[Ops]:
@@ -254,30 +279,13 @@ class ReassignCustomerAt(OperatorBL[ReassignCustomerAtOps]):
         if src_route == dest_route and src_index == dest_index:
             return MoveKind.NOOP
 
-        if src_route == dest_route and abs(src_index - dest_index) == 1:
-            min_id = min(src_index, dest_index)
-            deltas = src_route.cost_deltas_for_adjacent_customer_swap_starting_at(min_id)
-        else:
-            deltas = src_route.cost_deltas_if_customer_popped(src_index)
-            customer = src_route.path[src_index]
+        customer = src_route.get_visit_at(src_index)
+        insert_visit = dest_route.get_visit_at(dest_index)
+        # We already gated for validity of src_index and dest_index, so we can now assert they're the desired types.
+        assert isinstance(customer, CustomerVisit)
+        assert isinstance(insert_visit, CustomerVisit|LastRouteVisit)
 
-            if src_route == dest_route and src_index < dest_index:
-                # Must account for target index shifting before you can insert! The next customer (if any) post-reassign
-                #     is the one currently at dest_index + 1 due to this shift.
-                deltas += dest_route.cost_deltas_if_customer_inserted(customer, dest_index + 1)
-            else:
-                deltas += dest_route.cost_deltas_if_customer_inserted(customer, dest_index)
-
-        if src_route == dest_route:
-            # An intra-route move only reorders the path, so the route's load -- and therefore both
-            # load-derived terms -- cannot change. They must be forced to zero rather than summed:
-            # pop-delta and insert-delta are each measured against the SAME original load, and
-            # max(0, load - capacity) is nonlinear, so they don't cancel. E.g. at load == capacity
-            # the pop contributes 0 and the insert contributes +demand, inventing overload that
-            # never happens.
-            deltas = deltas._replace(total_route_overload=0, vehicles_overloaded=0)
-
-        return deltas
+        return dest_route.cost_deltas_if_customer_inserted_before(customer, insert_visit)
 
     def _apply_impl(self, operands: ReassignCustomerAtOps):
         src_route, src_index, dest_route, dest_index = operands
