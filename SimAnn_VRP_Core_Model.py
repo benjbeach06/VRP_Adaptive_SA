@@ -82,9 +82,9 @@ def rand_shuffle(items: list) -> None:
 
 #region Global helper functions
 
-def combine_defaultdicts_by_value_sum[T1: int, T2: Num](dict1: defaultdict[T1, T2], dict2: defaultdict[T1, T2]) -> defaultdict[T1, T2]:
+def combine_defaultdicts_by_value_sum[T1: Any](dict1: defaultdict[T1, Any], dict2: defaultdict[T1, Any]) -> defaultdict[T1, Any]:
     # Copy-combines and returns new
-    result = defaultdict(dict1.default_factory)
+    result: defaultdict[T1, Any] = defaultdict(dict1.default_factory)
 
     all_keys = dict1.keys() | dict2.keys()
 
@@ -93,7 +93,7 @@ def combine_defaultdicts_by_value_sum[T1: int, T2: Num](dict1: defaultdict[T1, T
 
     return result
 
-def append_new_defaultdict_by_value_sum(dict1: defaultdict, dict2: defaultdict) -> None:
+def append_new_defaultdict_by_value_sum[T1: Any](dict1: defaultdict[T1, Any], dict2: defaultdict[T1, Any]) -> None:
     for key in dict2.keys():
         dict1[key] += dict2[key]
 
@@ -785,7 +785,7 @@ class NextRouteKind(Enum):
 
 class LastRouteVisit(Depot, RouteVisit):
     prev_visit: CustomerVisit | FirstRouteVisit # prev visit is never None
-    next_visit: FirstRouteVisit | None # next visit is either None or the start of the next src_route
+    #next_visit: FirstRouteVisit | None # next visit is either None or the start of the next src_route
 
     # NOTE: Core operations can only focus on changing where a src_route ends, not starts.
     # BUT changing where one src_route ends for a vehicle necessarily changes where the next starts
@@ -2542,12 +2542,12 @@ class Route(VehicleNode):
             if len(path) == 0:
                 self.count_load_change(-self.current_load) # Remove all load from self - and update any requisite vehicle overload accounting.
                 self.first_visit.next_visit = self.last_visit
+                self.last_visit.prev_visit = self.first_visit
                 return
 
             # Update current load and vehicle overload accounting
             current_load = sum(c.demand for c in path)
             self.count_load_change(current_load-self.current_load)
-
             # Link visits
             self.link_visits()
 
@@ -2821,7 +2821,7 @@ class Route(VehicleNode):
             # Permute path in place cheaply (no accounting necessary!) via direct node replacement within visits.
             sub_permute_path(subpermutation, self.path)
 
-        def split_at(self, split_index: int, refill_depot: Depot) -> Route:
+        def split_at(self, split_index: int, refill_depot: Depot, new_route: Route | None = None) -> Route:
             # Removes the customers at or after the index. Then returns a new src_route with those customers and
             # the given end depot. Idea is that vehicle will handle the insertion of the new src_route.
             # TODO(revert-identity): take an optional `into: Route | None = None` and, when given,
@@ -2841,7 +2841,12 @@ class Route(VehicleNode):
 
             # Make the new src_route. First customer of new src_route will link with new FirstVisit on creation.
             # Broken linkages will update on new src_route add.
-            new_route = Route(path[split_index:], self.end_depot)
+            if new_route is None:
+                # new_route is not a legal destination: make a new one
+                new_route = Route(path[split_index:], self.end_depot)
+            else:
+                assert not (new_route.is_assigned or new_route.has_customers), "Invalid route specified for split: target route must be empty and unassigned"
+                new_route.set_values(path = path[split_index:])
 
             # Remove the tail of the path from the original src_route, and update customer linkages without affecting vehicle customer accounting.
 
@@ -2870,8 +2875,12 @@ class Route(VehicleNode):
             # other must have customers to relink at the boundary index below; is_empty (not just
             # is_trivial) is the real requirement -- an empty-but-not-trivial other (zero customers,
             # start_depot != end_depot) would relink out of range just the same.
-            if other.is_empty or self.is_trivial:
-                raise ValueError("Cannot combine using trivial/empty routes")
+            # Mirrors the split guard: split_at never produces an empty half, so combine --
+            # its inverse -- must never consume one. self.is_trivial was too weak: an
+            # empty-but-not-trivial self (no customers, start_depot != end_depot) passed here and
+            # then failed on revert, because undoing the combine calls split_at(0, ...).
+            if other.is_empty or self.is_empty:
+                raise ValueError("Cannot combine using empty routes")
 
             if self is other:
                 raise ValueError("Cannot combine a src_route with itself")
@@ -2900,7 +2909,6 @@ class Route(VehicleNode):
             # (get_replacement_travel_delta, distance_in, ...). Only a no-op when other had
             # exactly 1 customer, in which case relink_customer(start_len) already did it.
             self.relink_customer(self.path_len - 1)
-            other.last_visit.route = self
             for i in range(start_len+1, self.path_len):
                 self.path[i].route = self
 
@@ -3412,11 +3420,11 @@ class Vehicle:
     #endregion
 
     #region Split and combine routes
-    def split_route(self, route: Route, split_index: int, refill_depot: Depot) -> Route:
+    def split_route(self, route: Route, split_index: int, refill_depot: Depot, new_route: Route | None = None) -> Route:
         if route.vehicle is not self:
             raise ValueError("route not assigned to current vehicle.")
 
-        return route.split_at(split_index, refill_depot)
+        return route.split_at(split_index, refill_depot, new_route)
 
     #endregion
 
@@ -3768,7 +3776,8 @@ class FullSolution:
                 if route.is_assigned:
                     break
                 else:
-                    unassigned_routes: RouteSet = RouteSet() if unassigned_routes is None else unassigned_routes
+                    unassigned_routes = RouteSet() if unassigned_routes is None else unassigned_routes
+                    assert isinstance(unassigned_routes, RouteSet) # Linter is dumb hurr durr
                     unassigned_routes.add(route)
 
                     if route.is_empty:

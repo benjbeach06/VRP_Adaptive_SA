@@ -12,6 +12,33 @@ def argmin(values):
     return min(range(len(values)), key=values.__getitem__)
 
 
+# NOTE(tuning): results of a 704-trial Optuna/TPE search over the annealing constants
+# (2026-08-11). Full report in tools/tuning_report.txt; harness in tools/tune.py; raw trials in
+# tools/tune_results.json. Defaults below are UNCHANGED -- this is a record, not an application.
+#
+#   The landscape is FLAT. Best-to-worst across the whole searched space is 3.6%, so no parameter
+#   setting is going to rescue or ruin a run. The existing hand-tuned values were already within
+#   3-5x of the optimum on parameters spanning 2-4 orders of magnitude, and an hour of search
+#   bought 2-3%. Remaining performance is in the algorithm (operator quality, the scoring fix),
+#   not in these numbers.
+#
+#   Only two parameters are resolvable above the noise floor (trial-to-trial stdev 0.0064):
+#     initial_temp_factor   bin spread 0.0123   ~2x noise    best ~0.005  (current 0.05)
+#     cooling_factor        bin spread 0.0101   ~1.6x noise  best ~0.97   (current 0.99)
+#   These three show a consistent trend but under the noise floor -- weakly supported:
+#     max_plateau_size      spread 0.0046   best ~1800   (current 10000)
+#     plateau_reheat_factor spread 0.0046   best ~7.0    (current 2.0)
+#     low_temp_factor       spread 0.0029   NO SIGNAL over 55 orders of magnitude; don't tune it.
+#
+#   Direction, if applied: start cooler, cool faster, notice plateaus sooner, reheat harder --
+#   i.e. short aggressive anneal-reheat cycles beat one long slow anneal. Measured -1.4% to -3.3%
+#   against defaults on seeds never used during tuning, holding at 4x the tuning run length.
+#
+#   Caveat: cooling_factor is per-ITERATION, so its optimum is coupled to throughput. It survived
+#   a 2x throughput change and a 4x run-length change here, but reparameterising it as a fraction
+#   of the expected budget would decouple it properly.
+
+
 # TODO(debug-tooling): improvements to the verification machinery, ordered by payoff. Each of
 # these was reconstructed ad hoc while chasing the depot-usage / combine-linkage bug set, and
 # would have found those bugs immediately (and at their true source) had it already existed.
@@ -49,28 +76,45 @@ def argmin(values):
 #    can see, since it only manifests on the apply->revert path.
 
 class SimAnnVRPSolver:
-    def __init__(self, sln: FullSolution, max_time: float = 120):
+    # Every tunable constant is a constructor argument defaulting to its historical value, so
+    # passing nothing reproduces the old behaviour exactly. They're exposed as parameters mainly
+    # so tools/tune.py can search over them -- see that file for the current best-known settings
+    # and the caveats on which ones are worth tuning yet.
+    def __init__(self, sln: FullSolution, max_time: float = 120,
+                 *,
+                 segment_length: int = 100,
+                 reaction_factor: float = 0.2,
+                 cooling_factor: float = 1 - 1e-2,
+                 initial_temp_factor: float = 0.05,
+                 low_temp_factor: float = 1e-40,
+                 max_plateau_size: int = 10000,
+                 plateau_reheat_factor: float = 2,
+                 empty_route_cleanup_interval: int = 100,
+                 min_weight: float = 1e-6):
         self.sln = sln
         self.operators: list[Operator] = []
 
-        self.segment_length = 100
-        self.reaction_factor = 0.2
+        self.segment_length = segment_length
+        self.reaction_factor = reaction_factor
         self.max_time = max_time
 
         #self.cooling_factor = 0.93304 # Factor per 100 iterations
-        self.cooling_factor = 1-1e-2 # Factor per iteration
+        self.cooling_factor = cooling_factor # Factor per iteration
         self.log_cooling_factor = math.log2(self.cooling_factor)
         self.temperature = 0.0
         self.log_temperature = -100.0
 
+        # Starting temperature, as a fraction of the initial solution's objective (see solve()).
+        self.initial_temp_factor = initial_temp_factor
+
         # If the temp gets below low_temp_factor: reset to original temperature
-        self.low_temp_factor = 1e-40
+        self.low_temp_factor = low_temp_factor
 
         self.curr_plateau_size = 0
-        self.max_plateau_size = 10000
-        self.plateau_reheat_factor = 2 # Factor of "reheat to this factor of plateau start"
+        self.max_plateau_size = max_plateau_size
+        self.plateau_reheat_factor = plateau_reheat_factor # Factor of "reheat to this factor of plateau start"
 
-        self.min_weight = 1e-6
+        self.min_weight = min_weight
 
         self.best_objective = float("inf")
         self.curr_objective = float("inf")
@@ -110,7 +154,7 @@ class SimAnnVRPSolver:
         # Every this-many iterations, dispose of any empty routes outright rather than waiting
         # for weighted operator selection to stochastically pick DisposeOfEmptyRoutes -- since
         # all objective coefficients are non-negative, this is never a net loss.
-        self.empty_route_cleanup_interval = 100
+        self.empty_route_cleanup_interval = empty_route_cleanup_interval
         self._dispose_bl = DisposeOfEmptyRoutesBL(sln, dispose_only_trivial_routes=False)
 
     def set_deterministic_weighting(self, deterministic: bool = True):
@@ -320,7 +364,7 @@ class SimAnnVRPSolver:
 
     def solve(self, debug_level: int = 0):
         sln = self.sln
-        initial_temp = 0.05 * self.best_objective
+        initial_temp = self.initial_temp_factor * self.best_objective
         self.temperature = initial_temp
         self.log_temperature = math.log(self.temperature, 2)
 

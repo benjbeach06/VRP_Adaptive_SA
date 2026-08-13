@@ -279,9 +279,16 @@ def random_intra_route_swap_pairs(sln: FullSolution, k: int = 20) -> Iterator[Sw
 
 
 def random_route_pairs(sln: FullSolution, k: int = 10) -> Iterator[CombineRoutesOps]:
+    # choose_n(2) needs two routes to draw from; with few customers and many vehicles the route
+    # count really can collapse to one (or zero) after disposals, and sampling then raises rather
+    # than simply producing no candidates.
+    if len(sln.all_routes) < 2:
+        return
     for _ in range(k):
         r1, r2 = sln.all_routes.choose_n(2)
-        if not (r1.is_trivial or r2.is_trivial):
+        # is_empty, not is_trivial: combine_with rejects any empty route, and an
+        # empty-but-not-trivial one would otherwise be yielded and then raise on apply.
+        if not (r1.is_empty or r2.is_empty):
             yield r1, r2
 
 class RandomRouteReassignment(Operator[ReassignRouteBeforeOps]):

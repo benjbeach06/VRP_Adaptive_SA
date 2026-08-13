@@ -76,6 +76,21 @@ class Move[Ops: tuple]:
     def is_actionable(self) -> bool:
         return self.kind is MoveKind.VALID
 
+    def replace_operands(self, operands: Ops) -> None:
+        """
+        Second sanctioned mutation, for operators whose revert cannot restore the ORIGINAL
+        operand objects -- currently only CombineRoutes, whose _revert_impl rebuilds the absorbed
+        route through split_at() as a NEW object. Without this, operands still name the emptied,
+        unlinked original, so re-applying the move operates on a corpse. The solver DOES re-apply
+        after reverting: that is exactly the snapshot path (revert -> take_sln_snapshot -> apply).
+
+        Weakens what `operands` means -- it is no longer strictly "the objects this move was
+        priced against" -- so it stays narrow and named. The durable fix is revert-identity: have
+        _revert_impl restore into the original object (see TODO(revert-identity) on split_at),
+        after which this method should go away.
+        """
+        object.__setattr__(self, "operands", operands)
+
     def mark_applied(self, applied: bool) -> None:
         """
         The ONLY sanctioned mutation on a Move; every other field raises FrozenInstanceError.
@@ -128,8 +143,13 @@ class OperatorBL[Ops: tuple](ABC):
         pass
 
     @abstractmethod
-    def _revert_impl(self, revert_info) -> None:
-        """Undo exactly what _apply_impl did, given its returned payload."""
+    def _revert_impl(self, move: Move[Ops], revert_info) -> None:
+        """
+        Undo exactly what _apply_impl did, given its returned payload.
+
+        `move` is passed in so a revert that cannot restore the original operand objects can
+        repoint the move at the replacements (see CombineRoutes, and Move.replace_operands).
+        """
         pass
 
     # -------------------------------------------------------------- drivers
@@ -159,10 +179,7 @@ class OperatorBL[Ops: tuple](ABC):
         without tracking which operators happen to mutate during evaluate().
         """
         assert move.is_actionable, f"{type(self).__name__}.apply() called on a non-actionable move."
-        assert not move.already_applied, f"{type(self).__name__}.apply() called on an already-applied move."
-
-        assert not move.already_applied and not self.is_applied, \
-            f"{type(self).__name__}.apply() called but the move is already applied!."
+        assert not (move.already_applied or self.is_applied), f"{type(self).__name__}.apply() called on an already-applied move."
         assert move.eval_version == self.sln.version, (
             f"Stale move for {type(self).__name__}: attempted to apply at version {move.eval_version}, "
             f"solution is now at {self.sln.version}.")
@@ -183,7 +200,7 @@ class OperatorBL[Ops: tuple](ABC):
             f"Stale move for {type(self).__name__}: attempted to revert at version {move.eval_version}, "
             f"solution is now at {self.sln.version}.")
 
-        self._revert_impl(self._revert_info)
+        self._revert_impl(move, self._revert_info)
         self._revert_info = None
         self._applied = None
         # DECREMENT, and only when we genuinely reverted. A revert restores the exact state the
@@ -252,7 +269,7 @@ class ReassignRouteBefore(OperatorBL[ReassignRouteBeforeOps]):
         src_route.link_to_vehicle_before(dest_route)
         return revert_info
 
-    def _revert_impl(self, revert_info):
+    def _revert_impl(self, move, revert_info):
         # Reassigns src_route back to its original vehicle and location.
         (route, successor) = revert_info
         if successor is None:
@@ -289,7 +306,7 @@ class ReassignCustomerAt(OperatorBL[ReassignCustomerAtOps]):
         dest_route.insert_customer(customer, dest_index)
         return revert_info
 
-    def _revert_impl(self, revert_info):
+    def _revert_impl(self, move, revert_info):
         src_route, src_index, dest_route, dest_index = revert_info
         # Reversing is just re-applying with source and destination swapped.
         customer = dest_route.pop_customer_at(dest_index)
@@ -326,7 +343,7 @@ class ReassignCustomerToNewRouteBefore(OperatorBL[ReassignCustomerToNewRouteOps]
         sln.all_routes.add(new_route)
         return src_route, src_index, new_route
 
-    def _revert_impl(self, revert_info):
+    def _revert_impl(self, move, revert_info):
         sln = self.sln
 
         src_route, src_index, new_route = revert_info
@@ -356,7 +373,7 @@ class SwapCustomersAt(OperatorBL[SwapCustomersAtOps]):
         route1.swap_customers_with(index1, route2, index2)
         return route1, index1, route2, index2
 
-    def _revert_impl(self, revert_info):
+    def _revert_impl(self, move, revert_info):
         # Reapplying the swap just swaps back.
         route1, index1, route2, index2 = revert_info
         route1.swap_customers_with(index1, route2, index2)
@@ -380,7 +397,7 @@ class PermuteRoute(OperatorBL[PermuteRouteOps]):
         route.permute(permutation)
         return route, invert_permutation(permutation)
 
-    def _revert_impl(self, revert_info):
+    def _revert_impl(self, move, revert_info):
         route, inv_permutation = revert_info
         route.permute(inv_permutation)
 
@@ -416,7 +433,7 @@ class ChangeEndDepot(OperatorBL[ChangeEndDepotOps]):
         route.set_end_depot(new_end_depot)
         return route, old_end_depot
 
-    def _revert_impl(self, revert_info):
+    def _revert_impl(self, move, revert_info):
         (route, old_end_depot) = revert_info
         route.set_end_depot(old_end_depot)
 
@@ -463,7 +480,7 @@ class DisposeOfEmptyRoutesBL(OperatorBL[DisposeOfEmptyRoutesOps]):
         removed = self.sln.all_routes.difference_update(routes)
         return revert_stack, removed
 
-    def _revert_impl(self, revert_info):
+    def _revert_impl(self, move, revert_info):
         revert_stack, removed = revert_info
         for route, prev_route in reversed(revert_stack):
             if prev_route is not None:
@@ -489,7 +506,7 @@ class SplitRoute(OperatorBL[SplitRouteOps]):
         self.sln.all_routes.add(new_route)
         return route, new_route
 
-    def _revert_impl(self, revert_info):
+    def _revert_impl(self, move, revert_info):
         route, new_route = revert_info
         route.combine_with(new_route)
         self.sln.all_routes.remove(new_route)
@@ -526,22 +543,27 @@ class CombineRoutes(OperatorBL[CombineRoutesOps]):
         # Keep the slot it vacated so revert can drop the rebuilt route straight back into it,
         # leaving all_routes in its original ORDER (the solver picks operands positionally).
         other_slot = self.sln.all_routes.remove(route2)
-        return route1, split_index, own_end_depot, other_prev_route, other_slot
+        return route1, split_index, own_end_depot, other_prev_route, other_slot, route2
 
-    def _revert_impl(self, revert_info):
+    def _revert_impl(self, move, revert_info):
         # TODO(revert-identity): restore into the ORIGINAL route2 object rather than building a
         # new one -- see the matching TODO on Route.split_at (needs its planned `into=` argument,
         # and route2 itself captured in the revert payload). Until then, revert is only
         # value-correct, not identity-correct: after an apply->revert cycle this Move's operands
         # still name the disposed route2, so re-evaluating the same Move (as the solver's
         # debug_level>=3 check does) reads a dead route.
-        route1, split_index, own_end_depot, other_prev_route, other_slot = revert_info
-        new_route = route1.split_at(split_index, own_end_depot)
+        route1, split_index, own_end_depot, other_prev_route, other_slot, route2 = revert_info
+        new_route = route1.split_at(split_index, own_end_depot, route2)
         self.sln.all_routes.undo_remove(new_route, other_slot)
         if other_prev_route is not None:
             # split_at already linked new_route directly after route1; move it back to route2's
             # original slot (a no-op when route2 was route1's immediate successor).
             new_route.link_to_vehicle_after(other_prev_route)
+
+        # split_at handed back a NEW Route, so the move's operands would otherwise still name the
+        # original route2 -- now emptied and unlinked. Repoint them, or the solver's snapshot path
+        # (revert -> snapshot -> apply) re-applies against a dead route.
+        # move.replace_operands((route1, new_route))
 
 # TODO(future-operator): SubPermuteRoute, using the existing (unused)
 # Route.cost_deltas_for_subpermutation -- not yet decided how best to leverage this one.

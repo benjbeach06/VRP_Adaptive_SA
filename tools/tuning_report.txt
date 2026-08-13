@@ -1,0 +1,136 @@
+SimAnnVRPSolver parameter tuning -- full report
+===============================================
+Run date 2026-08-11.  Harness: tools/tune.py (Optuna 4.9.0, TPE).  Raw trials: tools/tune_results.json.
+704 trials, 3602s wall.  Defaults were NOT changed as a result of this; see "Recommendation" below.
+
+
+METHOD
+------
+Production settings throughout: wall-clock termination and the normal timing-based operator
+weighting, i.e. the solver exactly as shipped. Fixing the iteration count and forcing
+deterministic weighting would have given a much quieter objective, but would have tuned a solver
+nobody runs.
+
+Noise was handled by AVERAGING rather than by removing it. Each configuration was scored over
+10 short runs -- 5 seeds x 2 instance sizes (60 and 200 customers) at 0.5s each -- rather than
+one long run. Run-to-run spread on this solver is large (roughly +-30% on iteration rate), so
+what matters is the variance of the mean.
+
+Scores are normalised per instance size against the current defaults, because raw objectives
+differ by ~2.5x between the two sizes and the larger would otherwise dominate. A score of 1.0000
+means "identical to current defaults"; lower is better.
+
+Searched (5 parameters):
+    cooling_rate           = 1 - cooling_factor, log scale, 1e-5 .. 1e-1
+    initial_temp_factor    log scale, 2e-3 .. 5e-1
+    low_temp_factor        log scale, 1e-60 .. 1e-5
+    max_plateau_size       log scale, 500 .. 50000
+    plateau_reheat_factor  linear, 1.05 .. 8.0
+
+NOT searched: segment_length, reaction_factor, and the hard-coded 0.997 (weight pull exponent)
+and 1.5 (score exponent). All four feed the adaptive weighting, whose input statistics are known
+to be wrong until the proposal/accept timing split lands -- see TODO(rescore) in
+SimAnn_VRP_Operators.py. Fitting them now would fit them to broken measurements.
+
+
+HEADLINE RESULT
+---------------
+The landscape is FLAT.
+
+    best 0.9647   p5 0.9708   median 0.9774   p95 0.9948   worst 1.0003
+    stdev across trials 0.0064
+
+The entire searched space spans 3.6%. The existing hand-tuned defaults were already within 3-5x
+of the optimum on parameters whose search ranges span two to four orders of magnitude:
+
+    parameter               default    optimum      off by    range searched
+    cooling_rate            0.01       ~0.03        3-4x      10,000x
+    max_plateau_size        10000      ~1800        5x        100x
+    initial_temp_factor     0.05       ~0.005       10x       250x
+    plateau_reheat_factor   2.0        ~7.0         3.5x      7.6x
+    low_temp_factor         1e-40      no signal    n/a       10^55
+
+An hour of TPE across 704 trials bought 2-3%. The conclusion is that parameter tuning is not
+where the remaining performance lives; the algorithmic work (operator quality, the scoring fix,
+whether CombineRandomRoutes earns its cost) is.
+
+
+SIGNAL vs NOISE, PER PARAMETER
+------------------------------
+Trials were binned into 10 buckets by parameter value (~70 trials each). "Bin spread" is the
+difference between the best and worst bucket means -- compare against the 0.0064 trial-to-trial
+stdev to judge whether the parameter is resolvable at all at this sample size.
+
+    parameter               bin spread   verdict
+    initial_temp_factor     0.0123       ~2x noise      REAL
+    cooling_rate            0.0101       ~1.6x noise    REAL
+    max_plateau_size        0.0046       below noise    weakly supported
+    plateau_reheat_factor   0.0046       below noise    weakly supported
+    low_temp_factor         0.0029       below noise    NO SIGNAL
+
+low_temp_factor is flat to the fourth decimal across 55 orders of magnitude. Drop it from any
+future search and save the dimension.
+
+Best-scoring bucket per parameter:
+    cooling_rate            [0.03347 .. 0.04118]     mean 0.9761
+    initial_temp_factor     [0.004161 .. 0.004573]   mean 0.9761
+    max_plateau_size        [1751 .. 1915]           mean 0.9773
+    plateau_reheat_factor   [6.554 .. 6.769]         mean 0.9771
+    low_temp_factor         [5.88e-34 .. 5.978e-33]  mean 0.9774
+
+
+BEST-TRIAL vs BEST-RANGE
+------------------------
+Worth recording as a methodology note. The single best trial and the best-scoring bins disagree,
+because the best of 704 noisy draws is optimistically biased (winner's curse) while each bin
+averages ~70 trials. Validated head to head on 20 seeds never used in tuning or earlier checks:
+
+                          0.5s/60    0.5s/200    2s/60     2s/200
+    best-trial            -2.67%     -0.95%      -2.07%    -2.56%
+    range-derived         -2.09%     -1.37%      -2.11%    -3.28%
+
+Within noise of each other on the first column; the range-derived values win the other three,
+decisively at 2s/200 customers (-3.28% vs -2.56%, z=10.1). Prefer bucket means over the argmin
+trial when reporting an optimum from a noisy search.
+
+
+VALIDATION
+----------
+Range-derived values, against defaults, on fresh seeds (tuning used 0..4; these used 1000+ and
+2000+). z is the standard score of the difference of the two means.
+
+    0.5s runs, 30 seeds:   size 60  -1.97%  z=4.4      size 200  -0.85%  z=5.4
+    2.0s runs, 30 seeds:   size 60  -3.34%  z=12.2     size 200  -2.21%  z=6.7
+    2.0s runs, 20 seeds:   size 60  -2.11%  z=4.0      size 200  -3.28%  z=10.1
+
+All significant. The gain HELD OR GREW at 4x the tuning run length, which is mild evidence the
+annealing optimum is not tightly coupled to run length in this range.
+
+
+RECOMMENDATION (not applied)
+----------------------------
+    cooling_factor        0.97     (cooling_rate 0.03)   was 0.99
+    initial_temp_factor   0.005                          was 0.05
+    max_plateau_size      1800                           was 10000
+    plateau_reheat_factor 7.0                            was 2.0
+    low_temp_factor       1e-40    unchanged, no signal
+
+Rounded deliberately: the landscape is flat enough that further digits are noise, and round
+numbers make it obvious these are tuned rather than derived.
+
+The direction is coherent across all four: start cooler, cool faster, notice plateaus sooner,
+reheat harder. Short aggressive anneal-reheat cycles beat one long slow anneal.
+
+
+CAVEATS
+-------
+1. cooling_factor is per-ITERATION, so its optimum depends on how many iterations fit the
+   budget. It survived a ~2x throughput change (the RNG swap) and a 4x run-length change here,
+   so the coupling is evidently weak in this range -- but reparameterising it as a fraction of
+   the expected budget would remove the question entirely, and should be done before trusting
+   these values at a very different max_time.
+2. Tuned at 0.5-2s on 60 and 200 customers with 3 vehicles. Larger instances or much longer
+   budgets are untested.
+3. max_plateau_size and plateau_reheat_factor sit below the noise floor. Their trends are
+   consistent but the evidence is weak; treat those two as suggestions, not findings.
+4. The weighting parameters remain unsearched pending the stats refactor.

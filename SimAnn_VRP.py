@@ -66,7 +66,7 @@ def build_vrp_model():
 
     sln.set_objectives(cost_per_depot = cost_per_depot, cost_per_vehicle = cost_per_vehicle, unit_travel_cost = unit_travel_cost)
 
-    solver = SimAnnVRPSolver(sln, max_time=60)
+    solver = SimAnnVRPSolver(sln, max_time=60, max_plateau_size=1800)
 
     """
     route1 = Route([customers[cID] for cID in [1, 15, 18, 17, 5]], depots[2])
@@ -109,7 +109,7 @@ def build_vrp_model():
     """
 
     solver.make_initial_solution()
-    solver.solve(debug_level=0)
+    solver.solve(debug_level=3)
 
     (obj, sln) = solver.get_best_snapshot()
 
@@ -123,7 +123,7 @@ def build_vrp_model():
                     {i: {"Path": ["d" + str(route.start_depot.dID)] +
                                  [customer.cID for customer in route.path] +
                                  ["d" + str(route.end_depot.dID)],
-                         "Vehicle": route.vehicle.vID,
+                         "Vehicle": route.vehicle.vID, #type: ignore - invariant: all routes assigned
                          "Cost": route.total_distance()}
                      for (i,route) in enumerate(all_routes)}.items()
                     )
@@ -141,7 +141,7 @@ def build_vrp_model():
     print(f"Infeasibility routes - {sln.total_overload()} total units:\n" +
           "\n".join("[" +', '.join(["d" + str(route.start_depot.dID)] +
                                    [str(customer.cID) for customer in route.path] +
-                                   ["d" + str(route.end_depot.dID)]) + f"], load={route.current_load}, cap={route.vehicle.capacity}" for route in all_routes))
+                                   ["d" + str(route.end_depot.dID)]) + f"], load={route.current_load}, cap={route.vehicle.capacity}" for route in all_routes)) #type: ignore - invariant: all routes assigned
 
 
     #print(vehicle_usage_count.value)
