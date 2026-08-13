@@ -1,6 +1,22 @@
 """
 Long-running correctness stress test, aimed squarely at delta computations.
 
+PROVENANCE
+----------
+Written by Claude (Anthropic) during development assistance; not hand-written by the repository
+author. The DESIGN is the author's, and both of their decisions materially strengthened it:
+
+  * the check sequence below -- unconditional evaluate -> apply -> revert -> apply -> commit,
+    verifying objective terms AND invariants after every transition, not just after the first
+    apply. Claude's original checked at two points and would have missed an objective that
+    drifted only on the second apply;
+  * accepting EVERY actionable move rather than random-walking like a solve. A solve-like walk
+    clusters near local optima and under-visits the degenerate states where delta bugs live.
+
+This harness found a latent crash on the solver's snapshot path (revert -> snapshot -> re-apply
+against a route that revert had rebuilt as a new object) and an unguarded 2-of-n sample that
+raised whenever the route count collapsed below two.
+
     python tools/stress.py --budget-seconds 3600
 
 WHAT IT CHECKS, per proposed move, against ground truth recomputed from scratch:

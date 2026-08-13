@@ -1,6 +1,16 @@
 """
 Ablation harness: iterations/sec for a given operator roster, averaged over several RNG seeds.
 
+PROVENANCE
+----------
+Written by Claude (Anthropic) during development assistance; not hand-written by the repository
+author. Kept in the repo at the author's request, for re-measuring when operators are added.
+
+CAUTION on reading its output: iterations/sec rewards doing cheap work. Removing the dispose
+operators from the weighted roster made this number roughly 3x WORSE while making the solution
+better, because those operators are cheap and were absorbing selections. Judge a roster change on
+the objective, not on throughput.
+
 usage: ablate.py <label> <roster> <seconds> <seed> [<seed> ...]
   roster = all | nodispose
 """

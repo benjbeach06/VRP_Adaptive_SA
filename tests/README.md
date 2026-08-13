@@ -4,9 +4,12 @@
 providing development assistance on this project. It is not hand-written by the repository author.
 
 Two design decisions in it came from the repository author, with the implementation by Claude:
-routing all randomness through a single explicit generator (`np.random.default_rng`) instead of
-the global `random` module — which is what actually made solves reproducible — and requiring
-every test to fix its own seed so the suite holds under arbitrary ordering and partial runs.
+routing all randomness through a single **owned, seeded generator** instead of the process-wide
+`random` module — which is what actually made solves reproducible — and requiring every test to
+fix its own seed, so the suite holds under arbitrary ordering and partial runs. (That generator
+was first `np.random.default_rng`; it later became a `random.Random` instance, because numpy's
+Generator costs 6-8x more per scalar draw and the solver only ever draws scalars. The design
+point — one owned stream, isolated from anything else in the process — is what mattered.)
 
 ## Running
 

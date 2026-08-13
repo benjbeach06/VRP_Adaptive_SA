@@ -1,6 +1,16 @@
 """
 Hyperparameter search over SimAnnVRPSolver's "magic numbers", using Optuna (TPE).
 
+PROVENANCE
+----------
+Written by Claude (Anthropic) during development assistance; not hand-written by the repository
+author. The METHOD below is the author's, and corrected a worse proposal: Claude suggested fixing
+the iteration count and forcing deterministic weighting to get a quieter objective. The author
+rejected that -- it would tune a solver nobody runs -- and specified keeping production
+nondeterminism while averaging ten short runs per configuration instead. That reduces the variance
+of the estimator rather than changing the system being measured, and it is why these results
+transfer to real solves.
+
     python tools/tune.py --budget-seconds 3600
 
 METHOD -- and why it is shaped this way:
@@ -28,7 +38,10 @@ METHOD -- and why it is shaped this way:
   * cooling_factor is per-ITERATION, so its best value depends on how many iterations fit in the
     budget. Results therefore transfer only to runs of a similar length; a longer run wants
     slower cooling. Reparameterising it as a fraction of the expected budget would fix that and
-    is worth doing before trusting these numbers at a very different max_time.
+    SHOULD BE DONE BEFORE THE NEXT SEARCH -- the 704-trial run of 2026-08-11 was invalidated by
+    exactly this. It ran at 0.5s per solve, where the temperature collapsed within ~1000
+    iterations, so it tuned an annealing schedule that was already degenerate. Use
+    --seconds-per-run at the length you actually care about.
 
 Results are written to the output JSON after every trial, so an interrupted run keeps its work.
 """
@@ -49,19 +62,22 @@ from SimAnn_VRP_Solver import SimAnnVRPSolver
 # nothing else needs to change.
 SEARCH_SPACE = {
     # Searched as (1 - cooling_factor) so the interesting region near 1.0 gets resolution.
-    "cooling_rate":          ("float", 1e-5, 1e-1, True),
+    # Range recentred after the temperature-collapse fix. The old upper end (1e-1) cooled so fast
+    # that the anneal was degenerate within ~1000 iterations, so the previous search optimised the
+    # wrong thing. cooling_rate is per-ITERATION, so a long run needs a much smaller value.
+    "cooling_rate":          ("float", 1e-6, 3e-3, True),
     "initial_temp_factor":   ("float", 2e-3, 5e-1, True),
-    "low_temp_factor":       ("float", 1e-60, 1e-5, True),
     "max_plateau_size":      ("int",   500, 50_000, True),
     "plateau_reheat_factor": ("float", 1.05, 8.0, False),
 }
 
+# Must track SimAnnVRPSolver.__init__'s defaults: these are the reference the search normalises
+# against, so a stale value silently shifts every score.
 DEFAULTS = {
-    "cooling_rate": 1e-2,
-    "initial_temp_factor": 0.05,
-    "low_temp_factor": 1e-40,
-    "max_plateau_size": 10_000,
-    "plateau_reheat_factor": 2.0,
+    "cooling_rate": 3e-4,
+    "initial_temp_factor": 0.01,
+    "max_plateau_size": 2_000,
+    "plateau_reheat_factor": 10.0,
 }
 
 
@@ -84,7 +100,6 @@ def solver_kwargs(params: dict) -> dict:
     return {
         "cooling_factor": 1.0 - params["cooling_rate"],
         "initial_temp_factor": params["initial_temp_factor"],
-        "low_temp_factor": params["low_temp_factor"],
         "max_plateau_size": int(params["max_plateau_size"]),
         "plateau_reheat_factor": params["plateau_reheat_factor"],
     }

@@ -98,7 +98,14 @@ class Operator[Ops: tuple](ABC):
         return move
 
     def evaluate(self, operands: Ops) -> Move[Ops]:
-        # Re-evaluation without timing, used for debugging and testing only
+        """
+        UNTIMED pricing, for callers outside weighted selection.
+
+        propose() is the weighted-selection entry point: it selects operands and charges the
+        proposal to segment_time / segment_proposals / the reporting counters. Use this instead
+        whenever the caller supplies its own operands and must NOT be charged -- unconditional
+        maintenance, the solver's debug re-checks, and the test suite.
+        """
         return self.base_operator.evaluate(operands)
 
     def apply_for_acceptance(self, move: Move[Ops]):
@@ -115,7 +122,15 @@ class Operator[Ops: tuple](ABC):
         move.mark_applied(True)
 
     def apply(self, move: Move[Ops]):
-        # Pure re-application of a move, used for debugging and testing only
+        """
+        UNTIMED apply, for callers outside weighted selection.
+
+        Use apply_for_acceptance() on the solver's accept path -- it charges apply time to
+        mean_apply_time, which feeds the cost term in operator scoring. Use this one when the
+        operator is not competing for selection, so the cost model stays clean. Production
+        callers today: SimAnnVRPSolver._dispose_empty_routes (maintenance) and the snapshot
+        re-apply. Also used by the tests.
+        """
         if move.already_applied:
             return
 
@@ -138,7 +153,16 @@ class Operator[Ops: tuple](ABC):
         return
 
     def revert(self, move: Move[Ops]):
-        # Pure reversion of a move, used for debugging and testing only
+        """
+        UNTIMED revert, for callers outside weighted selection.
+
+        Use revert_and_reject() on the solver's reject path -- it charges revert time to
+        segment_time, because reverting a rejected move is a real cost of having tried the
+        operator. Use this one when the operator is not competing for selection. Production
+        callers today: BestOfCandidates.propose (reverting each candidate is part of the
+        proposal, already timed by its own outer span), SimAnnVRPSolver._dispose_empty_routes,
+        and the snapshot round trip. Also used by the tests.
+        """
         if not move.already_applied:
             return
 
