@@ -325,6 +325,7 @@ class RandomCustomerReassignment(Operator[ReassignCustomerAtOps]):
             valid = len(src_route.path) >= 1
             tries += 1
 
+        assert isinstance(src_route, Route)
         if not valid:
             # Note: src_route is still an empty src_route.
             return src_route, 0, src_route, 0
@@ -460,6 +461,19 @@ class DisposeOfEmptyRoutes(Operator[DisposeOfEmptyRoutesOps]):
     def _operand_selection_impl(self):
         # Will dispose of all routes that can be disposed: they serve no customers, but may do a depot-to-depot move.
         return RouteSet(route for route in self.sln.all_routes if route.can_dispose()),
+
+    def evaluate_dispose_all(self) -> Move[DisposeOfEmptyRoutesOps]:
+        """
+        Select every disposable route and price the disposal, WITHOUT the proposal bookkeeping.
+
+        For callers that run disposal as unconditional maintenance rather than as a weighted
+        proposal -- see SimAnnVRPSolver._dispose_empty_routes, which runs on a fixed interval and
+        before every snapshot. Such a caller must not touch segment_time, segment_proposals or the
+        reporting counters, because this operator never competes for selection; propose() would.
+
+        Returns a NOOP move when nothing is disposable, so callers need no separate empty check.
+        """
+        return self.evaluate(self._operand_selection_impl())
 
 class SplitRandomRoute(Operator[SplitRouteOps]):
     def __init__(self, sln: FullSolution):

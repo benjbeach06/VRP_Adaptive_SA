@@ -109,7 +109,8 @@ def build_vrp_model():
     """
 
     solver.make_initial_solution()
-    solver.solve(debug_level=3)
+    #solver.make_dumb_initial_solution()
+    solver.solve(debug_level=0)
 
     (obj, sln) = solver.get_best_snapshot()
 

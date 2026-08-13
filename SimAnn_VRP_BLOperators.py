@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, cast
 import numpy as np
 
-from SimAnn_VRP_Core_Model import Vehicle, Route
+from SimAnn_VRP_Core_Model import Vehicle, Route, LastRoute, Depot, FirstRoute
 
 
 class MoveKind(Enum):
@@ -138,7 +138,7 @@ class OperatorBL[Ops: tuple](ABC):
         pass
 
     @abstractmethod
-    def _apply_impl(self, operands: Ops):
+    def _apply_impl(self, operands: Ops) -> tuple:
         """Mutate the solution. RETURN the revert payload (do not assign it directly)."""
         pass
 
@@ -258,7 +258,7 @@ class ReassignRouteBefore(OperatorBL[ReassignRouteBeforeOps]):
 
         return src_route.cost_deltas_if_inserted_before(dest_route)
 
-    def _apply_impl(self, operands: ReassignRouteBeforeOps):
+    def _apply_impl(self, operands: ReassignRouteBeforeOps) -> tuple[Route, Route | LastRoute | None]:
         src_route, dest_route = operands
         # Possible impacts to solution cost:
         #   Activating an idle vehicle, or deactivating a single-src_route vehicle
@@ -299,7 +299,7 @@ class ReassignCustomerAt(OperatorBL[ReassignCustomerAtOps]):
 
         return dest_route.cost_deltas_if_customer_inserted_before(customer, insert_visit)
 
-    def _apply_impl(self, operands: ReassignCustomerAtOps):
+    def _apply_impl(self, operands: ReassignCustomerAtOps) -> tuple[Route, int, Route, int]:
         src_route, src_index, dest_route, dest_index = operands
         revert_info = (src_route, src_index, dest_route, dest_index)
         customer = src_route.pop_customer_at(src_index)
@@ -332,7 +332,7 @@ class ReassignCustomerToNewRouteBefore(OperatorBL[ReassignCustomerToNewRouteOps]
 
         return add_delta + remove_delta
 
-    def _apply_impl(self, operands: ReassignCustomerToNewRouteOps):
+    def _apply_impl(self, operands: ReassignCustomerToNewRouteOps) -> tuple[Route, int, Route]:
         src_route, src_index, dest_route, end_depot = operands
         sln = self.sln
 
@@ -368,7 +368,7 @@ class SwapCustomersAt(OperatorBL[SwapCustomersAtOps]):
         deltas = route1.cost_deltas_for_inter_route_customer_swap_at(index1, route2, index2)
         return deltas
 
-    def _apply_impl(self, operands: SwapCustomersAtOps):
+    def _apply_impl(self, operands: SwapCustomersAtOps) -> tuple[Route, int, Route, int]:
         route1, index1, route2, index2 = operands
         route1.swap_customers_with(index1, route2, index2)
         return route1, index1, route2, index2
@@ -380,9 +380,11 @@ class SwapCustomersAt(OperatorBL[SwapCustomersAtOps]):
 
 def invert_permutation(permutation: Sequence[int]) -> Sequence[int]:
     # This stupid fast solution was found on Stack Overflow. Poster found a ~4us runtime for 1000 entries!
+    # Type-fixed in a way to reduce copies with help from Gemini
     inv = np.empty_like(permutation)
-    inv[permutation] = np.arange(len(inv), dtype=inv.dtype)
-    return inv
+    idx = list(permutation) if isinstance(permutation, tuple) else permutation # Resolve tuple-bug - numpy treats tuples as multi-D arrays
+    inv[idx] = np.arange(len(inv), dtype=inv.dtype)
+    return cast(Sequence[int], inv)
 
 class PermuteRoute(OperatorBL[PermuteRouteOps]):
     # Not yet given real delta math (planned for a later pass) - keeps computing its improvement
@@ -392,7 +394,7 @@ class PermuteRoute(OperatorBL[PermuteRouteOps]):
     def _evaluate_impl(self, operands: PermuteRouteOps):
         pass   # unused: _evaluates_by_applying routes evaluate() through _evaluate_by_applying instead
 
-    def _apply_impl(self, operands: PermuteRouteOps):
+    def _apply_impl(self, operands: PermuteRouteOps) -> tuple[Route, Sequence[int]]:
         route, permutation = operands
         route.permute(permutation)
         return route, invert_permutation(permutation)
@@ -427,7 +429,7 @@ class ChangeEndDepot(OperatorBL[ChangeEndDepotOps]):
 
         return route.cost_deltas_if_end_depot_changes(new_end_depot)
 
-    def _apply_impl(self, operands: ChangeEndDepotOps):
+    def _apply_impl(self, operands: ChangeEndDepotOps) -> tuple[Route, Depot]:
         route, new_end_depot = operands
         old_end_depot = route.end_depot
         route.set_end_depot(new_end_depot)
@@ -463,7 +465,7 @@ class DisposeOfEmptyRoutesBL(OperatorBL[DisposeOfEmptyRoutesOps]):
 
         return self.sln.cost_deltas_for_removing_empty_routes(routes)
 
-    def _apply_impl(self, operands: DisposeOfEmptyRoutesOps):
+    def _apply_impl(self, operands: DisposeOfEmptyRoutesOps) -> tuple[list[tuple[Route, Route | FirstRoute | None]], list[tuple[Route, int]]]:
         (routes,) = operands
         # Each item in revert stack is a tuple of [item removed, item's predecessor].
         # Thus, to revert: in reverse order, we add in the route after its predecessor.
@@ -480,6 +482,7 @@ class DisposeOfEmptyRoutesBL(OperatorBL[DisposeOfEmptyRoutesOps]):
         removed = self.sln.all_routes.difference_update(routes)
         return revert_stack, removed
 
+    # TODO: There's duplicated data stored in the revert_info: routes to remove show up twice. We need to deduplicate.
     def _revert_impl(self, move, revert_info):
         revert_stack, removed = revert_info
         for route, prev_route in reversed(revert_stack):
@@ -500,7 +503,7 @@ class SplitRoute(OperatorBL[SplitRouteOps]):
 
         return route.cost_deltas_for_split_at(split_index, intermediate_end_depot)
 
-    def _apply_impl(self, operands: SplitRouteOps):
+    def _apply_impl(self, operands: SplitRouteOps) -> tuple[Route, Route]:
         route, split_index, intermediate_end_depot = operands
         new_route = route.split_at(split_index, intermediate_end_depot)
         self.sln.all_routes.add(new_route)
@@ -525,7 +528,7 @@ class CombineRoutes(OperatorBL[CombineRoutesOps]):
 
         return route1.cost_deltas_for_combine_with(route2)
 
-    def _apply_impl(self, operands: CombineRoutesOps):
+    def _apply_impl(self, operands: CombineRoutesOps) -> tuple[Route, int, Depot, Route | FirstRoute | None, int, Route]:
         route1, route2 = operands
         split_index = route1.path_len
         # Capture route1's OWN end depot -- combine_with is about to overwrite it with route2's.

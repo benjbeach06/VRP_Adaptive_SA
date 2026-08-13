@@ -28,7 +28,6 @@ def argmin(values):
 #   These three show a consistent trend but under the noise floor -- weakly supported:
 #     max_plateau_size      spread 0.0046   best ~1800   (current 10000)
 #     plateau_reheat_factor spread 0.0046   best ~7.0    (current 2.0)
-#     low_temp_factor       spread 0.0029   NO SIGNAL over 55 orders of magnitude; don't tune it.
 #
 #   Direction, if applied: start cooler, cool faster, notice plateaus sooner, reheat harder --
 #   i.e. short aggressive anneal-reheat cycles beat one long slow anneal. Measured -1.4% to -3.3%
@@ -84,11 +83,10 @@ class SimAnnVRPSolver:
                  *,
                  segment_length: int = 100,
                  reaction_factor: float = 0.2,
-                 cooling_factor: float = 1 - 1e-2,
-                 initial_temp_factor: float = 0.05,
-                 low_temp_factor: float = 1e-40,
-                 max_plateau_size: int = 10000,
-                 plateau_reheat_factor: float = 2,
+                 cooling_factor: float = 1 - 3e-4,
+                 initial_temp_factor: float = 0.01,
+                 max_plateau_size: int = 2000,
+                 plateau_reheat_factor: float = 10,
                  empty_route_cleanup_interval: int = 100,
                  min_weight: float = 1e-6):
         self.sln = sln
@@ -106,9 +104,6 @@ class SimAnnVRPSolver:
 
         # Starting temperature, as a fraction of the initial solution's objective (see solve()).
         self.initial_temp_factor = initial_temp_factor
-
-        # If the temp gets below low_temp_factor: reset to original temperature
-        self.low_temp_factor = low_temp_factor
 
         self.curr_plateau_size = 0
         self.max_plateau_size = max_plateau_size
@@ -155,7 +150,10 @@ class SimAnnVRPSolver:
         # for weighted operator selection to stochastically pick DisposeOfEmptyRoutes -- since
         # all objective coefficients are non-negative, this is never a net loss.
         self.empty_route_cleanup_interval = empty_route_cleanup_interval
-        self._dispose_bl = DisposeOfEmptyRoutesBL(sln, dispose_only_trivial_routes=False)
+        # The Operator wrapper, not the bare OperatorBL: it owns the already_applied bookkeeping
+        # that _dispose_empty_routes / take_sln_snapshot depend on. Kept OUT of self.operators, so
+        # it is never selected by weight and never reaches update_weights.
+        self._dispose_op = DisposeOfEmptyRoutes(sln)
 
     def set_deterministic_weighting(self, deterministic: bool = True):
         """
@@ -178,6 +176,7 @@ class SimAnnVRPSolver:
 
     def update_weights(self):
         weights = [op.weight for op in self.operators]
+        reheat = 1e5 if max(weights) <= 1e-5 else 1
 
         geom_mean_weight = math.exp(math.fsum([math.log(w) for w in weights]) / len(weights))
         total_proposals = 0
@@ -190,9 +189,9 @@ class SimAnnVRPSolver:
             p = self.reaction_factor
             if num_proposals > 0:
                 average_score = score_sum / num_accepts if score_sum > 0 else 0
-                op.weight =  (1 - p) * weight + p * average_score
+                op.weight = reheat*((1 - p) * weight + p * average_score)
             else:
-                op.weight = max(weight, (weight / geom_mean_weight) ** 0.997 * geom_mean_weight)
+                op.weight = reheat*max(weight, (weight / geom_mean_weight) ** 0.997 * geom_mean_weight)
 
             total_proposals += num_proposals
             total_accepts += num_accepts
@@ -288,7 +287,7 @@ class SimAnnVRPSolver:
         new_route = Route([], end_depot=sln.depots[0])
 
         for customer in sln.customers:
-            new_route.append_customer(customer)
+            new_route.append_customer(CustomerVisit(customer))
 
         sln.add_route_to_vehicle(new_route, sln.vehicles[0])
 
@@ -296,32 +295,39 @@ class SimAnnVRPSolver:
         self.best_objective = sln.solution_cost()
         self.curr_objective = self.best_objective
 
-    def _dispose_empty_routes(self):
+    def _dispose_empty_routes(self) -> Move | None:
         """
         Dispose every empty route, WITHOUT committing, and return the move (None if there was
         nothing to do). Leaving it uncommitted is what lets take_sln_snapshot() undo it again.
         Callers that want the disposal to stick must commit it -- see _cleanup_empty_routes.
+
+        Driven through the Operator wrapper, not the bare OperatorBL. The wrapper owns the
+        already_applied bookkeeping, so going around it meant the caller had to call
+        mark_applied() by hand -- and any path that forgot left the move and the operator
+        disagreeing about whether it was applied.
+
+        Deliberately evaluate_dispose_all() rather than propose(), and the untimed apply()/revert()
+        rather than apply_for_acceptance()/revert_and_reject(). This is unconditional maintenance,
+        not a weighted proposal, so it must not add to segment_time, segment_proposals or the
+        reporting counters -- those feed a cost model this operator never competes in.
         """
-        empty_routes = RouteSet(route for route in self.sln.all_routes if route.is_empty)
-        if not empty_routes:
+        move = self._dispose_op.evaluate_dispose_all()
+        if move.kind != MoveKind.VALID:
             return None
 
-        move = self._dispose_bl.evaluate((empty_routes,))
-        if not move.is_actionable:
-            return None
-
-        self._dispose_bl.apply(move)
+        self._dispose_op.apply(move)
         return move
 
     def _cleanup_empty_routes(self):
         # Unconditional maintenance: since every objective coefficient is non-negative, removing
         # an empty route's travel/depot footprint is never a net loss. Called directly rather than
-        # through weighted operator selection.
+        # through weighted operator selection -- DisposeOfEmptyRoutes is deliberately absent from
+        # self.operators (see __init__), so this wrapper's stats never reach update_weights.
         move = self._dispose_empty_routes()
         if move is None:
             return
 
-        self._dispose_bl.commit(move)
+        self._dispose_op.commit(move)
         self.curr_objective -= move.improvement
         self.best_objective = min(self.best_objective, self.curr_objective)
 
@@ -538,6 +544,9 @@ class SimAnnVRPSolver:
         dest_route) as well as move the version out from under it.
         """
         dispose_move = self._dispose_empty_routes()
+        if dispose_move is not None and dispose_move.is_actionable:
+            # We're not going through a true Operator so we have to do the already_apoplied bookkeeping ourselves here.
+            dispose_move.mark_applied(True)
         try:
             unassigned = [route for route in self.sln.all_routes if not route.is_assigned]
             assert not unassigned, (
@@ -551,7 +560,8 @@ class SimAnnVRPSolver:
 
             if debug_level >= 1 and curr_objective is not None:
                 # Validate current objective values for all snapshots
-                if curr_objective != self.sln.solution_cost():
+                cost = self.sln.solution_cost()
+                if abs(curr_objective - cost) >= 1e-8+1e-10*max(abs(curr_objective), abs(cost)): # Abs+rel error
                     assert curr_objective is not None # Linter is dum-dum so add this dum-dum assert for dum-dum linter
                     print(
                         f"WARNING: Computed objective for a stored snapshot does NOT match its stored objective:\n"
@@ -561,7 +571,7 @@ class SimAnnVRPSolver:
         finally:
             # Restore even if the assert fires, so a failing run is still inspectable.
             if dispose_move is not None:
-                self._dispose_bl.revert(dispose_move)
+                self._dispose_op.revert(dispose_move)
 
     def pare_snapshots_to_top_k(self, k):
         # Pares and sorts snapshots
