@@ -565,7 +565,7 @@ class CustomerVisit(Customer, RouteVisit):
             route.count_load_change(load_delta)
 
     def unlink_from_route(self):
-        # Only unlinks src_route and uncounts src_route from vehicle.
+        # Only unlinks src_route and uncounts src_route from vehicle and updates depot accounting.
         # Does not process loading changes or vehicle accounting, since some of those operations
         # must be performed before the src_route's path is mutated.
         if self.route is None:
@@ -578,6 +578,25 @@ class CustomerVisit(Customer, RouteVisit):
         # start at that depot, leaving depot_num_uses permanently too high.
         if self.will_decrement_depot_usage_if_removed():
             self.prev_visit.uncount_route_depot_use() # type: ignore - If it decrements: src_route exists and this is its only customer, so prev visit is a FirstRouteVisit
+
+        # Link neighbors
+        prev_visit = self.prev_visit
+        next_visit = self.next_visit
+
+        prev_visit.next_visit = next_visit
+        next_visit.prev_visit = prev_visit
+
+        # Unlink self from src_route
+        self.route = None
+        self.prev_visit = None # type: ignore # None only for a short bit
+        self.next_visit = None # type: ignore # none only for a short bit
+
+    def unlink_from_route_no_depot_accounting(self):
+        # Only unlinks src_route and uncounts src_route from vehicle.
+        # Does not process loading changes or vehicle accounting, since some of those operations
+        # must be performed before the src_route's path is mutated.
+        if self.route is None:
+            raise ValueError(f"Cannot unlink CustomerVisit {self.cID}: it is already unlinked!")
 
         # Link neighbors
         prev_visit = self.prev_visit
@@ -986,7 +1005,7 @@ class LastRouteVisit(Depot, RouteVisit):
     #endregion
 #endregion
 
-# Route-like objects, including start-point and end-point
+# region Route-like objects, including start-route and end-route
 class VehicleNode(ABC):
     # Annotations only -- each concrete subclass initializes these in its own __init__.
     # VehicleNode has no __init__ of its own (subclasses don't chain to one), so defaults here
@@ -2297,6 +2316,30 @@ class Route(VehicleNode):
                                       total_route_overload=overload_delta, vehicles_overloaded=vehicles_overloaded_delta)
         #endregion
 
+        #region Reversing/reassigning subpaths
+
+        #region Reversing a subpath
+        def cost_deltas_if_subpath_reversed(self, start: int, end: int) -> ObjectiveTermDelta:
+            assert 0 <= start < end < self.num_customers, f"Get your reverse_range indices in order you dumbo! start={start}, end={end}, {self.num_customers} customers is duuuuumb"
+
+            path = self.path
+
+            # Delta just disconnects ends and reconnects in reverse!
+            first_customer = path[start]
+            last_customer = path[end]
+
+            # Old: prev->first->...->last->next
+            # New: prev->last->...->first->next
+            old_distance = first_customer.distance_in + last_customer.distance_out
+            new_distance = first_customer.prev_visit.distance(last_customer) + last_customer.next_visit.distance(first_customer)
+
+            return ObjectiveTermDelta(travel_distance=new_distance-old_distance)
+
+
+        #endregion
+
+        #endregion
+
         def cost_deltas_if_swapped_with_next_route(self):
             # These deltas come exclusively from changes in the start_depot of each src_route.
             # So? We simply ask the routes for the travel deltas when swapping their start depots.
@@ -2680,7 +2723,7 @@ class Route(VehicleNode):
 
         #region Customer move operations
         def insert_customer(self, customer: CustomerVisit, index):
-            # Just inserts the customer. Updates start depot's "num_used" if the src_route goes
+            # Just inserts the customer. Updates start depot's "num_used" if the this route goes
             # inactive -> active. Mirrors CustomerVisit.unlink_from_route's decrement: the rule is
             # "uses its depot" = "has customers AND is assigned" (is_active), NOT is_trivial --
             # an empty route with start != end is non-trivial but still inactive/uncounted.
@@ -2917,6 +2960,51 @@ class Route(VehicleNode):
             # Clear dest_route src_route
             other.set_values(path=[])
 
+        def reverse_subpath(self, start: int, end: int):
+            assert 0 <= start < end < self.num_customers, f"Get your reverse_range indices in order you dumbo! start={start}, end={end}, {self.num_customers} customers is duuuuumb"
+
+            path = self.path
+            reversed_customers = [customer.source_customer for customer in reversed(path[start:end+1])]
+            for i in range(end-start+1):
+                curr_visit = path[start+i]
+                customer = reversed_customers[i]
+
+                curr_visit.replace_customer(customer)
+
+        # NOTE TO CLAUDE: WIP ignore this one
+        def reassign_subpath(self, start: int, end: int, dest_route: Route, dest_idx: int, reverse: bool = False):
+            assert 0 <= start < end < self.num_customers, f"Get your reassign_range indices in order you dumbo! start={start}, end={end}, {self.num_customers} customers is duuuuumb"
+            assert self != dest_route and 0 <= dest_idx < dest_route.num_customers
+
+            # Remove customer range from self, update accounting
+            start_visit = self.path[start]
+            end_visit = self.path[end]
+
+            path = self.path
+            customers = path[start:end + 1]
+
+
+            if dest_route != self:
+                # Need to remove from self to prep to add to other route
+                self.path[start:end + 1] = []
+
+                load_delta = sum(customer.demand for customer in customers)
+                self.register_num_customers_change_in_vehicle(-(end - start + 1), is_route_operation=False)
+                self.count_load_change(-load_delta)
+                if len(path) == 0:
+                    self.first_visit.uncount_route_depot_use()
+
+            # TODO: dest_route = self path, and dest_vehicle=self.vehicle path must be resolved differently.
+
+            start_visit.next_visit = end_visit
+            end_visit.prev_visit = start_visit
+
+            for customer in customers:
+                customer.unlink_from_route_no_depot_accounting()
+
+            if reverse:
+                print("Imma reverse you. But later. Too tired now.")
+
         def __str__(self):
             return (str(self.start_depot.dID) + '->' +
                     '->'.join(str(customer.cID) for customer in self.path) + '->' +
@@ -2926,6 +3014,7 @@ class Route(VehicleNode):
             return str(self)
 
         #endregion
+#endregion
 
 
 class RouteSet:

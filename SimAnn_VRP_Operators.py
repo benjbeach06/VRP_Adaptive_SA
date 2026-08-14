@@ -412,7 +412,6 @@ class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator[ReassignCustomerToNew
 
         return route, customer_id, dest_route, depot
 
-
 class RandomCustomerSwap(Operator[SwapCustomersAtOps]):
     def __init__(self, sln: FullSolution):
         super().__init__(sln, SwapCustomersAt(sln))
@@ -420,20 +419,39 @@ class RandomCustomerSwap(Operator[SwapCustomersAtOps]):
     def _operand_selection_impl(self):
         sln = self.sln
 
-        #NOTE: It's worse in this case than in the random reassignment case if the customers choices are invalid.
+        # NOTE: It's worse in this case than in the random reassignment case if the customers choices are invalid.
         route1 = rand_choice(sln.all_routes)
 
         if len(route1.path) == 0:
             return route1, 0, route1, 0
 
-        index1 = rand_int_inclusive(0, len(route1.path)-1)
+        index1 = rand_int_inclusive(0, len(route1.path) - 1)
         route2 = rand_choice(sln.all_routes)
 
         if len(route2.path) == 0:
             return route1, 0, route1, 0
-        index2 = rand_int_inclusive(0, len(route2.path)-1)
+        index2 = rand_int_inclusive(0, len(route2.path) - 1)
 
         return route1, index1, route2, index2
+
+class RandomSubpathReversal(Operator[ReverseSubpathOps]):
+    def __init__(self, sln: FullSolution):
+        super().__init__(sln, ReverseSubpath(sln))
+
+    def _operand_selection_impl(self):
+        sln = self.sln
+
+        route = rand_choice(sln.all_routes)
+
+        if len(route.path) < 2:
+            return route, 0, 0
+
+        # Cannot truly be uniform: resolves to pre-ordered order statistics more or less
+        # Mean length averages out to about half the path length, as (route_end_idx-start)/2 averages to about len(route)/2 over uniform starts.
+        start = rand_int_inclusive(0, len(route.path)-2)
+        end = rand_int_inclusive(start+1, len(route.path)-1)
+
+        return route, start, end
 
 class CustomerBestOfkSwapInRandomRoute(BestOfCandidates[SwapCustomersAtOps]):
     def __init__(self, sln: FullSolution):

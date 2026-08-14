@@ -83,10 +83,10 @@ class SimAnnVRPSolver:
                  *,
                  segment_length: int = 100,
                  reaction_factor: float = 0.2,
-                 cooling_factor: float = 1 - 3e-4,
-                 initial_temp_factor: float = 0.01,
+                 cooling_factor: float = 1 - 1e-4,
+                 initial_temp_factor: float = 1e-4, # exploit first
                  max_plateau_size: int = 2000,
-                 plateau_reheat_factor: float = 10,
+                 plateau_reheat_exponent: float = 0.2,
                  empty_route_cleanup_interval: int = 100,
                  min_weight: float = 1e-6):
         self.sln = sln
@@ -107,7 +107,7 @@ class SimAnnVRPSolver:
 
         self.curr_plateau_size = 0
         self.max_plateau_size = max_plateau_size
-        self.plateau_reheat_factor = plateau_reheat_factor # Factor of "reheat to this factor of plateau start"
+        self.plateau_reheat_exponent = plateau_reheat_exponent # Fractional exponent of "reheat to this factor of plateau start"
 
         self.min_weight = min_weight
 
@@ -121,6 +121,7 @@ class SimAnnVRPSolver:
 
         self.operators.append(RandomRouteReassignment(sln))
         self.operators.append(RandomCustomerReassignment(sln))
+        self.operators.append(RandomSubpathReversal(sln))
         self.operators.append(RandomCustomerSwap(sln))
         self.operators.append(CustomerBestOfkSwapInRandomRoute(sln))
         self.operators.append(RandomRoutePermutation(sln))
@@ -204,11 +205,13 @@ class SimAnnVRPSolver:
             if self.curr_plateau_size >= self.max_plateau_size:
                 self.curr_plateau_size = 0
                 # Reheat factor = plateau_reheat_factor / (max_size^cooling factor). Undoes cooling during plateau, then reheats by the cooling factor.
-                log_reheat_factor = math.log(self.plateau_reheat_factor, 2) - self.segment_length*self.max_plateau_size*self.log_cooling_factor
-                self.log_temperature += log_reheat_factor
+                #log_reheat_factor = math.log(self.plateau_reheat_factor, 2) - self.segment_length*self.max_plateau_size*self.log_cooling_factor
+                #self.log_temperature += log_reheat_factor
+                # Simpler reheat factor: Given root from max, in log-space: we multiply range (obj-temp) by p. So: temp += (1-p)(obj-temp)
+                self.log_temperature += (1-self.plateau_reheat_exponent)*(math.log2(self.curr_objective)-self.log_temperature)
                 self.num_plateau_reheats += 1
 
-        self.temperature = 2**self.log_temperature
+        #self.temperature = 2**self.log_temperature
 
 
     def choose_operator(self):
@@ -391,9 +394,18 @@ class SimAnnVRPSolver:
         pre_propose_obj = 0
         #post_propose_obj = 0
 
+        iterations_since_last_recompute = 0
+        iterations_between_recomputes = 10000
+
         while elapsed_time < self.max_time:
             self.log_temperature += self.log_cooling_factor
             iterations += 1
+            iterations_since_last_recompute += 1
+
+            if iterations_since_last_recompute >= iterations_between_recomputes:
+                iterations_since_last_recompute = 0
+                self.curr_objective = sln.solution_cost()
+
             if iterations % self.segment_length == 0:
                 self.update_weights()
 

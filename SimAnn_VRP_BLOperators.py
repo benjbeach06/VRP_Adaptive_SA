@@ -32,6 +32,7 @@ type ReassignRouteBeforeOps           = tuple[Route, Route | LastRoute]
 type ReassignCustomerAtOps            = tuple[Route, int, Route, int]
 type ReassignCustomerToNewRouteOps    = tuple[Route, int, Route | LastRoute, Depot]
 type SwapCustomersAtOps               = tuple[Route, int, Route, int]
+type ReverseSubpathOps               = tuple[Route, int, int]
 type PermuteRouteOps                  = tuple[Route, Sequence[int]]
 type ChangeEndDepotOps                = tuple[Route, Depot]
 type DisposeOfEmptyRoutesOps          = tuple[RouteSet]
@@ -378,6 +379,29 @@ class SwapCustomersAt(OperatorBL[SwapCustomersAtOps]):
         route1, index1, route2, index2 = revert_info
         route1.swap_customers_with(index1, route2, index2)
 
+
+
+class ReverseSubpath(OperatorBL[ReverseSubpathOps]):
+    def _evaluate_impl(self, operands: ReverseSubpathOps):
+        route, start, end = operands
+        if not (0 <= start <= end < route.num_customers):
+            return None
+
+        if start==end:
+            return MoveKind.NOOP
+
+        return route.cost_deltas_if_subpath_reversed(start, end)
+
+    def _apply_impl(self, operands: ReverseSubpathOps) -> tuple[Route, int, int]:
+        route, start, end = operands
+        route.reverse_subpath(start, end)
+        return route, start, end
+
+    def _revert_impl(self, move, revert_info):
+        # Reapplying the swap just reverses back. ezpz
+        self._apply_impl(revert_info)
+
+
 def invert_permutation(permutation: Sequence[int]) -> Sequence[int]:
     # This stupid fast solution was found on Stack Overflow. Poster found a ~4us runtime for 1000 entries!
     # Type-fixed in a way to reduce copies with help from Gemini
@@ -405,7 +429,7 @@ class PermuteRoute(OperatorBL[PermuteRouteOps]):
 
     def _evaluate_by_applying(self, operands: PermuteRouteOps) -> Move[PermuteRouteOps]:
         # Route-local O(path length) measurement, not a full-solution objective_terms() diff.
-        route, _permutation = operands
+        route, _ = operands
         before = route.total_distance()
         self._revert_info = self._apply_impl(operands)
         after = route.total_distance()

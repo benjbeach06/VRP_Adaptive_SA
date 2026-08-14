@@ -11,7 +11,13 @@ nondeterminism while averaging ten short runs per configuration instead. That re
 of the estimator rather than changing the system being measured, and it is why these results
 transfer to real solves.
 
-    python tools/tune.py --budget-seconds 3600
+    python tools/tune.py --budget-seconds 28800
+
+  * plateau_reheat_exponent is NEW and has never been searched, so it holds most of the headroom
+    here. It is also the parameter this setup is least able to fit: it exists to sustain
+    exploration across a long run, and a 60s tuning run rewards reaching a decent solution
+    quickly. Validate the winner at 4x length on unseen seeds before adopting it -- as was done
+    for the 2026-08-11 results.
 
 METHOD -- and why it is shaped this way:
 
@@ -65,19 +71,33 @@ SEARCH_SPACE = {
     # Range recentred after the temperature-collapse fix. The old upper end (1e-1) cooled so fast
     # that the anneal was degenerate within ~1000 iterations, so the previous search optimised the
     # wrong thing. cooling_rate is per-ITERATION, so a long run needs a much smaller value.
-    "cooling_rate":          ("float", 1e-6, 3e-3, True),
-    "initial_temp_factor":   ("float", 2e-3, 5e-1, True),
-    "max_plateau_size":      ("int",   500, 50_000, True),
-    "plateau_reheat_factor": ("float", 1.05, 8.0, False),
+    "cooling_rate":            ("float", 1e-6, 3e-3, True),
+    # Now sets how OFTEN the temperature is pulled back to objective scale, so it matters more
+    # under the new reheat than it did under the old one.
+    "max_plateau_size":        ("int",   500, 50_000, True),
+    # Reheat closes (1 - p) of the log-space gap between temperature and log2(objective).
+    # p -> 0 is a full reset to objective scale; p -> 1 is no reheat at all. Must stay in (0, 1):
+    # p >= 1 moves the temperature away from the objective and does not converge.
+    "plateau_reheat_exponent": ("float", 0.02, 0.9, False),
+}
+
+# Held constant, deliberately NOT searched. initial_temp_factor only governs the opening
+# transient -- the first plateau reheat overwrites the temperature outright -- so searching it
+# lets the starting regime drift underneath the three parameters actually being measured, and
+# spends trials resolving an effect that decays. 1e-4 is chosen as a balanced middle: low enough
+# that exploitation begins inside a 60s budget, high enough that some exploration happens first.
+# Both behaviours stay reachable, which is what exposes the other parameters' effects instead of
+# masking them. Applies to the reference configuration too, so normalisation sees the same regime.
+FIXED = {
+    "initial_temp_factor": 1e-4,
 }
 
 # Must track SimAnnVRPSolver.__init__'s defaults: these are the reference the search normalises
 # against, so a stale value silently shifts every score.
 DEFAULTS = {
-    "cooling_rate": 3e-4,
-    "initial_temp_factor": 0.01,
+    "cooling_rate": 1e-4,
     "max_plateau_size": 2_000,
-    "plateau_reheat_factor": 10.0,
+    "plateau_reheat_exponent": 0.2,
 }
 
 
@@ -97,12 +117,20 @@ def build_instance(num_customers: int, vehicles: int = 3) -> FullSolution:
 
 
 def solver_kwargs(params: dict) -> dict:
+    params = {**FIXED, **params}
     return {
         "cooling_factor": 1.0 - params["cooling_rate"],
         "initial_temp_factor": params["initial_temp_factor"],
         "max_plateau_size": int(params["max_plateau_size"]),
-        "plateau_reheat_factor": params["plateau_reheat_factor"],
+        "plateau_reheat_exponent": params["plateau_reheat_exponent"],
     }
+
+
+# A configuration that raises scores inf, which is correct -- but a rename in the solver makes
+# EVERY configuration raise, and the search then spends its whole budget comparing inf to inf.
+# That has already happened once (plateau_reheat_factor -> plateau_reheat_exponent), so failures
+# are counted and surfaced rather than silently folded into the score.
+FAILURES: dict[str, int] = {}
 
 
 def run_once(params: dict, num_customers: int, seed: int, seconds: float) -> float:
@@ -115,7 +143,9 @@ def run_once(params: dict, num_customers: int, seed: int, seconds: float) -> flo
             solver.make_initial_solution()
             solver.solve(debug_level=0)
         best = solver.best_objective
-    except Exception:
+    except Exception as exc:
+        key = f"{type(exc).__name__}: {exc}"
+        FAILURES[key] = FAILURES.get(key, 0) + 1
         return float("inf")
     return best if best == best and best != float("inf") else float("inf")
 
@@ -134,10 +164,13 @@ def score(params: dict, sizes, runs_per_size: int, seconds: float, reference: di
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--budget-seconds", type=float, default=3600)
+    ap.add_argument("--budget-seconds", type=float, default=28_800)
     ap.add_argument("--sizes", type=int, nargs="+", default=[60, 200])
+    # 5 per size x 2 sizes = 10 runs per trial. The score is a mean of two size-means, so its
+    # variance is sigma^2/10 -- the same noise reduction as 10 runs at one size, while keeping
+    # both sizes in the normalisation. At 60s/run that is 10 min per trial, ~48 trials in 8h.
     ap.add_argument("--runs-per-size", type=int, default=5)
-    ap.add_argument("--seconds-per-run", type=float, default=0.5)
+    ap.add_argument("--seconds-per-run", type=float, default=60.0)
     ap.add_argument("--out", default=os.path.join(ROOT, "tools", "tune_results.json"))
     args = ap.parse_args()
 
@@ -154,6 +187,17 @@ def main() -> None:
         reference[size] = statistics.fmean(runs)
         print(f"  reference (defaults) size={size}: {reference[size]:.2f}", flush=True)
 
+    # Fail fast. If the defaults cannot even run, every trial scores inf and the whole budget is
+    # spent producing nothing -- check before committing hours to it.
+    if any(r == float("inf") or r != r for r in reference.values()):
+        print("\nABORT: the default configuration did not produce a finite objective.")
+        for message, count in FAILURES.items():
+            print(f"  {count:4d}x  {message}")
+        if not FAILURES:
+            print("  (no exceptions raised -- best_objective was inf or nan)")
+        print("\nDEFAULTS/solver_kwargs are probably out of step with SimAnnVRPSolver.__init__.")
+        sys.exit(1)
+
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     study = optuna.create_study(direction="minimize",
                                 sampler=optuna.samplers.TPESampler(seed=12345))
@@ -165,6 +209,7 @@ def main() -> None:
                    "budget_seconds": args.budget_seconds},
         "reference": {str(k): v for k, v in reference.items()},
         "defaults": DEFAULTS,
+        "fixed": FIXED,
         "trials": [],
     }
 
@@ -192,10 +237,15 @@ def main() -> None:
     study.optimize(objective, callbacks=[out_of_time])
 
     state["best"] = {"params": study.best_params, "value": study.best_value}
+    state["failures"] = dict(FAILURES)
     with open(args.out, "w") as handle:
         json.dump(state, handle, indent=2, default=float)
 
     print(f"\ncompleted {len(study.trials)} trials in {time.perf_counter() - started:.0f}s")
+    if FAILURES:
+        print("failed runs (scored inf):")
+        for message, count in FAILURES.items():
+            print(f"    {count:4d}x  {message}")
     print(f"best score {study.best_value:.4f}  (1.0 == current defaults)")
     for name, value in study.best_params.items():
         print(f"    {name:24} {value!r:>14}   (default {DEFAULTS[name]!r})")
