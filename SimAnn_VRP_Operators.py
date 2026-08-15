@@ -171,10 +171,19 @@ class Operator[Ops: tuple](ABC):
         UNTIMED apply, for callers outside weighted selection.
 
         Use apply_for_acceptance() on the solver's accept path -- it charges apply time to
-        mean_apply_time, which feeds the cost term in operator scoring. Use this one when the
-        operator is not competing for selection, so the cost model stays clean. Production
-        callers today: SimAnnVRPSolver._dispose_empty_routes (maintenance) and the snapshot
-        re-apply. Also used by the tests.
+        _apply_time_total, and so into mean_call_time, which is the cost term in operator scoring
+        (see update_stats_for_accept). Use this one when the operator is not competing for
+        selection, so the cost model stays clean. Production callers today:
+        SimAnnVRPSolver._dispose_empty_routes (maintenance) and the snapshot re-apply. Also used
+        by the tests.
+
+        This used to say the charge lands in mean_apply_time, "which feeds the cost term in
+        operator scoring". It does not: mean_apply_time has exactly one caller, the stats print
+        at the end of a run. Scoring reads mean_call_time. The distinction matters because
+        mean_apply_time is averaged over ACCEPTED moves only, and several operators are accepted
+        just a handful of times in a whole solve -- CombineRandomRoutes was accepted once in
+        33,654 proposals in a 60s run at n=200. Its printed "Average apply time" is therefore a
+        one-sample figure, and reading it as a cost is a mistake. Scoring is unaffected.
         """
         if move.already_applied:
             return
