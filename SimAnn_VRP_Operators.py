@@ -613,12 +613,16 @@ def routes_sharing_depot(sln: FullSolution, depot: Depot, at_end: bool) -> list[
     """
     Non-empty routes whose end (or start) depot is `depot`.
 
-    INTERIM, O(n) per call. TODO(depot-uses): once depot_num_uses becomes
-    depot_uses[Depot] -> [start_uses: RouteSet, end_uses: RouteSet], this becomes a direct lookup
-    and the scan goes away.
+    The START case is a direct lookup: depot_route_starts already indexes exactly that, and it
+    only holds ACTIVE routes so no emptiness filter is needed. The END case keeps an O(n) scan --
+    end-depot usage is not tracked, and TODO(end-depot-index) on SwapRouteTailsAtSharedDepot
+    records why it is not cheap to add.
     """
+    if not at_end:
+        return list(sln.depot_route_starts[depot])
+
     return [route for route in sln.all_routes
-            if not route.is_empty and (route.end_depot if at_end else route.start_depot) == depot]
+            if not route.is_empty and route.end_depot == depot]
 
 
 class _ChainSwapBase(Operator[SwapCustomerChainsOps], ABC):

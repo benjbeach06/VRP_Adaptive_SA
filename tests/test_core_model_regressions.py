@@ -35,7 +35,7 @@ def simple_customers(n=12, demand=1):
 
 
 class DepotUsageAccounting(SeededTestCase):
-    """depot_num_uses is incremental; it must match a fresh count at all times."""
+    """depot_route_starts is incremental; it must match a fresh count at all times."""
 
     def test_decrement_happens_even_when_depot_has_other_users(self):
         """
@@ -45,7 +45,7 @@ class DepotUsageAccounting(SeededTestCase):
         The decrement used to be gated on will_deactivate_depot_if_removed(), which additionally
         requires num_routes_starting_here == 1. That is the depot-ACTIVATION question, not the
         usage-COUNT question, so with 2+ routes sharing a depot the decrement was skipped and
-        depot_num_uses drifted permanently upward.
+        depot_route_starts drifted permanently upward.
         """
         depots, customers = make_depots(), simple_customers()
         sln = make_solution(depots, customers, [100])
@@ -55,11 +55,11 @@ class DepotUsageAccounting(SeededTestCase):
         sln.add_route_to_vehicle(route1, vehicle)
         route2 = route_of(customers, [1], depots[0])
         sln.add_route_to_vehicle(route2, vehicle)
-        self.assertEqual(sln.depot_num_uses[depots[0]], 2)
+        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 2)
 
         route1.pop_customer_at(0)
 
-        self.assertEqual(sln.depot_num_uses[depots[0]], 1,
+        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 1,
                          "depot usage did not decrement when another route still used the depot")
         self.assertEqual(depot_usage_problems(sln), [])
 
@@ -74,11 +74,11 @@ class DepotUsageAccounting(SeededTestCase):
         sln = make_solution(depots, customers, [100])
         route = route_of(customers, [0], depots[1])
         sln.add_route_to_vehicle(route, sln.vehicles[0])
-        self.assertEqual(sln.depot_num_uses[depots[0]], 1)
+        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 1)
 
         route.pop_customer_at(0)   # must not raise
 
-        self.assertEqual(sln.depot_num_uses[depots[0]], 0)
+        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 0)
         self.assertEqual(depot_usage_problems(sln), [])
 
     def test_increment_for_empty_route_whose_start_and_end_differ(self):
@@ -93,11 +93,11 @@ class DepotUsageAccounting(SeededTestCase):
         sln.add_route_to_vehicle(route, sln.vehicles[0])
         route.pop_customer_at(0)
         self.assertTrue(route.is_empty and not route.is_trivial)
-        self.assertEqual(sln.depot_num_uses[depots[0]], 0)
+        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 0)
 
         route.insert_customer(CustomerVisit(customers[2]), 0)
 
-        self.assertEqual(sln.depot_num_uses[depots[0]], 1,
+        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 1,
                          "insertion into an empty non-cycle route did not re-count its depot")
         self.assertEqual(depot_usage_problems(sln), [])
 
@@ -265,7 +265,7 @@ class DeltaArithmetic(SeededTestCase):
 class SolutionStateIsolation(SeededTestCase):
     def test_separate_solutions_do_not_share_containers(self):
         """
-        FullSolution declared all_routes/vehicles/depot_num_uses as CLASS attributes with an empty
+        FullSolution declared all_routes/vehicles/depot_route_starts as CLASS attributes with an empty
         __init__, so every instance mutated one shared set of containers. Python class-body
         defaults are shared for mutable objects -- unlike C# field initializers, which are
         per-instance.
@@ -279,10 +279,10 @@ class SolutionStateIsolation(SeededTestCase):
 
         self.assertEqual(len(second.all_routes), 0)
         self.assertEqual(len(second.vehicles), 0)
-        self.assertEqual(len(second.depot_num_uses), 0)
+        self.assertEqual(len(second.depot_route_starts), 0)
         self.assertIsNot(first.all_routes, second.all_routes)
         self.assertIsNot(first.vehicles, second.vehicles)
-        self.assertIsNot(first.depot_num_uses, second.depot_num_uses)
+        self.assertIsNot(first.depot_route_starts, second.depot_route_starts)
 
     def test_snapshot_is_independent_of_the_live_solution(self):
         """copy.copy must deep-enough-copy that mutating the original leaves a snapshot untouched."""
@@ -296,7 +296,7 @@ class SolutionStateIsolation(SeededTestCase):
         original_cost = sln.solution_cost()
         snapshot = copy.copy(sln)
         self.assertAlmostEqual(snapshot.solution_cost(), original_cost, places=9)
-        for attribute in ("all_routes", "vehicles", "depot_num_uses", "empty_routes"):
+        for attribute in ("all_routes", "vehicles", "depot_route_starts", "empty_routes"):
             self.assertIsNot(getattr(snapshot, attribute), getattr(sln, attribute),
                              f"snapshot shares {attribute} with the live solution")
 

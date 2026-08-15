@@ -363,7 +363,7 @@ class ReassignCustomerToNewRouteBefore(OperatorBL[ReassignCustomerToNewRouteOps]
         new_route = Route([customer], end_depot)
         # New mid-solve route needs its depot-usage dict linked before pricing against it -
         # otherwise depot-activation deltas below would touch an unlinked route.
-        new_route.link_depot_uses_except_customers(self.sln.depot_num_uses)
+        new_route.link_depot_uses_except_customers(self.sln.depot_route_starts)
 
         add_delta = new_route.cost_deltas_if_inserted_before(dest_route)
 
@@ -375,7 +375,7 @@ class ReassignCustomerToNewRouteBefore(OperatorBL[ReassignCustomerToNewRouteOps]
 
         customer = src_route.pop_customer_at(src_index)
         new_route = Route([customer], end_depot)
-        new_route.link_depot_uses_except_customers(sln.depot_num_uses)
+        new_route.link_depot_uses_except_customers(sln.depot_route_starts)
         new_route.link_to_vehicle_before(dest_route)
         sln.all_routes.add(new_route)
         return src_route, src_index, new_route

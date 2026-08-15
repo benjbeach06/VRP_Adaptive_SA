@@ -167,10 +167,17 @@ def visit_link_problems(sln: FullSolution) -> list[str]:
 
 
 def depot_usage_problems(sln: FullSolution) -> list[str]:
-    """Incrementally-maintained depot_num_uses must equal a fresh count over active routes."""
+    """Incrementally-maintained depot_route_starts must equal a fresh count over active routes."""
     truth = sln.depot_usage_breakdown()
-    return [f"depot {depot}: tracked {sln.depot_num_uses[depot]} != recomputed {truth[depot]}"
-            for depot in sln.depots if truth[depot] != sln.depot_num_uses[depot]]
+    def members(route_set):
+        # Sorted MEMBERSHIP, never order: RouteSet removal is swap-with-last, so a remove/add
+        # round trip restores membership but not position. Comparing order here would report
+        # every such revert as a failure.
+        return sorted(str(route) for route in route_set)
+
+    return [f"depot {depot}: tracked {members(sln.depot_route_starts[depot])} "
+            f"!= recomputed {members(truth[depot])}"
+            for depot in sln.depots if members(truth[depot]) != members(sln.depot_route_starts[depot])]
 
 
 def chain_problems(sln: FullSolution) -> list[str]:
@@ -226,7 +233,9 @@ def fingerprint(sln: FullSolution):
         chains.append(" , ".join(sequence))
     return (round(sln.solution_cost(), 9),
             " || ".join(chains),
-            tuple(sorted((str(depot), sln.depot_num_uses[depot]) for depot in sln.depots)),
+            # Sorted membership per depot, not RouteSet order -- see depot_usage_problems.
+            tuple(sorted((str(depot), tuple(sorted(str(r) for r in sln.depot_route_starts[depot])))
+                         for depot in sln.depots)),
             # Content per position, not id(): CombineRoutes' revert legitimately rebuilds the
             # absorbed route as a NEW object (see TODO(revert-identity) on Route.split_at), so
             # object identity would fail there for a reason that isn't an ordering bug.

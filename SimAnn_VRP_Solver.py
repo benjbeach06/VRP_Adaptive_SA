@@ -348,8 +348,14 @@ class SimAnnVRPSolver:
         problems = []
 
         depot_breakdown = sln.depot_usage_breakdown()
-        if any(depot_breakdown[depot] != sln.depot_num_uses[depot] for depot in sln.depots):
-            problems.append("depot usage breakdown disagrees with depot_num_uses")
+        # Sorted membership, not RouteSet order: removal is swap-with-last, so order churn is
+        # expected and is not a defect.
+        def depot_members(route_set):
+            return sorted(str(route) for route in route_set)
+
+        if any(depot_members(depot_breakdown[depot]) != depot_members(sln.depot_route_starts[depot])
+               for depot in sln.depots):
+            problems.append("depot usage breakdown disagrees with depot_route_starts")
 
         # sln.customers holds the raw problem-data Customer objects, not the per-route
         # CustomerVisit wrappers that carry linkage -- check the actual visits in each route.
