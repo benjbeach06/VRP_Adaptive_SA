@@ -231,6 +231,17 @@ class SimAnnVRPSolver:
         index = bisect.bisect_left(cum_weights, r)
         return operators[index]
 
+    # TODO(warm-start): add a third constructor that loads a saved solution instead of building
+    # one, so a run can resume from a recorded best rather than from the greedy sweep.
+    # solutions/*.json already carries everything needed: for each route a start depot, an ordered
+    # customer ID list, an end depot, and a vehicle. The loader walks the routes in file order,
+    # builds Route([CustomerVisit(customers[cID]) for cID in path], ...), calls set_end_depot, and
+    # calls sln.add_route_to_vehicle. File order matters -- the routes of one vehicle are
+    # consecutive and chain depot to depot, so appending in order satisfies the chaining invariant
+    # for free. Then set best_objective and curr_objective from sln.solution_cost(), as below.
+    # Check the saved instance descriptor (numpy_seed, depots, vehicles, costs) against the live
+    # instance first. A solution loaded onto a different instance is silently wrong.
+
     # We design the solution, initialization, and operators so that at all stages, all customers show up in the src_route.
     def make_initial_solution(self):
         sln = self.sln
