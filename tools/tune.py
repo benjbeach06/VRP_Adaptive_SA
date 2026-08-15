@@ -31,7 +31,7 @@ METHOD -- and why it is shaped this way:
     long-and-few here because the run-to-run spread is large (measured at roughly +-30% on
     iteration rate), so the variance of the mean is what matters.
 
-  * Scores are normalised per instance size against a reference configuration (the current
+  * Scores are normalized per instance size against a reference configuration (the current
     defaults), because raw objectives differ by an order of magnitude between 60 and 200
     customers and would otherwise let the largest size dominate the mean.
 
@@ -68,8 +68,8 @@ from SimAnn_VRP_Solver import SimAnnVRPSolver
 # nothing else needs to change.
 SEARCH_SPACE = {
     # Searched as (1 - cooling_factor) so the interesting region near 1.0 gets resolution.
-    # Range recentred after the temperature-collapse fix. The old upper end (1e-1) cooled so fast
-    # that the anneal was degenerate within ~1000 iterations, so the previous search optimised the
+    # Range recentered after the temperature-collapse fix. The old upper end (1e-1) cooled so fast
+    # that the anneal was degenerate within ~1000 iterations, so the previous search optimized the
     # wrong thing. cooling_rate is per-ITERATION, so a long run needs a much smaller value.
     "cooling_rate":            ("float", 1e-6, 3e-3, True),
     # Now sets how OFTEN the temperature is pulled back to objective scale, so it matters more
@@ -86,13 +86,13 @@ SEARCH_SPACE = {
 # lets the starting regime drift underneath the three parameters actually being measured, and
 # spends trials resolving an effect that decays. 1e-4 is chosen as a balanced middle: low enough
 # that exploitation begins inside a 60s budget, high enough that some exploration happens first.
-# Both behaviours stay reachable, which is what exposes the other parameters' effects instead of
-# masking them. Applies to the reference configuration too, so normalisation sees the same regime.
+# Both behaviors stay reachable, which is what exposes the other parameters' effects instead of
+# masking them. Applies to the reference configuration too, so normalization sees the same regime.
 FIXED = {
     "initial_temp_factor": 1e-4,
 }
 
-# Must track SimAnnVRPSolver.__init__'s defaults: these are the reference the search normalises
+# Must track SimAnnVRPSolver.__init__'s defaults: these are the reference the search normalizes
 # against, so a stale value silently shifts every score.
 DEFAULTS = {
     "cooling_rate": 1e-4,
@@ -168,7 +168,7 @@ def main() -> None:
     ap.add_argument("--sizes", type=int, nargs="+", default=[60, 200])
     # 5 per size x 2 sizes = 10 runs per trial. The score is a mean of two size-means, so its
     # variance is sigma^2/10 -- the same noise reduction as 10 runs at one size, while keeping
-    # both sizes in the normalisation. At 60s/run that is 10 min per trial, ~48 trials in 8h.
+    # both sizes in the normalization. At 60s/run that is 10 min per trial, ~48 trials in 8h.
     ap.add_argument("--runs-per-size", type=int, default=5)
     ap.add_argument("--seconds-per-run", type=float, default=60.0)
     ap.add_argument("--out", default=os.path.join(ROOT, "tools", "tune_results.json"))
@@ -179,7 +179,7 @@ def main() -> None:
           f"{args.runs_per_size} runs/size x {args.seconds_per_run}s; "
           f"budget {args.budget_seconds:.0f}s", flush=True)
 
-    # Reference = current defaults, measured the same way, used to normalise each size.
+    # Reference = current defaults, measured the same way, used to normalize each size.
     reference = {}
     for size in args.sizes:
         runs = [run_once(DEFAULTS, size, seed, args.seconds_per_run)

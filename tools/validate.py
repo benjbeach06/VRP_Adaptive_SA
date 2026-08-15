@@ -4,7 +4,7 @@ Re-measure the top configurations from a tune.py search, reporting RAW objective
 PROVENANCE
 ----------
 Written by Claude (Anthropic) during development assistance; not hand-written by the repository
-author. Written because tune.py stores only normalised scores, so "what objective did the best
+author. Written because tune.py stores only normalized scores, so "what objective did the best
 configuration actually reach" could not be answered from its results at all.
 
     python tools/validate.py --top 3 --runs 10 --seconds 60
@@ -46,7 +46,7 @@ def measure(params: dict, size: int, seeds: list[int], seconds: float) -> list[f
     return [tune.run_once(params, size, seed, seconds) for seed in seeds]
 
 
-def summarise(values: list[float]) -> dict:
+def summarize(values: list[float]) -> dict:
     finite = [v for v in values if v == v and v != float("inf")]
     if not finite:
         return {"n": 0, "failed": len(values)}
@@ -125,7 +125,7 @@ def main() -> None:
         raw: dict[str, list[float]] = {}
         for name, params in configs:
             raw[name] = measure(params, size, seeds, args.seconds)
-            s = summarise(raw[name])
+            s = summarize(raw[name])
             state["raw"].setdefault(str(size), {})[name] = raw[name]
             state["summary"].setdefault(str(size), {})[name] = s
             if s["n"] == 0:

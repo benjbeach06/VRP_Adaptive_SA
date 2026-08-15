@@ -34,7 +34,7 @@ def argmin(values):
 #   against defaults on seeds never used during tuning, holding at 4x the tuning run length.
 #
 #   Caveat: cooling_factor is per-ITERATION, so its optimum is coupled to throughput. It survived
-#   a 2x throughput change and a 4x run-length change here, but reparameterising it as a fraction
+#   a 2x throughput change and a 4x run-length change here, but reparameterizing it as a fraction
 #   of the expected budget would decouple it properly.
 
 
@@ -557,7 +557,7 @@ class SimAnnVRPSolver:
         without filtering or special-casing.
 
         The disposal is undone again immediately afterwards, so the live solution -- and any Move
-        evaluated against it -- is exactly as it was. Only the stored copy is normalised, which is
+        evaluated against it -- is exactly as it was. Only the stored copy is normalized, which is
         what keeps this safe to call with a move in flight: disposing empty routes would otherwise
         invalidate operands (ReassignCustomerAt and ReassignRouteBefore both accept an empty
         dest_route) as well as move the version out from under it.

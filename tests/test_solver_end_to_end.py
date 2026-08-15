@@ -88,7 +88,7 @@ class SolverSelfVerification(SeededTestCase):
 
 class SnapshotNormalisation(SeededTestCase):
     """
-    Snapshots are the artifact callers inspect, so take_sln_snapshot normalises before storing:
+    Snapshots are the artifact callers inspect, so take_sln_snapshot normalizes before storing:
     every empty route disposed, and every remaining route assigned to a vehicle. Readers can rely
     on that without filtering.
 
@@ -114,7 +114,7 @@ class SnapshotNormalisation(SeededTestCase):
                                            msg="snapshot's recorded objective disagrees with it")
 
     def test_snapshotting_leaves_the_live_solution_untouched(self):
-        """The normalisation must be visible only in the stored copy, never in the live solve."""
+        """The normalization must be visible only in the stored copy, never in the live solve."""
         sln = random_instance(4242, 30, 4)
         solver, _ = run_solver(sln, max_time=SOLVE_SECONDS, debug_level=0, iterations=4000)
 

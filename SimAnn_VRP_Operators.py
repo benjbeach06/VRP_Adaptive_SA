@@ -438,7 +438,7 @@ class RandomCustomerReassignment(_ChainReassignmentBase):
     """Chain of exactly one -- the classic single-customer relocate."""
 
     def _choose_chain(self, src_route: Route) -> Chain | None:
-        # A bare int IS a Chain; as_chain_range normalises it downstream.
+        # A bare int IS a Chain; as_chain_range normalizes it downstream.
         return rand_int_inclusive(0, len(src_route.path) - 1)
 
 

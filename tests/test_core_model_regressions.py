@@ -267,7 +267,7 @@ class SolutionStateIsolation(SeededTestCase):
         """
         FullSolution declared all_routes/vehicles/depot_num_uses as CLASS attributes with an empty
         __init__, so every instance mutated one shared set of containers. Python class-body
-        defaults are shared for mutable objects -- unlike C# field initialisers, which are
+        defaults are shared for mutable objects -- unlike C# field initializers, which are
         per-instance.
         """
         depots, customers = make_depots(), simple_customers()
