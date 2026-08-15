@@ -8,10 +8,10 @@ from typing import Callable, Iterable, Iterator
 # Permute src_route with permutation array: src_route.permute(permutation)
 # Permute subset of src_route: src_route.subpermute(permutation)
 
-# Reassignment chain length is geometric: each extra customer continues with this probability.
-# Uniform is cheaper to sample but spends most of its draws on long chains -- on a 20-customer
-# route it made length 1 about 10% of proposals, where it used to be 100% of this operator's
-# behaviour. Geometric keeps short chains common (P(1) = 1 - base) and lets long ones stay rare.
+# Multi-customer chain length is geometric: each extra customer continues with this probability.
+# Only shapes lengths >= 2 -- RandomCustomerReassignment owns length 1 as its own roster entry, so
+# the single-vs-multi mix is priced by the adaptive weighting rather than set by this constant.
+# Uniform was tried and lost a paired A/B: it spends most draws on long chains.
 CHAIN_LEN_CONTINUE_P = 0.75
 # Sampled by inverse CDF: one RNG draw and one log, rather than an expected 1/(1-base) Bernoulli
 # trials. Reciprocal is precomputed because this runs on every proposal.
@@ -71,9 +71,11 @@ class Operator[Ops: tuple](ABC):
         # Accumulate over a whole segment (see SimAnnVRPSolver.update_weights) instead.
         self.segment_proposals = 0
         self.segment_time = 0.0
-        self.mean_apply_time = 0.0
+        self._last_propose_time = 0.0
         self._apply_time_total = 0.0
         self._apply_count = 0
+        self._proposal_count = 0
+        self._propose_time_total = 0.0
 
         # When False, update_stats() treats every operator's mean cost per move as 1 instead of
         # measuring it. See SimAnnVRPSolver.set_deterministic_weighting -- TESTING ONLY.
@@ -93,14 +95,31 @@ class Operator[Ops: tuple](ABC):
 
         self.num_neutral_calls = 0
 
+    @property
+    def mean_apply_time(self) -> float:
+        count = self._apply_count
+        return 0 if count==0 else self._apply_time_total/self._apply_count
+    @property
+    def mean_propose_time(self) -> float:
+        return self._propose_time_total/self._proposal_count
+    @property
+    def mean_call_time(self)->float:
+        return (self._propose_time_total + self._apply_time_total) / (self._apply_count + self._proposal_count)
+
     def propose(self) -> Move[Ops]:
         """Select operands and price the move. Never mutates the solution (unless the base
         operator is escape-hatch flavored, in which case it already has, atomically)."""
         t0 = time.perf_counter()
         operands = self._operand_selection_impl()
         move = self.base_operator.evaluate(operands)
-        self.segment_time += time.perf_counter() - t0
+        propose_time = time.perf_counter() - t0
+        self.segment_time += propose_time
         self.segment_proposals += 1
+        self._last_propose_time = propose_time
+
+        self._proposal_count += 1
+        self._propose_time_total += propose_time
+
         self.prev_operands = operands
         self.last_move = move
         self._update_reporting_stats(move)
@@ -119,16 +138,17 @@ class Operator[Ops: tuple](ABC):
 
     def apply_for_acceptance(self, move: Move[Ops]):
         # Core accept path within solver: Apply, and do necessary timing/accounting
+        dt = 0
         if move.already_applied or not move.is_actionable:
-            return
+            pass
+        else:
+            t0 = time.perf_counter()
+            self.base_operator.apply(move)
+            dt = time.perf_counter() - t0
+            move.mark_applied(True)
 
-        t0 = time.perf_counter()
-        self.base_operator.apply(move)
-        dt = time.perf_counter() - t0
         self._apply_count += 1
-        self._apply_time_total += dt
-        self.mean_apply_time = self._apply_time_total / self._apply_count
-        move.mark_applied(True)
+        self._apply_time_total += dt + self._last_propose_time
 
     def apply(self, move: Move[Ops]):
         """
@@ -206,7 +226,7 @@ class Operator[Ops: tuple](ABC):
               f"Invalid: {self.num_invalid_calls}, Noop: {self.num_noop_calls}, Useful: {self.num_useful_calls}\n"
               f"Num improving calls: {self.num_improving_calls}, Mean improvement: {self.mean_improving_improvement}\n"
               f"Num degrading calls: {self.num_degrading_calls}, Mean degradation: {self.mean_degrading_degradation}\n"
-              f"Average apply time: {self.mean_apply_time}")
+              f"Average apply time: {self.mean_apply_time}, Average propose time: {self.mean_propose_time}")
 
     def update_stats_for_reject(self):
         self.stats.record_reject()
@@ -240,8 +260,7 @@ class Operator[Ops: tuple](ABC):
         # Cost-aware weighting: an operator's score is its improvement per unit of time spent,
         # so cheap operators are preferred at equal improvement. Substituting 1 makes selection a
         # pure function of improvements, and therefore reproducible (see set_deterministic_weighting).
-        mean_cost = (self.segment_time / max(self.segment_proposals, 1) + self.mean_apply_time
-                     if self.weight_by_time else 1.0)
+        mean_cost = (self.mean_call_time if self.weight_by_time else 1.0)
 
         sign = -1 if move.improvement < 0 else 1
         score = max(0, sign * (abs(move.improvement) ** 1.5) / max(mean_cost, 1e-9))
@@ -294,10 +313,16 @@ class BestOfCandidates[Ops: tuple](Operator[Ops]):
             if move.is_actionable and move.improvement > best_imp:
                 best, best_imp = move, move.improvement
             self.revert(move)
-        self.segment_time += time.perf_counter() - t0
+        propose_time = time.perf_counter() - t0
+        self.segment_time += propose_time
         self.segment_proposals += 1
         self.prev_operands = best.operands
         self.last_move = best
+
+        self._proposal_count += 1
+        self._propose_time_total += propose_time
+        self._last_propose_time = propose_time
+
         self._update_reporting_stats(best)
         return best
 
@@ -341,9 +366,37 @@ class RandomRouteReassignment(Operator[ReassignRouteBeforeOps]):
 
         return src_route, dest_route
 
-class RandomCustomerChainReassignment(Operator[ReassignCustomerChainOps]):
+def random_chain_destination(sln: FullSolution, src_route: Route, chain_len: int) -> tuple[Route, int]:
+    """A destination route and a legal insert index for a chain of chain_len customers.
+
+    dest_idx is the chain's start index AFTER removal, so a same-route move has chain_len fewer
+    slots to land in than a cross-route one. Written once because every reassignment selector
+    needs this same bound, and separate copies are separate chances to disagree with the bound
+    ReassignCustomerChain actually gates on.
+    """
+    dest_route = rand_choice(sln.all_routes)
+    # Never negative: a same-route chain is drawn FROM this path, so chain_len <= len(path).
+    max_dest = (len(dest_route.path) - chain_len if dest_route is src_route
+                else len(dest_route.path))
+    return dest_route, rand_int_inclusive(0, max_dest)
+
+
+class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
+    """
+    Shared operand selection for the chain-reassignment family.
+
+    Subclasses override _choose_chain and nothing else. The roster carries these as separate
+    entries so the adaptive weighting can price chain LENGTH separately -- length is therefore the
+    only thing that should differ, and source/destination selection lives here once.
+    """
+
     def __init__(self, sln: FullSolution):
         super().__init__(sln, ReassignCustomerChain(sln))
+
+    @abstractmethod
+    def _choose_chain(self, src_route: Route) -> Chain | None:
+        """None means this route cannot supply the kind of chain this operator makes."""
+        raise NotImplementedError
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -359,32 +412,109 @@ class RandomCustomerChainReassignment(Operator[ReassignCustomerChainOps]):
             tries += 1
 
         assert isinstance(src_route, Route)
-        if not valid:
-            # Note: src_route is still an empty src_route.
+        customer_chain = self._choose_chain(src_route) if valid else None
+        if customer_chain is None:
+            # Empty range reports INVALID rather than raising. Shows up in the operator's own
+            # invalid-call counter, which is where a degenerate selector becomes visible.
             return src_route, range(0, 0), src_route, 0, False
 
-        # Chain length caps at half the route, rounded up, so the bound scales with the route
-        # instead of being a fixed number. A chain past halfway starts to approximate moving the
-        # whole route, which ReassignRouteBefore already does more cheaply and with the right
-        # depot handling. Rounding up keeps length 1 reachable on a 1-customer route.
-        src_len = len(src_route.path)
-        start = rand_int_inclusive(0, src_len - 1)
-        max_len = min(src_len - start, -(-src_len // 2))
-        # +1e-50 guards rand_unit() == 0 (random() draws from [0, 1)). It is lost to double
-        # precision everywhere else -- 1.0 + 1e-50 == 1.0 -- so the distribution is unchanged.
-        length = min(max_len, 1 + int(math.log(rand_unit() + 1e-50) * _INV_LOG_CHAIN_CONTINUE_P))
-        chain = range(start, start + length)
-
-        dest_route = rand_choice(sln.all_routes)
-        max_dest = (len(dest_route.path) - len(chain) if dest_route is src_route
-                    else len(dest_route.path))
-        if max_dest < 0:
-            return src_route, chain, src_route, start, False   # NOOP: nowhere to put it
-        dest_index = rand_int_inclusive(0, max_dest)
+        dest_route, dest_index = random_chain_destination(sln, src_route, len(as_chain_range(customer_chain)))
 
         # Trailing False is a placeholder: ReassignCustomerChain sets _evaluates_in_batch, so
         # evaluate() replaces this with the orientation it priced as better.
-        return src_route, chain, dest_route, dest_index, False
+        return src_route, customer_chain, dest_route, dest_index, False
+
+
+class RandomCustomerReassignment(_ChainReassignmentBase):
+    """Chain of exactly one -- the classic single-customer relocate."""
+
+    def _choose_chain(self, src_route: Route) -> Chain | None:
+        # A bare int IS a Chain; as_chain_range normalises it downstream.
+        return rand_int_inclusive(0, len(src_route.path) - 1)
+
+
+class RandomCustomerChainReassignment(_ChainReassignmentBase):
+    """
+    Chain of two or more, so it never duplicates RandomCustomerReassignment. Splitting the two
+    lets the weighting discover the mix; previously it was fixed by the length distribution, and a
+    paired A/B showed that choice was worth about 31 objective units.
+    """
+
+    def _choose_chain(self, src_route: Route) -> Chain | None:
+        src_len = len(src_route.path)
+        if src_len < 2:
+            return None
+
+        # start is bounded so a 2-chain always fits from it. The cap is half the route, rounded
+        # up, so it scales with the route: a chain past halfway approximates moving the whole
+        # route, which ReassignRouteBefore does more cheaply and with the right depot handling.
+        start = rand_int_inclusive(0, src_len - 2)
+        max_len = min(src_len - start, -(-src_len // 2))
+        if max_len < 2:
+            return None   # e.g. a 2-customer route, where the half-cap forbids a 2-chain
+
+        # Geometric, shifted so the minimum is 2. +1e-50 guards rand_unit() == 0 (random() draws
+        # from [0, 1)); it is lost to double precision elsewhere, so the distribution is unchanged.
+        extra = int(math.log(rand_unit() + 1e-50) * _INV_LOG_CHAIN_CONTINUE_P)
+        return range(start, start + min(max_len, 2 + extra))
+
+
+class ReassignClosestChainWithRandomCustomer(_ChainReassignmentBase):
+    """
+    Relocates the run of customers sitting BETWEEN a random customer and its nearest
+    non-adjacent neighbour in the same route.
+
+    Those two are spatially close but sequence-distant, so whatever lies between them is a
+    detour: removing it leaves a cheap arc where an expensive pair of arcs used to be. This is
+    relatedness applied to the removal side, where the other two selectors only randomise.
+
+    Length is not drawn -- it is whatever the geometry gives. The long detours are the ones with
+    the most to gain, so capping would discard exactly the cases worth having.
+    """
+
+    def _choose_chain(self, src_route: Route) -> Chain | None:
+        num_customers = len(src_route.path)
+        anchor = rand_int_inclusive(0, num_customers - 1)
+        other = src_route.closest_non_adjacent_customer(anchor)
+        if other is None:
+            return None
+
+        low, high = (anchor, other) if anchor < other else (other, anchor)
+        # The open interval leaves both anchors in place, so it spans at most num_customers - 2
+        # and can never empty the source route. The whole-route case simply cannot arise here.
+        return range(low + 1, high)
+
+
+def closest_pair_reversals(sln: FullSolution) -> Iterator[ReverseCustomerChainOps]:
+    """
+    The two reversals that bring an anchored close pair together.
+
+    With low and high as the pair's positions, reversing [low+1 .. high] or [low .. high-1] both
+    leave them adjacent; they differ only in which OUTER arcs move. Both are 2-opt, and
+    cost_deltas_if_customer_chain_reversed is O(1), so pricing both costs two arc computations
+    against a proposal already paid for. Choosing one at random would discard half a neighbourhood
+    for no saving.
+    """
+    route = sln.choose_random_nonempty_route()
+    if route is None or route.path_len < 3:
+        return
+
+    anchor = rand_int_inclusive(0, route.path_len - 1)
+    other = route.closest_non_adjacent_customer(anchor)
+    if other is None:
+        return
+
+    low, high = (anchor, other) if anchor < other else (other, anchor)
+    yield route, range(low + 1, high + 1)
+    yield route, range(low, high)
+
+
+class ReverseClosestPairTogether(BestOfCandidates[ReverseCustomerChainOps]):
+    """Neighbour-driven 2-opt. Random reversal mostly proposes reversals that fix nothing; this
+    anchors on a pair that is spatially close but sequence-distant, which is where the crossing is."""
+
+    def __init__(self, sln: FullSolution):
+        super().__init__(sln, ReverseCustomerChain(sln), closest_pair_reversals, k=2)
 
 class RandomCustomerReassignmentToNewRoute(Operator[ReassignCustomerToNewRouteOps]):
     def __init__(self, sln: FullSolution):
@@ -503,14 +633,30 @@ class RandomRoutePermutation(Operator[PermuteRouteOps]):
         return route, permutation
 
 class ChangeRandomEndDepot(Operator[ChangeEndDepotOps]):
+    # INVALID -- by far the worst in the roster -- and every one of those is this operator picking
+    # the depot the route already has, which ChangeEndDepot rejects as a no-op. The weighting then
+    # prices the operator on the surviving two thirds.
+    # O(1) fix, no rejection loop: draw from [0, num_depots - 2], then increment the drawn index
+    # if it is >= the current end depot's index. That maps the smaller range onto "every depot
+    # except the current one" with a single comparison.
     def __init__(self, sln: FullSolution):
+        self.num_depots = len(sln.depots)
         super().__init__(sln, ChangeEndDepot(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
+        if self.num_depots <= 1:
+            route = sln.all_routes[0]
+            return route, route.end_depot
 
         route = rand_choice(sln.all_routes)
-        depot = rand_choice(sln.depots)
+        depot_id = rand_int_inclusive(0, self.num_depots - 2)
+        current_depot = route.end_depot
+
+        # Grab current index. Then, on match-current, pick last-depot, which was excluded from the draw.
+        depot = sln.depots[depot_id]
+        if depot == current_depot:
+            depot = sln.depots[-1]
 
         return route, depot
 

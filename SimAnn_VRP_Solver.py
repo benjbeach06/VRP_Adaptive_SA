@@ -76,13 +76,13 @@ def argmin(values):
 
 class SimAnnVRPSolver:
     # Every tunable constant is a constructor argument defaulting to its historical value, so
-    # passing nothing reproduces the old behaviour exactly. They're exposed as parameters mainly
+    # passing nothing reproduces the old behavior exactly. They're exposed as parameters mainly
     # so tools/tune.py can search over them -- see that file for the current best-known settings
     # and the caveats on which ones are worth tuning yet.
     def __init__(self, sln: FullSolution, max_time: float = 120,
                  *,
                  segment_length: int = 100,
-                 reaction_factor: float = 0.2,
+                 reaction_factor: float = 0.01,
                  cooling_factor: float = 1 - 1e-4,
                  initial_temp_factor: float = 1e-4, # exploit first
                  max_plateau_size: int = 2000,
@@ -120,7 +120,10 @@ class SimAnnVRPSolver:
         self.report_every = 1.0
 
         self.operators.append(RandomRouteReassignment(sln))
+        self.operators.append(RandomCustomerReassignment(sln))
         self.operators.append(RandomCustomerChainReassignment(sln))
+        self.operators.append(ReassignClosestChainWithRandomCustomer(sln))
+        self.operators.append(ReverseClosestPairTogether(sln))
         self.operators.append(RandomCustomerChainReversal(sln))
         self.operators.append(RandomCustomerSwap(sln))
         self.operators.append(CustomerBestOfkSwapInRandomRoute(sln))
@@ -189,7 +192,7 @@ class SimAnnVRPSolver:
             (num_proposals, num_accepts, num_improvements, score_sum) = op.get_stats()
             p = self.reaction_factor
             if num_proposals > 0:
-                average_score = score_sum / num_accepts if score_sum > 0 else 0
+                average_score = score_sum / num_proposals if score_sum > 0 else 0
                 op.weight = reheat*((1 - p) * weight + p * average_score)
             else:
                 op.weight = reheat*max(weight, (weight / geom_mean_weight) ** 0.997 * geom_mean_weight)

@@ -1202,6 +1202,32 @@ class Route(VehicleNode):
 
             return self.path[i]
 
+        def closest_non_adjacent_customer(self, index: int) -> int | None:
+            """
+            Index of the customer nearest to path[index], excluding itself and its two immediate
+            neighbours. None when no such customer exists (a route of 2 or fewer, or an interior
+            index on a route of 3).
+
+            The exclusion is what makes this useful rather than degenerate. The nearest customer
+            in a route is very often the one already beside it, and a move anchored on an adjacent
+            pair has nothing to change -- an empty interval to relocate, or a zero-length reversal.
+
+            O(n). The route is a path, not a cycle (a depot sits at each end), so adjacency does
+            not wrap.
+            """
+            path = self.path
+            anchor = path[index]
+
+            best_index, best_distance = None, float('inf')
+            for i in range(len(path)):
+                if abs(i - index) <= 1:
+                    continue
+                distance = anchor.distance(path[i])
+                if distance < best_distance:
+                    best_index, best_distance = i, distance
+
+            return best_index
+
         @property
         def path_is_cycle(self) -> bool: return self.start_depot == self.end_depot
 
