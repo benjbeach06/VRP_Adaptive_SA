@@ -66,9 +66,17 @@ class Operator[Ops: tuple](ABC):
         self.prev_operands: Ops | None = None
         self.last_move: Move[Ops] | None = None
 
-        # Segment-granularity timing: time.time()/perf_counter() has ~15ms resolution on Windows,
-        # while these operators run in single-digit microseconds, so per-call timing is useless.
-        # Accumulate over a whole segment (see SimAnnVRPSolver.update_weights) instead.
+        # Segment-granularity timing: accumulate over a whole segment (see
+        # SimAnnVRPSolver.update_weights) rather than trusting any single call.
+        #
+        # NOTE: this comment used to say perf_counter has ~15ms resolution on Windows, which is
+        # false and was measured to be false -- time.get_clock_info('perf_counter').resolution is
+        # 1e-7s here, and back-to-back reads advance by ~100ns. The ~15ms figure is the OLD
+        # time.time() tick, not perf_counter's. The design is still right, for a different reason:
+        # two perf_counter calls around a 4us operator cost a few percent of the thing being
+        # measured, and a single call can be straddled by a GC pause or a scheduler slice.
+        # Segment sums average both away. Per-call timing is viable when wanted -- see
+        # tools/profile_operators.py, which uses it deliberately and reports medians.
         self.segment_proposals = 0
         self.segment_time = 0.0
         self._last_propose_time = 0.0
