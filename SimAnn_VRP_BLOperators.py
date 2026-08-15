@@ -32,7 +32,8 @@ type ReassignRouteBeforeOps           = tuple[Route, Route | LastRoute]
 # Trailing bool is the reverse decision, filled in by evaluate() -- see _evaluates_in_batch.
 type ReassignCustomerChainOps         = tuple[Route, Chain, Route, int, bool]
 type ReassignCustomerToNewRouteOps    = tuple[Route, int, Route | LastRoute, Depot]
-type SwapCustomersAtOps               = tuple[Route, int, Route, int]
+# Trailing bools are the two reverse decisions, filled by evaluate() -- see _evaluates_in_batch.
+type SwapCustomerChainsOps            = tuple[Route, Chain, Route, Chain, bool, bool]
 type ReverseCustomerChainOps          = tuple[Route, Chain]
 type PermuteRouteOps                  = tuple[Route, Sequence[int]]
 type ChangeEndDepotOps                = tuple[Route, Depot]
@@ -392,28 +393,68 @@ class ReassignCustomerToNewRouteBefore(OperatorBL[ReassignCustomerToNewRouteOps]
         sln.all_routes.remove(new_route)
 
 
-class SwapCustomersAt(OperatorBL[SwapCustomersAtOps]):
-    def _evaluate_impl(self, operands: SwapCustomersAtOps):
-        route1, index1, route2, index2 = operands
-        if not (0 <= index1 < len(route1.path) and 0 <= index2 < len(route2.path)):
-            return None, MoveKind.INVALID
+class SwapCustomerChains(OperatorBL[SwapCustomerChainsOps]):
+    """
+    Exchange two customer chains. route1's chain lands in route2's slot and vice versa, each
+    optionally reversed as it lands.
 
-        if route1 == route2 and index1 == index2:
-            return None, MoveKind.NOOP
+    Chains must be non-empty. That guard is load-bearing rather than cosmetic: it is what makes
+    the vehicle-activation and depot-activation terms vanish, because each route keeps at least
+    one customer and so neither can empty.
+    """
+    _evaluates_in_batch = True
 
-        deltas = route1.cost_deltas_for_inter_route_customer_swap_at(index1, route2, index2)
-        return deltas, MoveKind.VALID
+    def _evaluate_impl(self, operands: SwapCustomerChainsOps):
+        route1, chain1, route2, chain2, _, _ = operands
+        rng1, rng2 = as_chain_range(chain1), as_chain_range(chain2)
 
-    def _apply_impl(self, operands: SwapCustomersAtOps) -> tuple[Route, int, Route, int]:
-        route1, index1, route2, index2 = operands
-        route1.swap_customers_with(index1, route2, index2)
-        return route1, index1, route2, index2
+        if len(rng1) == 0 or len(rng2) == 0:
+            return None, MoveKind.INVALID, False, False
+        if not (0 <= rng1.start and rng1.stop <= route1.num_customers):
+            return None, MoveKind.INVALID, False, False
+        if not (0 <= rng2.start and rng2.stop <= route2.num_customers):
+            return None, MoveKind.INVALID, False, False
+        if route1 is route2 and rng1.start < rng2.stop and rng2.start < rng1.stop:
+            return None, MoveKind.INVALID, False, False   # overlapping ranges in one route
+
+        deltas = route1.cost_deltas_for_customer_chain_swap(rng1, route2, rng2)
+
+        # argmin over all four rather than two independent comparisons. The two reversals ARE
+        # independent when the chains are disjoint, but not when they are adjacent in one route --
+        # there the arc between them depends on both. argmin is correct either way.
+        options = ((deltas[0], False, False), (deltas[1], True, False),
+                   (deltas[2], False, True), (deltas[3], True, True))
+        best, reverse1, reverse2 = min(options, key=lambda option: option[0].travel_distance)
+        return best, MoveKind.VALID, reverse1, reverse2
+
+    def _apply_impl(self, operands: SwapCustomerChainsOps) -> tuple[Route, range, Route, range, bool, bool]:
+        route1, chain1, route2, chain2, reverse1, reverse2 = operands
+        rng1, rng2 = as_chain_range(chain1), as_chain_range(chain2)
+        k1, k2 = len(rng1), len(rng2)
+
+        # Where each chain ENDS UP. For unequal sizes the chains do not land where they started,
+        # so revert cannot recompute these -- they go in the payload.
+        if route1 is not route2:
+            landed1 = range(rng2.start, rng2.start + k1)
+            landed2 = range(rng1.start, rng1.start + k2)
+        elif rng1.start < rng2.start:
+            gap = rng2.start - rng1.stop
+            landed2 = range(rng1.start, rng1.start + k2)
+            landed1 = range(rng1.start + k2 + gap, rng1.start + k2 + gap + k1)
+        else:
+            gap = rng1.start - rng2.stop
+            landed1 = range(rng2.start, rng2.start + k1)
+            landed2 = range(rng2.start + k1 + gap, rng2.start + k1 + gap + k2)
+
+        route1.swap_customer_chains_with(rng1, route2, rng2, reverse1, reverse2)
+        return route1, landed2, route2, landed1, reverse2, reverse1
 
     def _revert_impl(self, move, revert_info):
-        # Reapplying the swap just swaps back.
-        route1, index1, route2, index2 = revert_info
-        route1.swap_customers_with(index1, route2, index2)
-
+        # Swap the landed chains back, each carrying its own reverse flag again. Reversal is an
+        # involution, and insert_customer_chain places at the target range's START, so the chains
+        # land back on their original spans even when the sizes differ.
+        route1, landed2, route2, landed1, reverse2, reverse1 = revert_info
+        route1.swap_customer_chains_with(landed2, route2, landed1, reverse2, reverse1)
 
 
 class ReverseCustomerChain(OperatorBL[ReverseCustomerChainOps]):

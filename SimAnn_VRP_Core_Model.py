@@ -30,10 +30,10 @@ Num = float | int
 Chain = int | range
 
 
-def as_chain_range(chain: Chain) -> range:
+def as_chain_range(customer_chain: Chain) -> range:
     """Normalise a Chain to a half-open range. Call this ONCE at the top of any chain method, so
     the rest of the body never has to ask which form it was handed."""
-    return range(chain, chain + 1) if isinstance(chain, int) else chain
+    return range(customer_chain, customer_chain + 1) if isinstance(customer_chain, int) else customer_chain
 
 
 #region Randomness
@@ -963,11 +963,18 @@ class LastRouteVisit(Depot, RouteVisit):
 
     #region Object operations
 
-    def count_route_in_depot(self):
-        self.change_depot_uses(self.source_depot, 1)
-
-    def uncount_route_in_depot(self):
-        self.change_depot_uses(self.source_depot, -1)
+    # DEAD, deliberately kept commented rather than deleted. These wrote END-depot usage into
+    # depot_num_uses, which counts route STARTS only -- calling them corrupts it. Nothing calls
+    # them today; a decrement path used to, and only escaped notice because a buggy guard was
+    # almost always false (see test_core_model_regressions, combine-revert end-depot test).
+    # They may come back if end-depot usage is ever tracked properly -- see
+    # TODO(end-depot-index) on SwapRouteTailsAtSharedDepot for why that is not cheap.
+    #
+    # def count_route_in_depot(self):
+    #     self.change_depot_uses(self.source_depot, 1)
+    #
+    # def uncount_route_in_depot(self):
+    #     self.change_depot_uses(self.source_depot, -1)
 
     def change_my_depot_uses(self, num_uses_delta: int):
         self.change_depot_uses(self.source_depot, num_uses_delta)
@@ -2041,28 +2048,33 @@ class Route(VehicleNode):
             return self.cost_deltas_for_adjacent_customer_swap_starting_with(customer1)
 
         @staticmethod
+        def total_overload_deltas_for_load_swap(route1: Route, route2: Route, route1_load_delta: Num) -> tuple[Num, int]:
+            # Takes the load moving INTO route1 rather than the customers moving, so a chain swap
+            # can sum its demands once and reuse this unchanged. Returns
+            # (total_route_overload_delta, num_vehicles_overloaded_delta).
+            if route1 is route2:
+                # Load is unchanged! Intra-route swap: demand never leaves the route.
+                return 0, 0
+
+            route1_overload_delta = route1.overload_delta_if_load_changes(route1_load_delta)
+            route2_overload_delta = route2.overload_delta_if_load_changes(-route1_load_delta)
+
+            num_vehicles_overloaded_delta = route1.is_vehicle_overloaded_delta_if_load_changes_from_other_route(route1_load_delta, route2)
+
+            return route1_overload_delta + route2_overload_delta, num_vehicles_overloaded_delta
+
+        @staticmethod
         def total_overload_deltas_for_customer_swap(customer1: CustomerVisit, customer2: CustomerVisit) -> tuple[Num, int]:
-            # returns (route1_overload_delta, route2_overload_delta, vehicle1_is_overloaded_delta, vehicle2_is_overloaded_delta)
             route1 = customer1.route
             route2 = customer2.route
 
             if route1 is None or route2 is None:
                 raise ValueError("Cannot swap customers that aren't assigned to routes!")
 
-            if route1 == route2:
-                # Load is unchanged! Intra-src_route swap.
-                return 0, 0
-            else:
-                # Compute net src_route overload change
-                route1_load_delta = customer1.current_route_load_delta_if_swapped_with(customer2)
-                route2_load_delta = -route1_load_delta
-
-                route1_overload_delta = route1.overload_delta_if_load_changes(route1_load_delta) # type: ignore # For some reason linter can't tell that route1 is not None here
-                route2_overload_delta = route2.overload_delta_if_load_changes(route2_load_delta)
-
-                num_vehicles_overloaded_delta = route1.is_vehicle_overloaded_delta_if_load_changes_from_other_route(route1_load_delta, route2)# type: ignore # For some reason linter can't tell that route1 is not None here
-
-                return route1_overload_delta + route2_overload_delta, num_vehicles_overloaded_delta
+            # current_route_load_delta_if_swapped_with, not a bare demand difference: it reduces
+            # numerical error when both customers share a route.
+            route1_load_delta = customer1.current_route_load_delta_if_swapped_with(customer2)
+            return Route.total_overload_deltas_for_load_swap(route1, route2, route1_load_delta)
 
         # Any two customers
         @staticmethod
@@ -2089,6 +2101,107 @@ class Route(VehicleNode):
             customer2 = other.path[j]
 
             return self.cost_deltas_for_customer_swap(customer1, customer2)
+
+        def customer_chains_are_adjacent(self, chain: Chain, other: Route, other_chain: Chain) -> bool:
+            # Only possible within one route. Adjacent chains share a boundary arc, which makes
+            # the two reversals interact -- see cost_deltas_for_customer_chain_swap.
+            if self is not other:
+                return False
+            rng1, rng2 = as_chain_range(chain), as_chain_range(other_chain)
+            return rng1.stop == rng2.start or rng2.stop == rng1.start
+
+        def cost_deltas_for_customer_chain_swap(self, chain: Chain, other: Route, other_chain: Chain
+                                                ) -> tuple[ObjectiveTermDelta, ObjectiveTermDelta,
+                                                           ObjectiveTermDelta, ObjectiveTermDelta]:
+            """
+            TODO(swap-len1-shortcut): when both chains have length 1 the four travels are equal,
+            because reversing a single customer changes nothing. Detect that and compute one.
+
+            Four deltas in fixed order: (fwd_fwd, rev1_fwd, fwd_rev2, rev1_rev2). rev1 reverses
+            THIS route's chain as it lands in `other`; rev2 reverses other's chain as it lands
+            here. Only travel_distance differs between the four. Makes no decision -- the caller
+            picks.
+            """
+            rng1, rng2 = as_chain_range(chain), as_chain_range(other_chain)
+            path1, path2 = self.path, other.path
+
+            c1_first, c1_last = path1[rng1.start], path1[rng1.stop - 1]
+            c2_first, c2_last = path2[rng2.start], path2[rng2.stop - 1]
+
+            if len(rng1) == 1 and len(rng2) == 1:
+                # Reversing one customer changes nothing, so all four are equal. The
+                # single-customer swap delta already covers adjacency, load and overload, so
+                # delegate rather than re-derive any of it here.
+                delta = Route.cost_deltas_for_customer_swap(c1_first, c2_first)
+                return delta, delta, delta, delta
+
+            if self.customer_chains_are_adjacent(rng1, other, rng2):
+                # The chains touch, so the arc between them depends on BOTH reversals and the two
+                # sides do not separate. Compose rather than recompute: moving the EARLIER chain
+                # past the later one is exactly cost_deltas_if_customer_chain_moved, which is
+                # already verified. Reversing the other chain then adds a term that depends on the
+                # first chain's orientation -- evaluating that term once per case is what captures
+                # the coupling.
+                if rng1.stop == rng2.start:
+                    early, late = rng1, rng2
+                    e_first, e_last, l_first, l_last = c1_first, c1_last, c2_first, c2_last
+                    early_is_chain1 = True
+                else:
+                    early, late = rng2, rng1
+                    e_first, e_last, l_first, l_last = c2_first, c2_last, c1_first, c1_last
+                    early_is_chain1 = False
+
+                a_visit = e_first.prev_visit
+                # Same-route move, so these carry travel_distance only.
+                moved = self.cost_deltas_if_customer_chain_moved(early, self, early.start + len(late))
+                moved_travel = (moved[0].travel_distance, moved[1].travel_distance)
+
+                def reverse_late_delta(head_early):
+                    # The late chain ends up at [early.start, early.start + len(late)), bracketed
+                    # by a_visit and whichever end of the early chain now leads.
+                    return (a_visit.distance(l_last) + l_first.distance(head_early)
+                            - a_visit.distance(l_first) - l_last.distance(head_early))
+
+                def travel(reverse1, reverse2):
+                    rev_early, rev_late = (reverse1, reverse2) if early_is_chain1 else (reverse2, reverse1)
+                    total = moved_travel[1 if rev_early else 0]
+                    if rev_late:
+                        total += reverse_late_delta(e_last if rev_early else e_first)
+                    return total
+
+                travels = (travel(False, False), travel(True, False),
+                           travel(False, True), travel(True, True))
+            else:
+                # Disjoint slots: rev1 only touches other's slot and rev2 only touches this one,
+                # so the four totals are sums of two independent halves. 12 distance calls.
+                a1, b1 = c1_first.prev_visit, c1_last.next_visit
+                a2, b2 = c2_first.prev_visit, c2_last.next_visit
+
+                removed_here = a1.distance(c1_first) + c1_last.distance(b1)
+                removed_there = a2.distance(c2_first) + c2_last.distance(b2)
+
+                # chain1 lands in other's slot
+                there_fwd = a2.distance(c1_first) + c1_last.distance(b2) - removed_there
+                there_rev = a2.distance(c1_last) + c1_first.distance(b2) - removed_there
+                # chain2 lands in this route's slot
+                here_fwd = a1.distance(c2_first) + c2_last.distance(b1) - removed_here
+                here_rev = a1.distance(c2_last) + c2_first.distance(b1) - removed_here
+
+                travels = (there_fwd + here_fwd, there_rev + here_fwd,
+                           there_fwd + here_rev, there_rev + here_rev)
+
+            # No vehicles_activated or depots_activated terms. Both chains are non-empty (the BL
+            # guards it), so each route keeps at least one customer and neither can empty. If that
+            # guard ever goes, these terms come back.
+            chain1_load = sum(path1[i].demand for i in rng1)
+            chain2_load = sum(path2[j].demand for j in rng2)
+            overload_delta, vehicles_overloaded_delta = Route.total_overload_deltas_for_load_swap(
+                self, other, chain2_load - chain1_load)
+
+            return tuple(  # type: ignore - fixed length 4, built from a 4-tuple
+                ObjectiveTermDelta(travel_distance=t, total_route_overload=overload_delta,
+                                   vehicles_overloaded=vehicles_overloaded_delta)
+                for t in travels)
         #endregion
 
         #region Permutation and subpermutation (travel distance only)
@@ -3175,12 +3288,57 @@ class Route(VehicleNode):
             self.register_num_customers_change_in_vehicle(k, is_route_operation=False)
             self.count_load_change(sum(visit.demand for visit in visits))
 
-            self.path[dest_idx:dest_idx] = visits
+            # Reverse the LIST before splicing rather than calling reverse_customer_chain after.
+            # Reversing afterward rewrites source_customer in every slot -- a second pass, plus
+            # per-visit load bookkeeping that nets to zero within one route. Reversing the list
+            # puts the visits in already ordered, so link_customer relinks them once.
+            self.path[dest_idx:dest_idx] = reversed(visits) if reverse else visits
             for i in range(dest_idx, dest_idx + k):
                 self.link_customer(i)
 
-            if reverse:
-                self.reverse_customer_chain(range(dest_idx, dest_idx + k))
+        def swap_customer_chains_with(self, chain: Chain, other: Route, other_chain: Chain,
+                                      rev1: bool = False, rev2: bool = False):
+            # This route's chain lands in other's slot (reversed if rev1); other's lands here
+            # (reversed if rev2). Callers must have rejected empty and overlapping chains.
+            rng1, rng2 = as_chain_range(chain), as_chain_range(other_chain)
+            k1, k2 = len(rng1), len(rng2)
+
+            if k1 == k2:
+                # Slots line up, so rewrite values in place -- no splice, no index shift. Read
+                # every source BEFORE writing: the two ranges are also the two destinations.
+                path1, path2 = self.path, other.path
+                src1 = [path1[i].source_customer for i in rng1]
+                src2 = [path2[j].source_customer for j in rng2]
+                if rev1:
+                    src1.reverse()
+                if rev2:
+                    src2.reverse()
+                for offset in range(k1):
+                    path1[rng1.start + offset].replace_customer(src2[offset])
+                    path2[rng2.start + offset].replace_customer(src1[offset])
+                return
+
+            if self is not other:
+                visits1 = self.remove_customer_chain(rng1)
+                visits2 = other.remove_customer_chain(rng2)
+                self.insert_customer_chain(visits2, rng1.start, rev2)
+                other.insert_customer_chain(visits1, rng2.start, rev1)
+                return
+
+            # Same route, unequal sizes. Remove the LATER chain first so the earlier chain's
+            # indices stay valid, then rebuild: the later chain's customers take the earlier slot.
+            if rng1.start < rng2.start:
+                early, late, early_rev, late_rev = rng1, rng2, rev1, rev2
+            else:
+                early, late, early_rev, late_rev = rng2, rng1, rev2, rev1
+
+            gap = late.start - early.stop
+            late_visits = self.remove_customer_chain(late)
+            early_visits = self.remove_customer_chain(early)
+
+            self.insert_customer_chain(late_visits, early.start, late_rev)
+            # The untouched middle segment (length gap) now sits directly after the inserted block.
+            self.insert_customer_chain(early_visits, early.start + len(late) + gap, early_rev)
         # endregion
 
 

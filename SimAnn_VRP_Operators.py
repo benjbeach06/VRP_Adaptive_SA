@@ -282,6 +282,12 @@ class Operator[Ops: tuple](ABC):
         pass
 
 
+# TODO(greedy-operator): add a GreedyOperator variant that does NOT necessarily route through
+# OperatorBL.evaluate(). Where a decision is fully specified by a greedy rule, the move is already
+# known, so pricing candidates to rediscover it is wasted work -- the operator can construct the
+# required Move directly. BestOfCandidates is the sampling answer to the same question; this is
+# the deterministic one. It still owes the same lifecycle contract (a Move carrying deltas,
+# improvement and eval_version) so apply/revert/commit and stress.py keep working unchanged.
 class BestOfCandidates[Ops: tuple](Operator[Ops]):
     """
     Evaluates candidate operand tuples and returns the argmax. Works with any BL operator, pure
@@ -327,13 +333,16 @@ class BestOfCandidates[Ops: tuple](Operator[Ops]):
         return best
 
 
-def random_intra_route_swap_pairs(sln: FullSolution, k: int = 20) -> Iterator[SwapCustomersAtOps]:
+def random_intra_route_swap_pairs(sln: FullSolution, k: int = 20) -> Iterator[SwapCustomerChainsOps]:
     route = sln.choose_random_nonempty_route()
     if route is None or route.path_len <= 1:
         return
     for _ in range(k):
+        # Distinct indices, so the two length-1 chains never overlap. Adjacent is fine -- the BL
+        # handles it. Trailing Falses are the reverse placeholders; for length-1 chains all four
+        # priced deltas are equal, so evaluate() settles on (False, False).
         i, j = rand_distinct_indices(route.path_len, 2)
-        yield route, i, route, j
+        yield route, i, route, j, False, False
 
 
 def random_route_pairs(sln: FullSolution, k: int = 10) -> Iterator[CombineRoutesOps]:
@@ -568,27 +577,214 @@ class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator[ReassignCustomerToNew
 
         return route, customer_id, dest_route, depot
 
-class RandomCustomerSwap(Operator[SwapCustomersAtOps]):
+def geometric_chain_length(max_length: int) -> int:
+    # +1e-50 guards rand_unit() == 0 (random() draws from [0, 1)); it is lost to double precision
+    # elsewhere, so the distribution is unchanged.
+    return min(max_length, 1 + int(math.log(rand_unit() + 1e-50) * _INV_LOG_CHAIN_CONTINUE_P))
+
+
+def disjoint_chain_start(num_customers: int, start1: int, length1: int, length2: int) -> int | None:
+    """
+    A start index for a length2-chain that does not overlap [start1, start1+length1) in a route of
+    num_customers. None when neither side has room.
+
+    Sides are weighted by how many legal starts each holds. A uniform side choice would oversample
+    whichever side is smaller, which on short routes is most of them.
+    """
+    left_starts = max(0, start1 - length2 + 1)
+    right_starts = max(0, num_customers - length2 - (start1 + length1) + 1)
+    if left_starts + right_starts == 0:
+        return None
+
+    if rand_int_inclusive(1, left_starts + right_starts) <= left_starts:
+        return rand_int_inclusive(0, start1 - length2)
+    return rand_int_inclusive(start1 + length1, num_customers - length2)
+
+
+def routes_sharing_depot(sln: FullSolution, depot: Depot, at_end: bool) -> list[Route]:
+    """
+    Non-empty routes whose end (or start) depot is `depot`.
+
+    INTERIM, O(n) per call. TODO(depot-uses): once depot_num_uses becomes
+    depot_uses[Depot] -> [start_uses: RouteSet, end_uses: RouteSet], this becomes a direct lookup
+    and the scan goes away.
+    """
+    return [route for route in sln.all_routes
+            if not route.is_empty and (route.end_depot if at_end else route.start_depot) == depot]
+
+
+class _ChainSwapBase(Operator[SwapCustomerChainsOps], ABC):
+    """
+    Shared operand plumbing for the chain-swap family. Subclasses override _choose_chains only.
+
+    Separate roster entries let the weighting price each selection strategy on its own, which is
+    the split that beat a fixed mix for reassignment.
+    """
+
     def __init__(self, sln: FullSolution):
-        super().__init__(sln, SwapCustomersAt(sln))
+        super().__init__(sln, SwapCustomerChains(sln))
+
+    @abstractmethod
+    def _choose_chains(self, sln: FullSolution) -> tuple[Route, Chain, Route, Chain] | None:
+        """None means this draw found no legal pair."""
+        raise NotImplementedError
+
+    @staticmethod
+    def _degenerate(route: Route) -> SwapCustomerChainsOps:
+        # Self-overlapping, so the BL's overlap guard reports INVALID. Used instead of a retry
+        # loop, which keeps the degeneracy visible in the operator's own invalid counter.
+        return route, 0, route, 0, False, False
 
     def _operand_selection_impl(self):
-        sln = self.sln
+        chosen = self._choose_chains(self.sln)
+        if chosen is None:
+            return self._degenerate(rand_choice(self.sln.all_routes))
 
-        # NOTE: It's worse in this case than in the random reassignment case if the customers choices are invalid.
+        route1, chain1, route2, chain2 = chosen
+        # Trailing Falses are placeholders: SwapCustomerChains sets _evaluates_in_batch, so
+        # evaluate() replaces them with the orientations it priced as best.
+        return route1, chain1, route2, chain2, False, False
+
+
+class RandomCustomerSwap(_ChainSwapBase):
+    """
+    Two single customers -- a chain of one each. Reversing one customer changes nothing, so the
+    four priced deltas are equal and min settles on (False, False).
+    """
+
+    def _choose_chains(self, sln: FullSolution):
         route1 = rand_choice(sln.all_routes)
-
-        if len(route1.path) == 0:
-            return route1, 0, route1, 0
+        route2 = rand_choice(sln.all_routes)
+        if route1.is_empty or route2.is_empty:
+            return None
 
         index1 = rand_int_inclusive(0, len(route1.path) - 1)
-        route2 = rand_choice(sln.all_routes)
-
-        if len(route2.path) == 0:
-            return route1, 0, route1, 0
-        index2 = rand_int_inclusive(0, len(route2.path) - 1)
+        if route1 is route2:
+            index2 = disjoint_chain_start(len(route1.path), index1, 1, 1)
+            if index2 is None:
+                return None   # a 1-customer route has nowhere to put the second pick
+        else:
+            index2 = rand_int_inclusive(0, len(route2.path) - 1)
 
         return route1, index1, route2, index2
+
+class RandomSameLengthChainSwap(_ChainSwapBase):
+    """
+    Two chains of the SAME length. Equal lengths hit the in-place path in
+    swap_customer_chains_with -- no splice, no index shift -- so this is the cheapest swap.
+    """
+
+    def _choose_chains(self, sln: FullSolution):
+        route1 = rand_choice(sln.all_routes)
+        route2 = rand_choice(sln.all_routes)
+        len1, len2 = len(route1.path), len(route2.path)
+
+        if route1 is route2:
+            # Two disjoint equal-length chains must both fit, so neither can exceed half.
+            max_length = len1 // 2
+            if max_length < 1:
+                return None
+            length = geometric_chain_length(max_length)
+            start1 = rand_int_inclusive(0, len1 - length)
+            start2 = disjoint_chain_start(len1, start1, length, length)
+            if start2 is None:
+                return None
+        else:
+            max_length = min(len1, len2)
+            if max_length < 1:
+                return None
+            length = geometric_chain_length(max_length)
+            start1 = rand_int_inclusive(0, len1 - length)
+            start2 = rand_int_inclusive(0, len2 - length)
+
+        return (route1, range(start1, start1 + length),
+                route2, range(start2, start2 + length))
+
+
+class RandomChainSwap(_ChainSwapBase):
+    """
+    Two chains of independently drawn lengths. Equal by chance is fine and not worth forcing
+    apart. This is the selector that reaches the unequal-size mutator paths.
+    """
+
+    def _choose_chains(self, sln: FullSolution):
+        route1 = rand_choice(sln.all_routes)
+        route2 = rand_choice(sln.all_routes)
+        len1, len2 = len(route1.path), len(route2.path)
+        if len1 < 1 or len2 < 1:
+            return None
+
+        if route1 is route2:
+            if len1 < 2:
+                return None
+            # Leave at least one slot for the second chain.
+            length1 = geometric_chain_length(len1 - 1)
+            start1 = rand_int_inclusive(0, len1 - length1)
+            length2 = geometric_chain_length(len1 - length1)
+            start2 = disjoint_chain_start(len1, start1, length1, length2)
+            if start2 is None:
+                return None
+        else:
+            length1 = geometric_chain_length(len1)
+            length2 = geometric_chain_length(len2)
+            start1 = rand_int_inclusive(0, len1 - length1)
+            start2 = rand_int_inclusive(0, len2 - length2)
+
+        return (route1, range(start1, start1 + length1),
+                route2, range(start2, start2 + length2))
+
+
+class _SharedDepotEndSwapBase(_ChainSwapBase):
+    """
+    Swap the leading or trailing runs of two routes that meet at the same depot.
+
+    No depot moves: the first/last visit sentinels stay with their own routes and only customers
+    travel. The shared-depot restriction is about which pairs are worth proposing -- two routes
+    that meet at a depot are spatially related, so their ends are more likely to recombine well.
+    """
+    _at_end: ClassVar[bool]
+
+    def _choose_chains(self, sln: FullSolution):
+        route1 = rand_choice(sln.all_routes)
+        if route1.is_empty:
+            return None
+
+        depot = route1.end_depot if self._at_end else route1.start_depot
+        candidates = [route for route in routes_sharing_depot(sln, depot, self._at_end)
+                      if route is not route1]
+        if not candidates:
+            return None
+        # A head or tail pair inside ONE route always overlaps, so the routes must be distinct.
+        route2 = candidates[rand_int_inclusive(0, len(candidates) - 1)]
+
+        len1, len2 = len(route1.path), len(route2.path)
+        length1 = geometric_chain_length(len1)
+        length2 = geometric_chain_length(len2)
+
+        if self._at_end:
+            return (route1, range(len1 - length1, len1), route2, range(len2 - length2, len2))
+        return route1, range(0, length1), route2, range(0, length2)
+
+
+class SwapRouteHeadsAtSharedDepot(_SharedDepotEndSwapBase):
+    _at_end = False
+
+
+class SwapRouteTailsAtSharedDepot(_SharedDepotEndSwapBase):
+    # TODO(end-depot-index): this one keeps the O(n) routes_sharing_depot scan even after start
+    # uses become an index, because END-depot usage is not tracked and is not cheap to track.
+    #
+    # A route's end depot IS the next route's start depot along a vehicle chain, so the set of
+    # routes ending at D is nearly "the predecessors of the routes starting at D". Two corrections
+    # break the equivalence: routes at the START of a vehicle have no predecessor and must be
+    # dropped, and each vehicle's LAST route ends at the vehicle's final depot, which is no
+    # route's start depot and must be added. Deriving it per proposal means copying and fixing up
+    # the start set; maintaining it directly means new accounting on every set_end_depot, split,
+    # combine, dispose and vehicle relink.
+    #
+    # Deferred deliberately: that is a lot of machinery for one operator's selection cost.
+    _at_end = True
+
 
 class RandomCustomerChainReversal(Operator[ReverseCustomerChainOps]):
     def __init__(self, sln: FullSolution):
@@ -609,9 +805,9 @@ class RandomCustomerChainReversal(Operator[ReverseCustomerChainOps]):
 
         return route, range(start, end + 1)
 
-class CustomerBestOfkSwapInRandomRoute(BestOfCandidates[SwapCustomersAtOps]):
+class CustomerBestOfkSwapInRandomRoute(BestOfCandidates[SwapCustomerChainsOps]):
     def __init__(self, sln: FullSolution):
-        super().__init__(sln, SwapCustomersAt(sln), random_intra_route_swap_pairs, k=20)
+        super().__init__(sln, SwapCustomerChains(sln), random_intra_route_swap_pairs, k=20)
 
 
 class RandomRoutePermutation(Operator[PermuteRouteOps]):
