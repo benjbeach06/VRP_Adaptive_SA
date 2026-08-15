@@ -609,17 +609,23 @@ def disjoint_chain_start(num_customers: int, start1: int, length1: int, length2:
     return rand_int_inclusive(start1 + length1, num_customers - length2)
 
 
-def routes_sharing_depot(sln: FullSolution, depot: Depot, at_end: bool) -> list[Route]:
+def routes_sharing_depot(sln: FullSolution, depot: Depot, at_end: bool) -> RouteSet | list[Route]:
     """
     Non-empty routes whose end (or start) depot is `depot`.
 
-    The START case is a direct lookup: depot_route_starts already indexes exactly that, and it
-    only holds ACTIVE routes so no emptiness filter is needed. The END case keeps an O(n) scan --
-    end-depot usage is not tracked, and TODO(end-depot-index) on SwapRouteTailsAtSharedDepot
-    records why it is not cheap to add.
+    START is a direct index lookup, O(1): depot_route_starts holds exactly this, and only ACTIVE
+    routes, so no emptiness filter is needed. END has no index and is scanned, O(routes) -- see
+    TODO(end-depot-index) on SwapRouteTailsAtSharedDepot for why one is not cheap to maintain.
+
+    The two return DIFFERENT types on purpose, and callers still need no branch: rand_choice and
+    len() both accept any sequence with indexing, RouteSet included. Forcing the scan to build a
+    RouteSet instead would only pay for an index map nothing here reads -- measured at roughly
+    double the cost of the list. Adding an end index later changes only the scan line below.
+
+    The START result is the LIVE index, not a copy. Callers must not mutate it.
     """
     if not at_end:
-        return list(sln.depot_route_starts[depot])
+        return sln.depot_route_starts[depot]
 
     return [route for route in sln.all_routes
             if not route.is_empty and route.end_depot == depot]
@@ -780,25 +786,23 @@ class _SharedDepotEndSwapBase(_ChainSwapBase):
         return route1, range(0, length1), route2, range(0, length2)
 
     def _draw_partner(self, sln: FullSolution, route1: Route, depot: Depot) -> Route | None:
-        """Another route meeting route1 at `depot`, or None."""
-        if not self._at_end:
-            # START side: depot_route_starts indexes exactly this, and RouteSet draws in O(1), so
-            # never materialize a candidate list -- that would be O(k) for a single pick.
-            route_set = sln.depot_route_starts[depot]
-            if len(route_set) < 2:
-                return None   # only route1 starts here
-            for _ in range(self.DEPOT_PARTNER_DRAWS):
-                route2 = rand_choice(route_set)
-                if route2 is not route1:
-                    return route2
+        """
+        Another route meeting route1 at `depot`, or None.
+
+        One code path for both sides. route1 itself always belongs to the set -- it is non-empty
+        and meets the depot by construction -- so a size under 2 means it is the only one there.
+        Drawing beats filtering: building a candidate list to exclude route1 would be O(k) for a
+        single pick, which is exactly what the index exists to avoid.
+        """
+        route_set = routes_sharing_depot(sln, depot, self._at_end)
+        if len(route_set) < 2:
             return None
 
-        # END side: no index exists. See TODO(end-depot-index) on SwapRouteTailsAtSharedDepot.
-        candidates = [route for route in routes_sharing_depot(sln, depot, True)
-                      if route is not route1]
-        if not candidates:
-            return None
-        return candidates[rand_int_inclusive(0, len(candidates) - 1)]
+        for _ in range(self.DEPOT_PARTNER_DRAWS):
+            route2 = rand_choice(route_set)
+            if route2 is not route1:
+                return route2
+        return None
 
 
 class SwapRouteHeadsAtSharedDepot(_SharedDepotEndSwapBase):
