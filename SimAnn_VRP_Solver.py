@@ -120,8 +120,8 @@ class SimAnnVRPSolver:
         self.report_every = 1.0
 
         self.operators.append(RandomRouteReassignment(sln))
-        self.operators.append(RandomCustomerReassignment(sln))
-        self.operators.append(RandomSubpathReversal(sln))
+        self.operators.append(RandomCustomerChainReassignment(sln))
+        self.operators.append(RandomCustomerChainReversal(sln))
         self.operators.append(RandomCustomerSwap(sln))
         self.operators.append(CustomerBestOfkSwapInRandomRoute(sln))
         self.operators.append(RandomRoutePermutation(sln))

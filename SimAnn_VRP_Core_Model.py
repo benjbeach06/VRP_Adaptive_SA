@@ -24,6 +24,18 @@ from abc import ABC, abstractmethod
 
 Num = float | int
 
+# A run of consecutive customers within one route, addressed by position. One index is the
+# single-customer case, so every chain operation subsumes the single-customer one and there is no
+# second code path to keep in agreement.
+Chain = int | range
+
+
+def as_chain_range(chain: Chain) -> range:
+    """Normalise a Chain to a half-open range. Call this ONCE at the top of any chain method, so
+    the rest of the body never has to ask which form it was handed."""
+    return range(chain, chain + 1) if isinstance(chain, int) else chain
+
+
 #region Randomness
 # Single source of randomness for the whole solver: operand selection, RouteSet sampling, and the
 # Metropolis coin all draw from here. Owning one explicit generator (rather than the process-wide
@@ -487,7 +499,7 @@ class CustomerVisit(Customer, RouteVisit):
             return False
 
         # If we're here: the src_route is active - so depot usage decrements if the src_route will be inactive
-        return route.is_inactive_after_customer_remove()
+        return route.is_inactive_after_customers_removed()
 
     def will_deactivate_depot_if_removed(self) -> bool:
         prev_visit: FirstRouteVisit = self.prev_visit # type: ignore # It will only be touched if this customer is the last one, in which case prev is a first visit.
@@ -1342,10 +1354,10 @@ class Route(VehicleNode):
             # TODO: Remove all uses of this after src_route activity definition is finalized
             return self.is_active
 
-        def is_inactive_after_customer_remove(self) -> bool:
-            # ASSUME here: customer removal is valid - src_route is nonempty
-            # Will be inactive if it is unassigned or has just 1 customer left
-            return self.vehicle is None or self.path_len == 1 # Can't remove a customer from an empty src_route but we deal with that elsewhere.
+        def is_inactive_after_customers_removed(self, num_customers: int = 1) -> bool:
+            # ASSUME here: the removal is valid - src_route holds at least num_customers
+            # Will be inactive if it is unassigned or if the removal takes every customer it has.
+            return self.vehicle is None or self.path_len == num_customers
 
         def is_active_after_customer_add(self) -> bool:
             # A src_route with customers is always active if it is assigned to a vehicle.
@@ -1373,12 +1385,12 @@ class Route(VehicleNode):
             # TODO: Remove all uses of this after src_route activity definition is finalized
             return 0
 
-        def deactivates_after_customer_remove(self) -> bool:
-            # ASSUME here: customer removal is valid - src_route is nonempty
-            return self.is_active and self.is_inactive_after_customer_remove()
+        def deactivates_after_customers_removed(self, num_customers: int = 1) -> bool:
+            # ASSUME here: the removal is valid - src_route holds at least num_customers
+            return self.is_active and self.is_inactive_after_customers_removed(num_customers)
 
-        def deactivates_after_customer_pop(self) -> bool:
-            return self.deactivates_after_customer_remove()
+        def deactivates_after_customer_popped(self, num_customers: int = 1) -> bool:
+            return self.deactivates_after_customers_removed(num_customers)
 
         def activates_after_customer_insert(self) -> bool:
             return self.is_inactive and self.is_active_after_customer_add()
@@ -1784,13 +1796,14 @@ class Route(VehicleNode):
         # NOTE: Active routes does not imply an active vehicle.
         # Active vehicle = "vehicle has customers"
         # Active src_route = "src_route moves something and it's assigned to an active vehicle"
-        def vehicle_deactivates_if_customer_removed(self) -> bool:
+        def vehicle_deactivates_if_customers_removed(self, num_customers: int = 1) -> bool:
             # For a customer removal to deactivate our vehicle:
-            #   It must make us trivial, and this must be the only nontrivial src_route.
+            #   It must take every customer the vehicle has, across all of its routes.
             vehicle = self.vehicle
-            return vehicle is not None and vehicle.num_customers == 1
+            return vehicle is not None and vehicle.num_customers == num_customers
 
-        def vehicle_activation_delta_if_customer_added(self, customer_route: Route, customer_vehicle: Vehicle|None) -> int:
+        def vehicle_activation_delta_if_customers_added(self, customer_route: Route, customer_vehicle: Vehicle|None,
+                                                        num_customers: int = 1) -> int:
             vehicle = self.vehicle
 
             same_vehicle = vehicle is not None and customer_vehicle == vehicle
@@ -1800,17 +1813,17 @@ class Route(VehicleNode):
                 return 0
             else:
                 vehicle_activates = vehicle is not None and vehicle.is_inactive
-                customer_vehicle_deactivates = customer_route is not None and customer_route.vehicle_deactivates_if_customer_removed()
+                customer_vehicle_deactivates = customer_route is not None and customer_route.vehicle_deactivates_if_customers_removed(num_customers)
 
                 return vehicle_activates - customer_vehicle_deactivates
 
         #endregion
 
         #region Depot activation deltas
-        def depot_deactivates_if_customer_removed(self) -> bool:
-            return self.deactivates_after_customer_remove() and self.first_visit.num_routes_starting_here == 1
+        def depot_deactivates_if_customers_removed(self, num_customers: int = 1) -> bool:
+            return self.deactivates_after_customers_removed(num_customers) and self.first_visit.num_routes_starting_here == 1
 
-        def depot_activation_delta_if_customer_added(self, customer_route: Route) -> int:
+        def depot_activation_delta_if_customers_added(self, customer_route: Route, num_customers: int = 1) -> int:
             same_route = customer_route == self
             if same_route:
                 return 0
@@ -1819,7 +1832,7 @@ class Route(VehicleNode):
                 customer_route_start_depot = customer_route.start_depot
                 if start_depot != customer_route_start_depot:
                     start_depot_activates = self.activates_after_customer_insert() and self.first_visit.num_routes_starting_here == 0
-                    customer_start_depot_deactivates = customer_route.depot_deactivates_if_customer_removed()
+                    customer_start_depot_deactivates = customer_route.depot_deactivates_if_customers_removed(num_customers)
 
                     return start_depot_activates - customer_start_depot_deactivates
                 else:
@@ -1840,14 +1853,15 @@ class Route(VehicleNode):
         def overload_deltas_if_customer_popped(self, index: int) -> tuple[Num, int]:
             return self.overload_deltas_if_customer_removed(self.path[index])
 
-        def overload_deltas_if_customer_added(self, customer: CustomerVisit, customer_route: Route) -> tuple[Num, int]:
+        def overload_deltas_if_load_added(self, load_delta: Num, customer_route: Route) -> tuple[Num, int]:
+            # Takes the load rather than the customers: summing demand over a chain is the
+            # expensive part, and callers already need that total for their own accounting, so
+            # they compute it once and pass it in.
             same_route = customer_route == self
 
             if same_route:
-                # Inter-route move! No change.
+                # Intra-route move! No change.
                 return 0, 0
-
-            load_delta = customer.demand
 
             route_overload_delta = self.overload_delta_if_load_changes(load_delta)
             customer_route_overload_delta = customer_route.overload_delta_if_load_changes(-load_delta)
@@ -1861,8 +1875,8 @@ class Route(VehicleNode):
         #region Full deltas
         def cost_deltas_if_customer_removed(self, customer):
             travel_delta = self.travel_delta_if_customer_removed(customer)
-            vehicle_delta = -self.vehicle_deactivates_if_customer_removed()
-            depot_delta = -self.depot_deactivates_if_customer_removed()
+            vehicle_delta = -self.vehicle_deactivates_if_customers_removed()
+            depot_delta = -self.depot_deactivates_if_customers_removed()
 
             overload_delta, num_vehicles_overloaded_delta = self.overload_deltas_if_customer_removed(customer)
 
@@ -1870,8 +1884,8 @@ class Route(VehicleNode):
 
         def cost_deltas_if_customer_popped(self, index):
             travel_delta = self.travel_delta_if_customer_popped(index)
-            vehicle_delta = -self.vehicle_deactivates_if_customer_removed()
-            depot_delta = -self.depot_deactivates_if_customer_removed()
+            vehicle_delta = -self.vehicle_deactivates_if_customers_removed()
+            depot_delta = -self.depot_deactivates_if_customers_removed()
 
             overload_delta, num_vehicles_overloaded_delta = self.overload_deltas_if_customer_popped(index)
 
@@ -1893,9 +1907,9 @@ class Route(VehicleNode):
             # will triage between the two.
 
             travel_delta = Route.travel_delta_if_customer_inserted_before(customer, insert_visit, customer_route)
-            depot_delta = self.depot_activation_delta_if_customer_added(customer_route)
-            vehicle_activation_delta = self.vehicle_activation_delta_if_customer_added(customer_route, customer_vehicle)
-            (overload_delta, num_vehicles_overloaded_delta) = self.overload_deltas_if_customer_added(customer, customer_route)
+            depot_delta = self.depot_activation_delta_if_customers_added(customer_route)
+            vehicle_activation_delta = self.vehicle_activation_delta_if_customers_added(customer_route, customer_vehicle)
+            (overload_delta, num_vehicles_overloaded_delta) = self.overload_deltas_if_load_added(customer.demand, customer_route)
 
             return ObjectiveTermDelta(travel_distance=travel_delta, depots_activated=depot_delta,
                                       vehicles_activated=vehicle_activation_delta, total_route_overload=overload_delta,
@@ -1904,6 +1918,67 @@ class Route(VehicleNode):
 
         def cost_deltas_if_customer_appended(self, customer):
             return self.cost_deltas_if_customer_inserted_before(customer, self.last_visit)
+
+        def travel_deltas_if_customer_chain_moved(self, chain: Chain,
+                                                  insert_visit: CustomerVisit | LastRouteVisit) -> tuple[Num, Num]:
+            # Returns (not_reversed, reversed), in that order.
+            rng = as_chain_range(chain)
+            path = self.path
+            first = path[rng.start]
+            last = path[rng.stop - 1]
+            before_chain = first.prev_visit
+            after_chain = last.next_visit
+            prev_insert = insert_visit.prev_visit
+
+            # Closing the gap the chain leaves behind. Identical for both orientations.
+            removal = (before_chain.distance(after_chain)
+                       - before_chain.distance(first) - last.distance(after_chain))
+
+            # Opening the gap at the destination. The chain's INTERIOR arcs are unchanged either
+            # way, because the metric is symmetric (Node.distance is Euclidean), so orientation
+            # reaches exactly these two arcs and nothing else.
+            reconnect = -prev_insert.distance(insert_visit)
+            forward = prev_insert.distance(first) + last.distance(insert_visit) + reconnect
+            backward = prev_insert.distance(last) + first.distance(insert_visit) + reconnect
+
+            return removal + forward, removal + backward
+
+        def cost_deltas_if_customer_chain_moved(self, chain: Chain, dest_route: Route,
+                                                dest_idx: int) -> tuple[ObjectiveTermDelta, ObjectiveTermDelta]:
+            # Returns (not_reversed, reversed). The two differ ONLY in travel_distance: the other
+            # four terms depend on which customers moved and where to, never on their order.
+            # This makes no decision -- it hands back both prices and the caller picks.
+            rng = as_chain_range(chain)
+            k = len(rng)
+            same_route = dest_route is self
+
+            # Mirrors ReassignCustomerAt's pre-removal precedent fetch, widened from one customer
+            # to k: moving right within a route, everything from dest_idx on shifts left by k once
+            # the chain is gone, so before the removal the visit to insert before sits k further on.
+            insert_visit = dest_route.get_visit_at(
+                dest_idx + k if same_route and rng.start <= dest_idx else dest_idx)
+            assert isinstance(insert_visit, CustomerVisit | LastRouteVisit)
+
+            fwd_travel, rev_travel = self.travel_deltas_if_customer_chain_moved(rng, insert_visit)
+
+            if same_route:
+                # No customer crosses a route boundary, so load, depot and vehicle are untouched.
+                return (ObjectiveTermDelta(travel_distance=fwd_travel),
+                        ObjectiveTermDelta(travel_distance=rev_travel))
+
+            chain_load = sum(self.path[i].demand for i in rng)
+            depot_delta = dest_route.depot_activation_delta_if_customers_added(self, k)
+            vehicle_delta = dest_route.vehicle_activation_delta_if_customers_added(self, self.vehicle, k)
+            (overload_delta,
+             vehicles_overloaded_delta) = dest_route.overload_deltas_if_load_added(chain_load, self)
+
+            def terms(travel: Num) -> ObjectiveTermDelta:
+                return ObjectiveTermDelta(travel_distance=travel, vehicles_activated=vehicle_delta,
+                                          depots_activated=depot_delta,
+                                          total_route_overload=overload_delta,
+                                          vehicles_overloaded=vehicles_overloaded_delta)
+
+            return terms(fwd_travel), terms(rev_travel)
         #endregion
 
         #endregion
@@ -2319,14 +2394,17 @@ class Route(VehicleNode):
         #region Reversing/reassigning subpaths
 
         #region Reversing a subpath
-        def cost_deltas_if_subpath_reversed(self, start: int, end: int) -> ObjectiveTermDelta:
-            assert 0 <= start < end < self.num_customers, f"Get your reverse_range indices in order you dumbo! start={start}, end={end}, {self.num_customers} customers is duuuuumb"
+        def cost_deltas_if_customer_chain_reversed(self, chain: Chain) -> ObjectiveTermDelta:
+            rng = as_chain_range(chain)
+            assert 0 <= rng.start and rng.stop <= self.num_customers and len(rng) > 1, (
+                f"cost_deltas_if_customer_chain_reversed {rng} out of range for "
+                f"{self.num_customers} customers, or too short to change anything.")
 
             path = self.path
 
             # Delta just disconnects ends and reconnects in reverse!
-            first_customer = path[start]
-            last_customer = path[end]
+            first_customer = path[rng.start]
+            last_customer = path[rng.stop - 1]
 
             # Old: prev->first->...->last->next
             # New: prev->last->...->first->next
@@ -2960,50 +3038,125 @@ class Route(VehicleNode):
             # Clear dest_route src_route
             other.set_values(path=[])
 
-        def reverse_subpath(self, start: int, end: int):
-            assert 0 <= start < end < self.num_customers, f"Get your reverse_range indices in order you dumbo! start={start}, end={end}, {self.num_customers} customers is duuuuumb"
+        # region Customer chain operations
+        # Three paths, split by route relationship. They rewrite Customer VALUES in place wherever
+        # they can (the trick permute already uses) rather than splicing the path list, because a
+        # list splice is O(n) -- doing one per customer would make a k-chain O(k*n).
+        def reverse_customer_chain(self, chain: Chain):
+            rng = as_chain_range(chain)
+            assert 0 <= rng.start and rng.stop <= self.num_customers, (
+                f"reverse_customer_chain {rng} out of range for {self.num_customers} customers.")
+
+            if len(rng) <= 1:
+                return   # a chain of 0 or 1 reverses to itself
 
             path = self.path
-            reversed_customers = [customer.source_customer for customer in reversed(path[start:end+1])]
-            for i in range(end-start+1):
-                curr_visit = path[start+i]
-                customer = reversed_customers[i]
+            reversed_customers = [visit.source_customer for visit in reversed(path[rng.start:rng.stop])]
+            for offset, customer in enumerate(reversed_customers):
+                path[rng.start + offset].replace_customer(customer)
 
-                curr_visit.replace_customer(customer)
-
-        # NOTE TO CLAUDE: WIP ignore this one
-        def reassign_subpath(self, start: int, end: int, dest_route: Route, dest_idx: int, reverse: bool = False):
-            assert 0 <= start < end < self.num_customers, f"Get your reassign_range indices in order you dumbo! start={start}, end={end}, {self.num_customers} customers is duuuuumb"
-            assert self != dest_route and 0 <= dest_idx < dest_route.num_customers
-
-            # Remove customer range from self, update accounting
-            start_visit = self.path[start]
-            end_visit = self.path[end]
+        def reassign_customer_chain(self, chain: Chain, dest: int, reverse: bool = False):
+            # SAME-ROUTE move. No customer crosses a route boundary, so there is no load, depot or
+            # vehicle accounting to do at all -- only the ordering changes. Both the chain and the
+            # customers it displaces get rewritten in place across one contiguous span; everything
+            # outside that span is untouched, where a remove-then-insert would shift the tail twice.
+            #
+            # `dest` is the chain's start index AFTER removal, matching reassign-customer semantics.
+            rng = as_chain_range(chain)
+            k = len(rng)
+            start = rng.start
+            assert 0 <= start and rng.stop <= self.num_customers, (
+                f"reassign_customer_chain {rng} out of range for {self.num_customers} customers.")
+            assert 0 <= dest <= self.num_customers - k, (
+                f"reassign_customer_chain dest={dest} out of range for a {k}-chain in "
+                f"{self.num_customers} customers.")
 
             path = self.path
-            customers = path[start:end + 1]
+            if dest != start and k > 0:
+                # Read every source value BEFORE writing any of them: the span being rewritten is
+                # the same span being read from.
+                if dest < start:
+                    # Chain moves left; the customers it passes shuffle right by k.
+                    span_start = dest
+                    new_customers = ([path[i].source_customer for i in rng] +
+                                     [path[i].source_customer for i in range(dest, start)])
+                else:
+                    # Chain moves right; the customers it passes shuffle left by k.
+                    span_start = start
+                    new_customers = ([path[i].source_customer for i in range(start + k, dest + k)] +
+                                     [path[i].source_customer for i in rng])
 
-
-            if dest_route != self:
-                # Need to remove from self to prep to add to other route
-                self.path[start:end + 1] = []
-
-                load_delta = sum(customer.demand for customer in customers)
-                self.register_num_customers_change_in_vehicle(-(end - start + 1), is_route_operation=False)
-                self.count_load_change(-load_delta)
-                if len(path) == 0:
-                    self.first_visit.uncount_route_depot_use()
-
-            # TODO: dest_route = self path, and dest_vehicle=self.vehicle path must be resolved differently.
-
-            start_visit.next_visit = end_visit
-            end_visit.prev_visit = start_visit
-
-            for customer in customers:
-                customer.unlink_from_route_no_depot_accounting()
+                for offset, customer in enumerate(new_customers):
+                    # ..._from_same_route skips the load bookkeeping, which is exactly right here:
+                    # the demand never leaves this route, so the full replace_customer would add
+                    # and subtract the same amount.
+                    path[span_start + offset].replace_customer_with_customer_from_same_route(customer)
 
             if reverse:
-                print("Imma reverse you. But later. Too tired now.")
+                self.reverse_customer_chain(range(dest, dest + k))
+
+        def remove_customer_chain(self, chain: Chain) -> list[CustomerVisit]:
+            # CROSS-ROUTE move, first half. Returns the detached visits for insert_customer_chain.
+            rng = as_chain_range(chain)
+            k = len(rng)
+            if k == 0:
+                return []
+            assert 0 <= rng.start and rng.stop <= self.num_customers, (
+                f"remove_customer_chain {rng} out of range for {self.num_customers} customers.")
+
+            path = self.path
+            removed = path[rng.start:rng.stop]
+
+            # Capture the NEIGHBOURS before the splice. After it, the only record of the boundary
+            # is on the removed visits themselves, and those links are about to be cleared.
+            prev_visit = removed[0].prev_visit
+            next_visit = removed[-1].next_visit
+
+            # Both of these read path_len, so they must run before the path shrinks.
+            self.register_num_customers_change_in_vehicle(-k, is_route_operation=False)
+            self.count_load_change(-sum(visit.demand for visit in removed))
+
+            was_active = self.is_active
+            path[rng.start:rng.stop] = []
+            prev_visit.next_visit = next_visit
+            next_visit.prev_visit = prev_visit
+
+            # Mirror of insert_customer's inactive -> active increment. unlink_from_route asks this
+            # per customer via will_decrement_depot_usage_if_removed(), which only fires on the
+            # last one; removing a whole chain reaches the same state in one step.
+            if was_active and self.is_inactive:
+                self.first_visit.uncount_route_depot_use()
+
+            for visit in removed:
+                visit.route = None
+            removed[0].prev_visit = None    # type: ignore - None only until the matching insert
+            removed[-1].next_visit = None   # type: ignore - None only until the matching insert
+            return removed
+
+        def insert_customer_chain(self, visits: list[CustomerVisit], dest_idx: int, reverse: bool = False):
+            # CROSS-ROUTE move, second half. Mirrors insert_customer, including the order of the
+            # three accounting calls: all of them read path_len, so all precede the splice.
+            k = len(visits)
+            if k == 0:
+                return
+            assert 0 <= dest_idx <= self.num_customers, (
+                f"insert_customer_chain dest_idx={dest_idx} out of range for "
+                f"{self.num_customers} customers.")
+
+            if self.is_inactive and self.is_active_after_customer_add():
+                self.first_visit.count_route_depot_use()
+
+            self.register_num_customers_change_in_vehicle(k, is_route_operation=False)
+            self.count_load_change(sum(visit.demand for visit in visits))
+
+            self.path[dest_idx:dest_idx] = visits
+            for i in range(dest_idx, dest_idx + k):
+                self.link_customer(i)
+
+            if reverse:
+                self.reverse_customer_chain(range(dest_idx, dest_idx + k))
+        # endregion
+
 
         def __str__(self):
             return (str(self.start_depot.dID) + '->' +
@@ -3961,9 +4114,9 @@ class FullSolution:
 
     def objective_terms(self) -> ObjectiveTermDelta:
         # Absolute totals in the same 5-field shape as ObjectiveTermDelta, so deltas can be
-        # checked against ground truth by diffing two calls to this. Also the measurement used
-        # by OperatorBL._evaluate_by_applying for operators that can't price a move without
-        # performing it.
+        # checked against ground truth by diffing two calls to this. Also the measurement
+        # available to operators that set _evaluates_by_applying because they can't price a move
+        # without performing it.
         return ObjectiveTermDelta(
             travel_distance=self.total_path_len(), vehicles_activated=self.vehicles_used(),
             depots_activated=self.depots_used(), total_route_overload=self.total_overload(),

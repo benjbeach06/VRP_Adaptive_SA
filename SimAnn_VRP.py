@@ -66,7 +66,7 @@ def build_vrp_model():
 
     sln.set_objectives(cost_per_depot = cost_per_depot, cost_per_vehicle = cost_per_vehicle, unit_travel_cost = unit_travel_cost)
 
-    solver = SimAnnVRPSolver(sln, max_time=300, max_plateau_size=1800)
+    solver = SimAnnVRPSolver(sln, max_time=30, max_plateau_size=1800)
 
     """
     route1 = Route([customers[cID] for cID in [1, 15, 18, 17, 5]], depots[2])
@@ -110,7 +110,7 @@ def build_vrp_model():
 
     solver.make_initial_solution()
     #solver.make_dumb_initial_solution()
-    solver.solve(debug_level=0)
+    solver.solve(debug_level=3)
 
     (obj, sln) = solver.get_best_snapshot()
 

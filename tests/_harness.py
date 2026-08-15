@@ -47,8 +47,27 @@ from SimAnn_VRP_Core_Model import (  # noqa: E402
     Customer, CustomerVisit, Depot, FullSolution, ObjectiveTermDelta, Route, Vehicle,
     seed_solver_rng,
 )
+from SimAnn_VRP_Operators import Operator  # noqa: E402
 
 FULL_MATRIX = os.environ.get("VRP_FULL_MATRIX") == "1"
+
+
+class DirectOperator(Operator):
+    """
+    Drives an OperatorBL through the real Operator lifecycle on caller-supplied operands.
+
+    Operator already provides evaluate/apply/commit/revert; it is abstract only on operand
+    SELECTION, which tests never want. This fills that one hole.
+
+    Going through the wrapper is the point, not a convenience. Move.already_applied is maintained
+    by Operator, not by OperatorBL, so a test that drives the BL object directly has to redo that
+    bookkeeping by hand -- and OperatorBL.revert() asserts on the flag it never sets. Reproducing
+    the wrapper's bookkeeping in a caller is the same mistake that produced real solver bugs, so
+    the suite should not model it.
+    """
+
+    def _operand_selection_impl(self):
+        raise NotImplementedError("DirectOperator is driven with caller-supplied operands.")
 
 DEFAULT_DEPOT_LAYOUT = [((10, 10), 35), ((50, 50), 35), ((90, 10), 35)]
 

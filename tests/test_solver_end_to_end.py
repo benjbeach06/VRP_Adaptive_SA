@@ -29,8 +29,8 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 
 from _harness import (
-    FULL_MATRIX, SeededTestCase, all_problems, debug_findings, fingerprint, random_instance,
-    run_solver,
+    FULL_MATRIX, DirectOperator, SeededTestCase, all_problems, debug_findings, fingerprint,
+    random_instance, run_solver,
 )
 
 # Wall-clock budget per solve. Kept small so the suite stays usable; the solver runs tens of
@@ -141,7 +141,7 @@ class SnapshotNormalisation(SeededTestCase):
 
         route = next(r for r in sln.all_routes if not r.is_empty)
         new_depot = next(d for d in sln.depots if d is not route.end_depot)
-        operator = ChangeEndDepot(sln)
+        operator = DirectOperator(sln, ChangeEndDepot(sln))
 
         version_before = sln.version
         move = operator.evaluate((route, new_depot))
@@ -155,7 +155,10 @@ class SnapshotNormalisation(SeededTestCase):
                          "revert did not return the version to the state it restored")
 
         # The same move must still be applicable: the state it was priced against is back.
-        self.assertTrue(operator.apply(move))
+        # apply() asserts eval_version == sln.version, so a wrong version here raises rather
+        # than silently re-applying against a different state.
+        operator.apply(move)
+        self.assertTrue(move.already_applied)
         operator.revert(move)
 
     def test_revert_and_apply_gatekeep_themselves(self):
@@ -167,14 +170,23 @@ class SnapshotNormalisation(SeededTestCase):
 
         route = next(r for r in sln.all_routes if not r.is_empty)
         new_depot = next(d for d in sln.depots if d is not route.end_depot)
-        operator = ChangeEndDepot(sln)
+        operator = DirectOperator(sln, ChangeEndDepot(sln))
         move = operator.evaluate((route, new_depot))
 
-        self.assertFalse(operator.revert(move), "reverting a never-applied move should be a no-op")
-        self.assertTrue(operator.apply(move))
-        self.assertTrue(operator.apply(move), "re-applying the applied move should be a no-op")
-        self.assertTrue(operator.revert(move))
-        self.assertFalse(operator.revert(move), "double revert should be a no-op")
+        # The gatekeeping still holds; it reports through move.already_applied rather than through
+        # a return value, so the caller asks the MOVE what happened instead of the operator.
+        operator.revert(move)
+        self.assertFalse(move.already_applied, "reverting a never-applied move should be a no-op")
+
+        operator.apply(move)
+        self.assertTrue(move.already_applied)
+        operator.apply(move)
+        self.assertTrue(move.already_applied, "re-applying the applied move should be a no-op")
+
+        operator.revert(move)
+        self.assertFalse(move.already_applied)
+        operator.revert(move)
+        self.assertFalse(move.already_applied, "double revert should be a no-op")
 
 
 class SolverDeterminism(SeededTestCase):

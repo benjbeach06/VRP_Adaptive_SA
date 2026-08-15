@@ -23,11 +23,11 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 
 from _harness import (
-    Customer, CustomerVisit, Depot, FullSolution, Route, Vehicle,
+    Customer, CustomerVisit, Depot, DirectOperator, FullSolution, Route, Vehicle,
     SeededTestCase,
     depot_usage_problems, make_depots, make_solution, route_of, term_deltas, visit_link_problems,
 )
-from SimAnn_VRP_BLOperators import CombineRoutes, ReassignCustomerAt, SplitRoute
+from SimAnn_VRP_BLOperators import CombineRoutes, ReassignCustomerChain, SplitRoute
 
 
 def simple_customers(n=12, demand=1):
@@ -200,8 +200,9 @@ class DeltaArithmetic(SeededTestCase):
         self.assertEqual(route.current_load, sln.vehicles[0].capacity)
 
         before = sln.objective_terms()
-        operator = ReassignCustomerAt(sln)
-        move = operator.evaluate((route, 0, route, 1))
+        operator = DirectOperator(sln, ReassignCustomerChain(sln))
+        # Chain of one, so this is still the single-customer move the regression was found with.
+        move = operator.evaluate((route, 0, route, 1, False))
         self.assertTrue(move.is_actionable)
         self.assertEqual(move.deltas.total_route_overload, 0)
         self.assertEqual(move.deltas.vehicles_overloaded, 0)
@@ -251,7 +252,7 @@ class DeltaArithmetic(SeededTestCase):
         sln.add_route_to_vehicle(route2, vehicle)
         original_end_depot = route1.end_depot
 
-        operator = CombineRoutes(sln)
+        operator = DirectOperator(sln, CombineRoutes(sln))
         move = operator.evaluate((route1, route2))
         self.assertTrue(move.is_actionable)
         operator.apply(move)

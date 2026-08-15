@@ -32,6 +32,7 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 
 from _harness import (
     Customer, FULL_MATRIX, Route, SeededTestCase,
+    DirectOperator,
     all_problems, fingerprint, make_depots, make_solution, random_instance, route_of, term_deltas,
 )
 from SimAnn_VRP_BLOperators import CombineRoutes, ReassignRouteBefore
@@ -45,8 +46,11 @@ class OperatorContractBase(SeededTestCase):
     """Shared contract assertion. A TestCase subclass (not a bare mixin) so the
     assert* helpers it calls are actually declared; it defines no test_* methods,
     so discovery collects nothing from it directly."""
-    def assert_operator_contract(self, sln, operator, operands, label):
+    def assert_operator_contract(self, sln, base_operator, operands, label):
         """Purity -> per-term delta -> invariants -> exact revert, for one evaluated move."""
+        # Wrapped, not driven directly: the wrapper owns Move.already_applied, which
+        # OperatorBL.revert() asserts on but never sets. See _harness.DirectOperator.
+        operator = DirectOperator(sln, base_operator)
         before_fingerprint = fingerprint(sln)
         before_terms = sln.objective_terms()
 
@@ -57,7 +61,7 @@ class OperatorContractBase(SeededTestCase):
         if not move.already_applied:
             self.assertEqual(sln.objective_terms(), before_terms,
                              f"{label}: evaluate() mutated the solution (not pure)")
-            operator.apply_and_commit(move)
+            operator.apply(move)
 
         actual = term_deltas(before_terms, sln.objective_terms())
         for name, predicted, measured in zip(type(actual)._fields, move.deltas, actual):
@@ -67,7 +71,9 @@ class OperatorContractBase(SeededTestCase):
 
         self.assertEqual(all_problems(sln), [], f"{label}: invariants broken after apply")
 
-        operator.revert_and_reject(move)
+        # No commit() here: committing finalises the move and clears the operator's revert
+        # payload, so a contract test that commits can no longer check the revert half.
+        operator.revert(move)
 
         self.assertEqual(fingerprint(sln), before_fingerprint,
                          f"{label}: revert() did not restore the solution exactly")
@@ -215,7 +221,10 @@ class RandomisedOperatorContract(OperatorContractBase):
             if not move.already_applied:
                 self.assertEqual(sln.objective_terms(), before_terms,
                                  f"{label}: propose() mutated the solution")
-                wrapper.apply_and_commit(move)
+                # apply_for_acceptance, not apply: paired with the revert_and_reject below, this
+                # is exactly the solver's accept/reject path, so the test exercises the timed
+                # production route rather than a quieter one only tests use.
+                wrapper.apply_for_acceptance(move)
 
             actual = term_deltas(before_terms, sln.objective_terms())
             for name, predicted, measured in zip(type(actual)._fields, move.deltas, actual):

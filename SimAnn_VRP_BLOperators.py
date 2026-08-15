@@ -29,10 +29,11 @@ class MoveKind(Enum):
 # which have been a real bug category here (e.g. SplitRandomRoute once supplied
 # (vehicle, route_id, split_index, depot) against a (route, split_index, depot) signature).
 type ReassignRouteBeforeOps           = tuple[Route, Route | LastRoute]
-type ReassignCustomerAtOps            = tuple[Route, int, Route, int]
+# Trailing bool is the reverse decision, filled in by evaluate() -- see _evaluates_in_batch.
+type ReassignCustomerChainOps         = tuple[Route, Chain, Route, int, bool]
 type ReassignCustomerToNewRouteOps    = tuple[Route, int, Route | LastRoute, Depot]
 type SwapCustomersAtOps               = tuple[Route, int, Route, int]
-type ReverseSubpathOps               = tuple[Route, int, int]
+type ReverseCustomerChainOps          = tuple[Route, Chain]
 type PermuteRouteOps                  = tuple[Route, Sequence[int]]
 type ChangeEndDepotOps                = tuple[Route, Depot]
 type DisposeOfEmptyRoutesOps          = tuple[RouteSet]
@@ -77,21 +78,6 @@ class Move[Ops: tuple]:
     def is_actionable(self) -> bool:
         return self.kind is MoveKind.VALID
 
-    def replace_operands(self, operands: Ops) -> None:
-        """
-        Second sanctioned mutation, for operators whose revert cannot restore the ORIGINAL
-        operand objects -- currently only CombineRoutes, whose _revert_impl rebuilds the absorbed
-        route through split_at() as a NEW object. Without this, operands still name the emptied,
-        unlinked original, so re-applying the move operates on a corpse. The solver DOES re-apply
-        after reverting: that is exactly the snapshot path (revert -> take_sln_snapshot -> apply).
-
-        Weakens what `operands` means -- it is no longer strictly "the objects this move was
-        priced against" -- so it stays narrow and named. The durable fix is revert-identity: have
-        _revert_impl restore into the original object (see TODO(revert-identity) on split_at),
-        after which this method should go away.
-        """
-        object.__setattr__(self, "operands", operands)
-
     def mark_applied(self, applied: bool) -> None:
         """
         The ONLY sanctioned mutation on a Move; every other field raises FrozenInstanceError.
@@ -105,6 +91,7 @@ class Move[Ops: tuple]:
 class OperatorBL[Ops: tuple](ABC):
     """
     Lifecycle:  evaluate(operands) -> Move[Ops]    (PURE unless _evaluates_by_applying)
+                                                   (see _evaluates_in_batch for operand fill-in)
                 apply(move) -> bool                (mutates; stores revert payload)
                 commit() | revert()                (finalize | undo)
 
@@ -114,14 +101,28 @@ class OperatorBL[Ops: tuple](ABC):
     Ops is the operand tuple this operator consumes (see the aliases above). Subclasses bind it
     once -- `class SplitRoute(OperatorBL[SplitRouteOps])` -- and then destructure it in each hook.
 
-    _evaluate_impl contract: return None (invalid) | MoveKind.NOOP (legal, no change) |
-    ObjectiveTermDelta (valid, priced). Never return MoveKind.INVALID directly -- that's
-    constructed internally by evaluate() when _evaluate_impl returns None.
+    _evaluate_impl contract: return (deltas, kind, *decisions).
+      deltas    -- ObjectiveTermDelta when kind is VALID, None otherwise.
+      kind      -- INVALID (operands illegal) | NOOP (legal, changes nothing) | VALID (priced).
+      decisions -- only when _evaluates_in_batch; see that flag.
+
+    One return shape for every operator, so evaluate() has a single path. The two flags below are
+    independent and neither one gets its own overridable hook: an operator that prices by mutating
+    and an operator that decides during pricing are still just _evaluate_impl.
     """
 
     # Set True only for operators that genuinely cannot price a move without performing it
-    # (e.g. PermuteRoute, for now). Such operators mutate during evaluate(), atomically.
+    # (e.g. PermuteRoute, for now). Such operators mutate during evaluate(), atomically, and must
+    # set self._revert_info themselves -- evaluate() asserts they did.
     _evaluates_by_applying: ClassVar[bool] = False
+
+    # Set True for operators that decide part of their own operands while pricing, because the
+    # decision is only knowable from the deltas (e.g. "is this chain cheaper reversed?"). Such an
+    # operator prices every option in ONE _evaluate_impl call -- the alternative is evaluating the
+    # same operands once per option, which recomputes every shared term. The returned decisions
+    # replace the trailing operand slots positionally, BEFORE the Move is built, so the Move still
+    # records exactly what apply() will do and nothing frozen is mutated.
+    _evaluates_in_batch: ClassVar[bool] = False
 
     def __init__(self, sln: FullSolution):
         self.sln = sln
@@ -134,7 +135,7 @@ class OperatorBL[Ops: tuple](ABC):
 
     # ---------------------------------------------------------------- hooks
     @abstractmethod
-    def _evaluate_impl(self, operands: Ops) -> ObjectiveTermDelta | MoveKind | None:
+    def _evaluate_impl(self, operands: Ops) -> tuple[ObjectiveTermDelta | None, MoveKind, *tuple[Any, ...]]:
         """PURE (unless _evaluates_by_applying). See class docstring for the return contract."""
         pass
 
@@ -148,8 +149,9 @@ class OperatorBL[Ops: tuple](ABC):
         """
         Undo exactly what _apply_impl did, given its returned payload.
 
-        `move` is passed in so a revert that cannot restore the original operand objects can
-        repoint the move at the replacements (see CombineRoutes, and Move.replace_operands).
+        `move` is passed in for reverts that need to see what was priced. It must NOT be mutated:
+        a revert that cannot restore the original operand objects is a revert-identity bug in the
+        operator, not something to paper over by repointing the move (see TODO(revert-identity)).
         """
         pass
 
@@ -157,19 +159,41 @@ class OperatorBL[Ops: tuple](ABC):
     def evaluate(self, operands: Ops) -> Move[Ops]:
         assert not self.is_applied, f"{type(self).__name__}.evaluate() called with a move still applied."
 
-        if self._evaluates_by_applying:
-            return self._evaluate_by_applying(operands)
+        deltas, kind, *decisions = self._evaluate_impl(operands)
+        applied_yet = self._evaluates_by_applying
 
-        result = self._evaluate_impl(operands)
-        if result is None:
+        if self._evaluates_in_batch:
+            split = len(operands) - len(decisions)
+            # Asserted BEFORE substituting: once the tuple is rebuilt a type error is indis-
+            # tinguishable from operands that were always wrong, and the trailing slots are the
+            # only place a decision can legally land.
+            assert split >= 0 and all(isinstance(d, type(o)) for d, o in zip(decisions, operands[split:])), (
+                f"{type(self).__name__} returned decisions {decisions!r} that do not match the "
+                f"trailing operand slots {operands[split:]!r}.")
+            operands = cast(Ops, (*operands[:split], *decisions))
+
+        # Single assert, no wrapping `if`: under -O the whole line vanishes, where a bare `if`
+        # would be left hanging with an empty body.
+        assert not (applied_yet and kind is MoveKind.VALID and self._revert_info is None), (
+            f"{type(self).__name__} sets _evaluates_by_applying but priced a VALID move without "
+            f"storing a revert payload.")
+
+        if kind is MoveKind.INVALID:
             return Move(MoveKind.INVALID, operands)
-        if result is MoveKind.NOOP:
+        if kind is MoveKind.NOOP:
             return Move(MoveKind.NOOP, operands)
-        assert isinstance(result, ObjectiveTermDelta), (
-            f"{type(self).__name__}._evaluate_impl returned {result!r}: expected None, "
-            f"MoveKind.NOOP, or an ObjectiveTermDelta.")
-        return Move(MoveKind.VALID, operands, result,
-                    self.improvement_from_deltas(result), self.sln.version)
+
+        assert isinstance(deltas, ObjectiveTermDelta), (
+            f"{type(self).__name__}._evaluate_impl returned kind=VALID with deltas={deltas!r}.")
+
+        move = Move(MoveKind.VALID, operands, deltas, self.improvement_from_deltas(deltas),
+                    self.sln.version, already_applied=applied_yet)
+        if applied_yet:
+            # Order matters: the Move records the PRE-apply version, then the solution advances.
+            # revert() asserts eval_version == sln.version - 1 against exactly this.
+            self._applied = move
+            self.sln.version += 1
+        return move
 
     def apply(self, move: Move[Ops]):
         """
@@ -222,21 +246,6 @@ class OperatorBL[Ops: tuple](ABC):
         self._revert_info = None
         self._applied = None
 
-    # ----------------------------------------------------------- escape hatch
-    def _evaluate_by_applying(self, operands: Ops) -> Move[Ops]:
-        """
-        Override this (not _evaluate_impl) for operators that genuinely cannot price a move
-        without performing it (_evaluates_by_applying = True). No shared "measure before/after"
-        template here -- each such operator knows its own cheapest way to measure, and there's
-        only ever going to be a couple of these, so a generic hook buys nothing.
-
-        MUST: apply the move, set self._revert_info, set self._applied to the returned Move,
-        bump self.sln.version by 1, and return a Move with kind=VALID and already_applied=True.
-        """
-        raise NotImplementedError(
-            f"{type(self).__name__} sets _evaluates_by_applying=True but doesn't override "
-            f"_evaluate_by_applying().")
-
     # ---------------------------------------------------------------- pricing
     def improvement_from_deltas(self, deltas: ObjectiveTermDelta) -> Num:
         sln = self.sln
@@ -249,15 +258,15 @@ class ReassignRouteBefore(OperatorBL[ReassignRouteBeforeOps]):
     def _evaluate_impl(self, operands: ReassignRouteBeforeOps):
         src_route, dest_route = operands
         if dest_route.vehicle is None:
-            return None   # INVALID: destination unassigned
+            return None, MoveKind.INVALID   # destination unassigned
 
         if (src_route.is_empty or src_route is dest_route or src_route.next_route is dest_route or
                 src_route.prev_route is dest_route and dest_route.is_empty): # type: ignore - prev routes are never last routes
             # No-ops for reassign to before self, to current location, or to before previous route if prev is empty
             # (if prev is empty, the op is equivalent to moving that empty route forward one - prevented)
-            return None
+            return None, MoveKind.INVALID
 
-        return src_route.cost_deltas_if_inserted_before(dest_route)
+        return src_route.cost_deltas_if_inserted_before(dest_route), MoveKind.VALID
 
     def _apply_impl(self, operands: ReassignRouteBeforeOps) -> tuple[Route, Route | LastRoute | None]:
         src_route, dest_route = operands
@@ -280,45 +289,71 @@ class ReassignRouteBefore(OperatorBL[ReassignRouteBeforeOps]):
             route.link_to_vehicle_before(successor)
 
 
-class ReassignCustomerAt(OperatorBL[ReassignCustomerAtOps]):
-    def _evaluate_impl(self, operands: ReassignCustomerAtOps):
-        src_route, src_index, dest_route, dest_index = operands
-        if src_index > len(src_route.path) - 1 or dest_index > len(dest_route.path) \
-                or (src_route == dest_route and dest_index == len(dest_route.path)):
-            # In the last case: you're moving within the same list - so the "last insert" is no longer valid.
-            # Otherwise: can move to the end of a different src_route (to become the new last element), but not beyond it
-            return None
+class ReassignCustomerChain(OperatorBL[ReassignCustomerChainOps]):
+    # Was ReassignCustomerAt: a chain of one is the single-customer move, so this is a pure
+    # widening rather than a second operator to keep in agreement.
+    #
+    # The trailing `reverse` operand is decided during pricing rather than chosen by the caller.
+    # Both orientations fall out of ONE delta computation (they differ only in travel_distance),
+    # so offering them as two candidates would recompute every shared term. Callers pass False;
+    # evaluate() overwrites it from the returned decision before building the Move.
+    _evaluates_in_batch = True
 
-        if src_route == dest_route and src_index == dest_index:
-            return MoveKind.NOOP
+    def _evaluate_impl(self, operands: ReassignCustomerChainOps):
+        src_route, chain, dest_route, dest_idx, _ = operands
+        rng = as_chain_range(chain)
+        k = len(rng)
+        same_route = src_route is dest_route
 
-        customer = src_route.get_visit_at(src_index)
-        insert_visit = dest_route.get_visit_at(dest_index if src_route != dest_route or src_index > dest_index else dest_index + 1)
-        # We already gated for validity of src_index and dest_index, so we can now assert they're the desired types.
-        assert isinstance(customer, CustomerVisit)
-        assert isinstance(insert_visit, CustomerVisit|LastRouteVisit)
+        if k == 0 or rng.start < 0 or rng.stop > src_route.num_customers or dest_route.vehicle is None:
+            return None, MoveKind.INVALID, False
 
-        return dest_route.cost_deltas_if_customer_inserted_before(customer, insert_visit)
+        # dest_idx is the chain's start index AFTER removal, so a same-route move has k fewer
+        # slots to land in. Different-route may append (== num_customers), never beyond.
+        max_dest = dest_route.num_customers - k if same_route else dest_route.num_customers
+        if not (0 <= dest_idx <= max_dest):
+            return None, MoveKind.INVALID, False
 
-    def _apply_impl(self, operands: ReassignCustomerAtOps) -> tuple[Route, int, Route, int]:
-        src_route, src_index, dest_route, dest_index = operands
-        revert_info = (src_route, src_index, dest_route, dest_index)
-        customer = src_route.pop_customer_at(src_index)
-        dest_route.insert_customer(customer, dest_index)
-        return revert_info
+        if same_route and dest_idx == rng.start:
+            # The chain does not move. Reversing it where it sits is ReverseCustomerChain's job,
+            # so this stays a no-op rather than becoming a second way to spell that move.
+            return None, MoveKind.NOOP, False
+
+        not_reversed, reversed_ = src_route.cost_deltas_if_customer_chain_moved(rng, dest_route, dest_idx)
+
+        # Only travel_distance differs, so this comparison decides the whole orientation.
+        reverse = reversed_.travel_distance < not_reversed.travel_distance
+        return (reversed_ if reverse else not_reversed), MoveKind.VALID, reverse
+
+    def _apply_impl(self, operands: ReassignCustomerChainOps) -> tuple[Route, range, Route, int, bool]:
+        src_route, chain, dest_route, dest_idx, reverse = operands
+        rng = as_chain_range(chain)
+        if src_route is dest_route:
+            src_route.reassign_customer_chain(rng, dest_idx, reverse)
+        else:
+            visits = src_route.remove_customer_chain(rng)
+            dest_route.insert_customer_chain(visits, dest_idx, reverse)
+        return src_route, rng, dest_route, dest_idx, reverse
 
     def _revert_impl(self, move, revert_info):
-        src_route, src_index, dest_route, dest_index = revert_info
-        # Reversing is just re-applying with source and destination swapped.
-        customer = dest_route.pop_customer_at(dest_index)
-        src_route.insert_customer(customer, src_index)
+        src_route, rng, dest_route, dest_idx, reverse = revert_info
+        moved = range(dest_idx, dest_idx + len(rng))
+        # Un-reverse before moving back. Reversal is an involution, so undoing it in place at the
+        # destination restores the original order, and the return trip is then a plain move.
+        if reverse:
+            dest_route.reverse_customer_chain(moved)
+        if src_route is dest_route:
+            src_route.reassign_customer_chain(moved, rng.start)
+        else:
+            visits = dest_route.remove_customer_chain(moved)
+            src_route.insert_customer_chain(visits, rng.start)
 
 
 class ReassignCustomerToNewRouteBefore(OperatorBL[ReassignCustomerToNewRouteOps]):
     def _evaluate_impl(self, operands: ReassignCustomerToNewRouteOps):
         src_route, src_index, dest_route, end_depot = operands
         if not 0 <= src_index < src_route.num_customers or dest_route.vehicle is None:
-            return None
+            return None, MoveKind.INVALID
 
         remove_delta = src_route.cost_deltas_if_customer_popped(src_index)
 
@@ -331,7 +366,7 @@ class ReassignCustomerToNewRouteBefore(OperatorBL[ReassignCustomerToNewRouteOps]
 
         add_delta = new_route.cost_deltas_if_inserted_before(dest_route)
 
-        return add_delta + remove_delta
+        return add_delta + remove_delta, MoveKind.VALID
 
     def _apply_impl(self, operands: ReassignCustomerToNewRouteOps) -> tuple[Route, int, Route]:
         src_route, src_index, dest_route, end_depot = operands
@@ -361,13 +396,13 @@ class SwapCustomersAt(OperatorBL[SwapCustomersAtOps]):
     def _evaluate_impl(self, operands: SwapCustomersAtOps):
         route1, index1, route2, index2 = operands
         if not (0 <= index1 < len(route1.path) and 0 <= index2 < len(route2.path)):
-            return None
+            return None, MoveKind.INVALID
 
         if route1 == route2 and index1 == index2:
-            return MoveKind.NOOP
+            return None, MoveKind.NOOP
 
         deltas = route1.cost_deltas_for_inter_route_customer_swap_at(index1, route2, index2)
-        return deltas
+        return deltas, MoveKind.VALID
 
     def _apply_impl(self, operands: SwapCustomersAtOps) -> tuple[Route, int, Route, int]:
         route1, index1, route2, index2 = operands
@@ -381,21 +416,22 @@ class SwapCustomersAt(OperatorBL[SwapCustomersAtOps]):
 
 
 
-class ReverseSubpath(OperatorBL[ReverseSubpathOps]):
-    def _evaluate_impl(self, operands: ReverseSubpathOps):
-        route, start, end = operands
-        if not (0 <= start <= end < route.num_customers):
-            return None
+class ReverseCustomerChain(OperatorBL[ReverseCustomerChainOps]):
+    def _evaluate_impl(self, operands: ReverseCustomerChainOps):
+        route, chain = operands
+        rng = as_chain_range(chain)
+        if not (0 <= rng.start and rng.stop <= route.num_customers):
+            return None, MoveKind.INVALID
 
-        if start==end:
-            return MoveKind.NOOP
+        if len(rng) <= 1:
+            return None, MoveKind.NOOP   # a chain of 0 or 1 reverses to itself
 
-        return route.cost_deltas_if_subpath_reversed(start, end)
+        return route.cost_deltas_if_customer_chain_reversed(rng), MoveKind.VALID
 
-    def _apply_impl(self, operands: ReverseSubpathOps) -> tuple[Route, int, int]:
-        route, start, end = operands
-        route.reverse_subpath(start, end)
-        return route, start, end
+    def _apply_impl(self, operands: ReverseCustomerChainOps) -> tuple[Route, Chain]:
+        route, chain = operands
+        route.reverse_customer_chain(chain)
+        return route, chain
 
     def _revert_impl(self, move, revert_info):
         # Reapplying the swap just reverses back. ezpz
@@ -411,12 +447,19 @@ def invert_permutation(permutation: Sequence[int]) -> Sequence[int]:
     return cast(Sequence[int], inv)
 
 class PermuteRoute(OperatorBL[PermuteRouteOps]):
-    # Not yet given real delta math (planned for a later pass) - keeps computing its improvement
-    # by actually applying the permutation and measuring the change, via the escape hatch.
+    # Not yet given real delta math (planned for a later pass) - prices by applying the
+    # permutation and measuring the change. _evaluates_by_applying changes only how evaluate()
+    # FINISHES (already_applied, _applied, version bump); pricing still goes through
+    # _evaluate_impl, so this operator can still report INVALID or NOOP like any other.
     _evaluates_by_applying = True
 
     def _evaluate_impl(self, operands: PermuteRouteOps):
-        pass   # unused: _evaluates_by_applying routes evaluate() through _evaluate_by_applying instead
+        # Route-local O(path length) measurement, not a full-solution objective_terms() diff.
+        route, _ = operands
+        before = route.total_distance()
+        self._revert_info = self._apply_impl(operands)
+        after = route.total_distance()
+        return ObjectiveTermDelta(travel_distance=after - before), MoveKind.VALID
 
     def _apply_impl(self, operands: PermuteRouteOps) -> tuple[Route, Sequence[int]]:
         route, permutation = operands
@@ -427,31 +470,18 @@ class PermuteRoute(OperatorBL[PermuteRouteOps]):
         route, inv_permutation = revert_info
         route.permute(inv_permutation)
 
-    def _evaluate_by_applying(self, operands: PermuteRouteOps) -> Move[PermuteRouteOps]:
-        # Route-local O(path length) measurement, not a full-solution objective_terms() diff.
-        route, _ = operands
-        before = route.total_distance()
-        self._revert_info = self._apply_impl(operands)
-        after = route.total_distance()
-        deltas = ObjectiveTermDelta(travel_distance=after - before)
-        move = Move(MoveKind.VALID, operands, deltas,
-                    self.improvement_from_deltas(deltas), self.sln.version, already_applied=True)
-        self._applied = move
-        self.sln.version += 1
-        return move
-
 
 class ChangeEndDepot(OperatorBL[ChangeEndDepotOps]):
     def _evaluate_impl(self, operands: ChangeEndDepotOps):
         route, new_end_depot = operands
         if route.is_empty:
-            return None
+            return None, MoveKind.INVALID
 
         # No-op condition (we disallow no-ops)
         if new_end_depot == route.end_depot:
-            return None
+            return None, MoveKind.INVALID
 
-        return route.cost_deltas_if_end_depot_changes(new_end_depot)
+        return route.cost_deltas_if_end_depot_changes(new_end_depot), MoveKind.VALID
 
     def _apply_impl(self, operands: ChangeEndDepotOps) -> tuple[Route, Depot]:
         route, new_end_depot = operands
@@ -480,14 +510,15 @@ class DisposeOfEmptyRoutesBL(OperatorBL[DisposeOfEmptyRoutesOps]):
     def _evaluate_impl(self, operands: DisposeOfEmptyRoutesOps):
         (routes,) = operands
         if not routes:
-            return MoveKind.NOOP
+            return None, MoveKind.NOOP
 
         assert all(route.is_empty for route in routes), "Cannot dispose of nonempty routes! You'll lose customers."
 
         if self.dispose_only_trivial_routes:
-            return ObjectiveTermDelta()   # trivial routes are cost-neutral by definition
+            # trivial routes are cost-neutral by definition
+            return ObjectiveTermDelta(), MoveKind.VALID
 
-        return self.sln.cost_deltas_for_removing_empty_routes(routes)
+        return self.sln.cost_deltas_for_removing_empty_routes(routes), MoveKind.VALID
 
     def _apply_impl(self, operands: DisposeOfEmptyRoutesOps) -> tuple[list[tuple[Route, Route | FirstRoute | None]], list[tuple[Route, int]]]:
         (routes,) = operands
@@ -523,9 +554,9 @@ class SplitRoute(OperatorBL[SplitRouteOps]):
         num_customers = route.num_customers
 
         if num_customers <= 1 or 0 == split_index or split_index >= num_customers:
-            return None
+            return None, MoveKind.INVALID
 
-        return route.cost_deltas_for_split_at(split_index, intermediate_end_depot)
+        return route.cost_deltas_for_split_at(split_index, intermediate_end_depot), MoveKind.VALID
 
     def _apply_impl(self, operands: SplitRouteOps) -> tuple[Route, Route]:
         route, split_index, intermediate_end_depot = operands
@@ -548,9 +579,9 @@ class CombineRoutes(OperatorBL[CombineRoutesOps]):
         # appends route2's customers onto route1 and then relinks at the boundary index, which is
         # out of range whenever route2 has zero customers, trivial or not.
         if route1 is route2 or route1.is_empty or route2.is_empty:
-            return None   # INVALID
+            return None, MoveKind.INVALID
 
-        return route1.cost_deltas_for_combine_with(route2)
+        return route1.cost_deltas_for_combine_with(route2), MoveKind.VALID
 
     def _apply_impl(self, operands: CombineRoutesOps) -> tuple[Route, int, Depot, Route | FirstRoute | None, int, Route]:
         route1, route2 = operands
@@ -587,10 +618,6 @@ class CombineRoutes(OperatorBL[CombineRoutesOps]):
             # original slot (a no-op when route2 was route1's immediate successor).
             new_route.link_to_vehicle_after(other_prev_route)
 
-        # split_at handed back a NEW Route, so the move's operands would otherwise still name the
-        # original route2 -- now emptied and unlinked. Repoint them, or the solver's snapshot path
-        # (revert -> snapshot -> apply) re-applies against a dead route.
-        # move.replace_operands((route1, new_route))
 
 # TODO(future-operator): SubPermuteRoute, using the existing (unused)
 # Route.cost_deltas_for_subpermutation -- not yet decided how best to leverage this one.

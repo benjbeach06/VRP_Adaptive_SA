@@ -8,6 +8,15 @@ from typing import Callable, Iterable, Iterator
 # Permute src_route with permutation array: src_route.permute(permutation)
 # Permute subset of src_route: src_route.subpermute(permutation)
 
+# Reassignment chain length is geometric: each extra customer continues with this probability.
+# Uniform is cheaper to sample but spends most of its draws on long chains -- on a 20-customer
+# route it made length 1 about 10% of proposals, where it used to be 100% of this operator's
+# behaviour. Geometric keeps short chains common (P(1) = 1 - base) and lets long ones stay rare.
+CHAIN_LEN_CONTINUE_P = 0.75
+# Sampled by inverse CDF: one RNG draw and one log, rather than an expected 1/(1-base) Bernoulli
+# trials. Reciprocal is precomputed because this runs on every proposal.
+_INV_LOG_CHAIN_CONTINUE_P = 1.0 / math.log(CHAIN_LEN_CONTINUE_P)
+
 class OperatorStats:
     def __init__(self):
         self.proposals: int = 0
@@ -192,7 +201,7 @@ class Operator[Ops: tuple](ABC):
 
     def report_stats(self):
         total_calls = self.num_invalid_calls + self.num_noop_calls + self.num_useful_calls
-        print(f"Stats for operator {type(self).__name__}: \n"
+        print(f"\nStats for operator {type(self).__name__}: \n"
               f"LogWeight: {math.log(self.weight, 10)}, Total calls: {total_calls}, "
               f"Invalid: {self.num_invalid_calls}, Noop: {self.num_noop_calls}, Useful: {self.num_useful_calls}\n"
               f"Num improving calls: {self.num_improving_calls}, Mean improvement: {self.mean_improving_improvement}\n"
@@ -332,9 +341,9 @@ class RandomRouteReassignment(Operator[ReassignRouteBeforeOps]):
 
         return src_route, dest_route
 
-class RandomCustomerReassignment(Operator[ReassignCustomerAtOps]):
+class RandomCustomerChainReassignment(Operator[ReassignCustomerChainOps]):
     def __init__(self, sln: FullSolution):
-        super().__init__(sln, ReassignCustomerAt(sln))
+        super().__init__(sln, ReassignCustomerChain(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -352,13 +361,30 @@ class RandomCustomerReassignment(Operator[ReassignCustomerAtOps]):
         assert isinstance(src_route, Route)
         if not valid:
             # Note: src_route is still an empty src_route.
-            return src_route, 0, src_route, 0
+            return src_route, range(0, 0), src_route, 0, False
 
-        src_index = rand_int_inclusive(0, len(src_route.path)-1)
+        # Chain length caps at half the route, rounded up, so the bound scales with the route
+        # instead of being a fixed number. A chain past halfway starts to approximate moving the
+        # whole route, which ReassignRouteBefore already does more cheaply and with the right
+        # depot handling. Rounding up keeps length 1 reachable on a 1-customer route.
+        src_len = len(src_route.path)
+        start = rand_int_inclusive(0, src_len - 1)
+        max_len = min(src_len - start, -(-src_len // 2))
+        # +1e-50 guards rand_unit() == 0 (random() draws from [0, 1)). It is lost to double
+        # precision everywhere else -- 1.0 + 1e-50 == 1.0 -- so the distribution is unchanged.
+        length = min(max_len, 1 + int(math.log(rand_unit() + 1e-50) * _INV_LOG_CHAIN_CONTINUE_P))
+        chain = range(start, start + length)
+
         dest_route = rand_choice(sln.all_routes)
-        dest_index = rand_int_inclusive(0, len(dest_route.path))
+        max_dest = (len(dest_route.path) - len(chain) if dest_route is src_route
+                    else len(dest_route.path))
+        if max_dest < 0:
+            return src_route, chain, src_route, start, False   # NOOP: nowhere to put it
+        dest_index = rand_int_inclusive(0, max_dest)
 
-        return src_route, src_index, dest_route, dest_index
+        # Trailing False is a placeholder: ReassignCustomerChain sets _evaluates_in_batch, so
+        # evaluate() replaces this with the orientation it priced as better.
+        return src_route, chain, dest_route, dest_index, False
 
 class RandomCustomerReassignmentToNewRoute(Operator[ReassignCustomerToNewRouteOps]):
     def __init__(self, sln: FullSolution):
@@ -434,9 +460,9 @@ class RandomCustomerSwap(Operator[SwapCustomersAtOps]):
 
         return route1, index1, route2, index2
 
-class RandomSubpathReversal(Operator[ReverseSubpathOps]):
+class RandomCustomerChainReversal(Operator[ReverseCustomerChainOps]):
     def __init__(self, sln: FullSolution):
-        super().__init__(sln, ReverseSubpath(sln))
+        super().__init__(sln, ReverseCustomerChain(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -444,14 +470,14 @@ class RandomSubpathReversal(Operator[ReverseSubpathOps]):
         route = rand_choice(sln.all_routes)
 
         if len(route.path) < 2:
-            return route, 0, 0
+            return route, range(0, 0)   # degenerate: NOOP, not a fake one-element chain
 
         # Cannot truly be uniform: resolves to pre-ordered order statistics more or less
         # Mean length averages out to about half the path length, as (route_end_idx-start)/2 averages to about len(route)/2 over uniform starts.
         start = rand_int_inclusive(0, len(route.path)-2)
         end = rand_int_inclusive(start+1, len(route.path)-1)
 
-        return route, start, end
+        return route, range(start, end + 1)
 
 class CustomerBestOfkSwapInRandomRoute(BestOfCandidates[SwapCustomersAtOps]):
     def __init__(self, sln: FullSolution):
