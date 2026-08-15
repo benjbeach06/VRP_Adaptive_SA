@@ -147,6 +147,14 @@ class Operator[Ops: tuple](ABC):
             dt = time.perf_counter() - t0
             move.mark_applied(True)
 
+        # _last_propose_time must have been set by the propose() that produced this move. It once
+        # was not, for BestOfCandidates only, which priced CustomerBestOfkSwapInRandomRoute at
+        # 3.10us against a real 95us and let it take a third of the roster's proposals. Exact
+        # check, no threshold: a proposal has happened, so the field cannot still be zero.
+        assert not (self._proposal_count > 0 and self._last_propose_time == 0.0), (
+            f"{type(self).__name__}: propose() ran but never recorded _last_propose_time, so "
+            f"apply cost will exclude it and this operator will be under-priced.")
+
         self._apply_count += 1
         self._apply_time_total += dt + self._last_propose_time
 

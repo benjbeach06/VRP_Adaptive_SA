@@ -76,7 +76,7 @@ def term_diff(before: ObjectiveTermDelta, after: ObjectiveTermDelta) -> dict:
 
 
 class Stress:
-    def __init__(self, out_path: str):
+    def __init__(self, out_path: str, inject_delta: float = 0.0, inject_operator: str | None = None):
         self.out_path = out_path
         self.counts = collections.Counter()
         self.by_operator = collections.Counter()
@@ -84,6 +84,20 @@ class Stress:
         self.examples = []
         self.probes = 0
         self.episodes = 0
+
+        # COVERAGE. A clean run says nothing about an operator that never produced an actionable
+        # move -- it is indistinguishable from one that was checked and passed. These two counters
+        # are what tell the difference, and they remove the need to inject a fault just to find
+        # out whether a new selector is reachable.
+        self.selected_by_operator = collections.Counter()   # every draw
+        self.actionable_by_operator = collections.Counter() # draws that produced a real move
+
+        # FAULT INJECTION. Perturbs the PREDICTED travel delta after pricing, leaving the apply
+        # itself correct, so the delta check must fire. Operator-agnostic: it works on the Move
+        # rather than on any particular core-model function, which is why one flag replaces a
+        # scratch script per operator.
+        self.inject_delta = inject_delta
+        self.inject_operator = inject_operator
 
     def record(self, kind: str, operator: str, detail: dict, term: str = "-") -> None:
         self.counts[kind] += 1
@@ -126,11 +140,19 @@ class Stress:
         pre_print = fingerprint(sln)
 
         # 1. evaluate (via propose, which also does operand selection)
+        self.selected_by_operator[name] += 1
         move = operator.propose()
         if not move.is_actionable:
             operator.revert(move)
             return
         self.probes += 1
+        self.actionable_by_operator[name] += 1
+
+        if self.inject_delta and self.inject_operator in (None, name):
+            # object.__setattr__ is the same frozen-dataclass escape Move.mark_applied uses. The
+            # solution is untouched, so predicted and measured must now disagree.
+            object.__setattr__(move, "deltas", move.deltas._replace(
+                travel_distance=move.deltas.travel_distance + self.inject_delta))
 
         # check: validity right after evaluate.
         if move.already_applied:
@@ -234,6 +256,8 @@ class Stress:
         payload = {
             "probes": self.probes,
             "episodes": self.episodes,
+            "selected_by_operator": dict(self.selected_by_operator),
+            "actionable_by_operator": dict(self.actionable_by_operator),
             "counts": dict(self.counts),
             "by_operator": {f"{k[0]}|{k[1]}": v for k, v in self.by_operator.items()},
             "delta_mismatch_by_operator_term":
@@ -249,9 +273,19 @@ def main() -> None:
     ap.add_argument("--budget-seconds", type=float, default=3600)
     ap.add_argument("--probes-per-episode", type=int, default=600)
     ap.add_argument("--out", default=os.path.join(ROOT, "tools", "stress_results.json"))
+    ap.add_argument("--inject-delta", type=float, default=0.0,
+                    help="NEGATIVE CONTROL: add this to every priced travel_distance, leaving the "
+                         "apply correct. Every actionable probe must then report delta_mismatch. "
+                         "A clean run under injection means the detector is broken.")
+    ap.add_argument("--inject-operator", default=None,
+                    help="restrict --inject-delta to one operator class name")
     args = ap.parse_args()
 
-    stress = Stress(args.out)
+    stress = Stress(args.out, args.inject_delta, args.inject_operator)
+    if args.inject_delta:
+        target = args.inject_operator or "ALL operators"
+        print(f"INJECTING travel_distance {args.inject_delta:+g} into {target} -- "
+              f"this run is expected to FAIL", flush=True)
     started = time.perf_counter()
     seed = 0
     sizes = [12, 25, 40, 60, 90, 140, 200]
@@ -274,9 +308,20 @@ def main() -> None:
     elapsed = time.perf_counter() - started
     print(f"\n=== stress complete: {elapsed:.0f}s, {stress.episodes} episodes, "
           f"{stress.probes} probes ===")
-    if not stress.counts:
-        print("NO FINDINGS -- deltas, invariants and reverts all verified clean.")
+    # Coverage first: it decides what "no findings" is worth.
+    print("coverage (actionable / selected) -- an operator at 0 actionable was NOT checked:")
+    for op in sorted(stress.selected_by_operator):
+        selected = stress.selected_by_operator[op]
+        actionable = stress.actionable_by_operator[op]
+        flag = "   <-- NEVER ACTIONABLE" if actionable == 0 else ""
+        print(f"    {op:38} {actionable:7d} / {selected:7d}{flag}")
+
+    if args.inject_delta and not stress.counts:
+        print("\n*** INJECTION PRODUCED NO FINDINGS. The delta detector is not working. ***")
+    elif not stress.counts:
+        print("\nNO FINDINGS -- deltas, invariants and reverts all verified clean.")
     else:
+        print()
         print("findings by kind:")
         for kind, n in stress.counts.most_common():
             print(f"    {kind:22} {n}")
