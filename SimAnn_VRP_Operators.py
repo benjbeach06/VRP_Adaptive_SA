@@ -756,18 +756,20 @@ class _SharedDepotEndSwapBase(_ChainSwapBase):
     """
     _at_end: ClassVar[bool]
 
+    # Draws to find a partner that is not route1 before giving up. With k routes at the depot the
+    # chance of repeatedly redrawing route1 is k**-DEPOT_PARTNER_DRAWS, so 3 is ample for k >= 2.
+    DEPOT_PARTNER_DRAWS: ClassVar[int] = 3
+
     def _choose_chains(self, sln: FullSolution):
         route1 = rand_choice(sln.all_routes)
         if route1.is_empty:
             return None
 
         depot = route1.end_depot if self._at_end else route1.start_depot
-        candidates = [route for route in routes_sharing_depot(sln, depot, self._at_end)
-                      if route is not route1]
-        if not candidates:
-            return None
         # A head or tail pair inside ONE route always overlaps, so the routes must be distinct.
-        route2 = candidates[rand_int_inclusive(0, len(candidates) - 1)]
+        route2 = self._draw_partner(sln, route1, depot)
+        if route2 is None:
+            return None
 
         len1, len2 = len(route1.path), len(route2.path)
         length1 = geometric_chain_length(len1)
@@ -776,6 +778,27 @@ class _SharedDepotEndSwapBase(_ChainSwapBase):
         if self._at_end:
             return (route1, range(len1 - length1, len1), route2, range(len2 - length2, len2))
         return route1, range(0, length1), route2, range(0, length2)
+
+    def _draw_partner(self, sln: FullSolution, route1: Route, depot: Depot) -> Route | None:
+        """Another route meeting route1 at `depot`, or None."""
+        if not self._at_end:
+            # START side: depot_route_starts indexes exactly this, and RouteSet draws in O(1), so
+            # never materialize a candidate list -- that would be O(k) for a single pick.
+            route_set = sln.depot_route_starts[depot]
+            if len(route_set) < 2:
+                return None   # only route1 starts here
+            for _ in range(self.DEPOT_PARTNER_DRAWS):
+                route2 = rand_choice(route_set)
+                if route2 is not route1:
+                    return route2
+            return None
+
+        # END side: no index exists. See TODO(end-depot-index) on SwapRouteTailsAtSharedDepot.
+        candidates = [route for route in routes_sharing_depot(sln, depot, True)
+                      if route is not route1]
+        if not candidates:
+            return None
+        return candidates[rand_int_inclusive(0, len(candidates) - 1)]
 
 
 class SwapRouteHeadsAtSharedDepot(_SharedDepotEndSwapBase):
