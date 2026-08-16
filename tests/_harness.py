@@ -66,6 +66,13 @@ class DirectOperator(Operator):
     the suite should not model it.
     """
 
+    def __init__(self, sln, base_operator, explore_reward=0.0):
+        # Keeps the (sln, base_operator) call shape every test already uses, and defaults
+        # explore_reward to 0.0 so the accept score has NO floor. That is what a contract test
+        # wants: an uphill accept scores exactly what the improvement says, with nothing added.
+        # Tests that care about the floor pass it explicitly.
+        super().__init__(sln, explore_reward, base_operator)
+
     def _operand_selection_impl(self):
         raise NotImplementedError("DirectOperator is driven with caller-supplied operands.")
 

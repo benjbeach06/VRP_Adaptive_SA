@@ -56,7 +56,7 @@ class Operator[Ops: tuple](ABC):
     is a static error rather than a runtime surprise inside a delta function.
     """
 
-    def __init__(self, sln: FullSolution, base_operator: OperatorBL[Ops]):
+    def __init__(self, sln: FullSolution, explore_reward: Num, base_operator: OperatorBL[Ops]):
         self.sln = sln
         self.base_operator = base_operator
         self.stats = OperatorStats()
@@ -85,6 +85,8 @@ class Operator[Ops: tuple](ABC):
         self._proposal_count = 0
         self._propose_time_total = 0.0
 
+        self.explore_reward = explore_reward
+
         # When False, update_stats() treats every operator's mean cost per move as 1 instead of
         # measuring it. See SimAnnVRPSolver.set_deterministic_weighting -- TESTING ONLY.
         self.weight_by_time = True
@@ -110,7 +112,7 @@ class Operator[Ops: tuple](ABC):
     # share is hundreds of proposals. It is reachable only under an ITERATION CAP. Measured on the
     # 2000-iteration test at 20 customers: weights had already spread 5800:1
     # (SwapRouteHeadsAtSharedDepot 6.2e3 against 1.08 for most of the roster), so the leader took
-    # 67% of all proposals and the tail got one to three each. Nothing was near min_weight; the
+    # 67% of all proposals and the tail got one to three each. No weight had collapsed; the
     # distribution was simply that peaked that early, and one more roster entry was enough to push
     # an operator to zero. mean_apply_time was already guarded; the other two were not, so adding
     # operators turned a passing suite into ZeroDivisionError.
@@ -301,7 +303,7 @@ class Operator[Ops: tuple](ABC):
         mean_cost = (self.mean_call_time if self.weight_by_time else 1.0)
 
         sign = -1 if move.improvement < 0 else 1
-        score = max(0, sign * (abs(move.improvement) ** 1.5) / max(mean_cost, 1e-9))
+        score = max(self.explore_reward, sign * (abs(move.improvement) ** 1.5) / max(mean_cost, 1e-9))
         self.stats.record_accept(score)
 
     def get_stats(self):
@@ -333,9 +335,9 @@ class BestOfCandidates[Ops: tuple](Operator[Ops]):
     reverted immediately, before the next candidate is evaluated, so every candidate is always
     priced against the same true baseline.
     """
-    def __init__(self, sln: FullSolution, base_operator: OperatorBL[Ops],
+    def __init__(self, sln: FullSolution, explore_reward: Num, base_operator: OperatorBL[Ops],
                  candidate_source: Callable[[FullSolution], Iterable[Ops]], k: int | None = None):
-        super().__init__(sln, base_operator)
+        super().__init__(sln, explore_reward, base_operator)
         self.candidate_source = candidate_source   # callable(sln) -> Iterable[operand tuple]
         self.k = k
 
@@ -434,8 +436,8 @@ def random_route_pairs(sln: FullSolution, k: int = 10) -> Iterator[CombineRoutes
             yield r1, r2
 
 class RandomRouteReassignment(Operator[ReassignRouteBeforeOps]):
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, ReassignRouteBefore(sln))
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, ReassignRouteBefore(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -565,8 +567,8 @@ class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
     proposals at 500 customers; the one operator with no destination to choose accepts 18.51%.
     """
 
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, ReassignCustomerChain(sln))
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, ReassignCustomerChain(sln))
 
     @abstractmethod
     def _choose_chain(self, src_route: Route) -> Chain | None:
@@ -735,12 +737,12 @@ class ReverseClosestPairTogether(BestOfCandidates[ReverseCustomerChainOps]):
     """Neighbour-driven 2-opt. Random reversal mostly proposes reversals that fix nothing; this
     anchors on a pair that is spatially close but sequence-distant, which is where the crossing is."""
 
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, ReverseCustomerChain(sln), closest_pair_reversals, k=2)
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, ReverseCustomerChain(sln), closest_pair_reversals, k=2)
 
 class RandomCustomerReassignmentToNewRoute(Operator[ReassignCustomerToNewRouteOps]):
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, ReassignCustomerToNewRouteBefore(sln))
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, ReassignCustomerToNewRouteBefore(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -756,8 +758,8 @@ class RandomCustomerReassignmentToNewRoute(Operator[ReassignCustomerToNewRouteOp
         return src_route, customer_id, dest_route, depot
 
 class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator[ReassignCustomerToNewRouteOps]):
-    def __init__(self, sln: FullSolution, k):
-        super().__init__(sln, ReassignCustomerToNewRouteBefore(sln))
+    def __init__(self, sln: FullSolution, explore_reward: Num, k):
+        super().__init__(sln, explore_reward, ReassignCustomerToNewRouteBefore(sln))
         self.k = k
 
     # TODO(future-operator): this always relocates the worst customer to a brand-new route.
@@ -844,8 +846,8 @@ class _ChainSwapBase(Operator[SwapCustomerChainsOps], ABC):
     the split that beat a fixed mix for reassignment.
     """
 
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, SwapCustomerChains(sln))
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, SwapCustomerChains(sln))
 
     @abstractmethod
     def _choose_chains(self, sln: FullSolution) -> tuple[Route, Chain, Route, Chain] | None:
@@ -1062,8 +1064,8 @@ class SwapRouteTailsAtSharedDepot(_SharedDepotEndSwapBase):
 
 
 class RandomCustomerChainReversal(Operator[ReverseCustomerChainOps]):
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, ReverseCustomerChain(sln))
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, ReverseCustomerChain(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -1081,8 +1083,8 @@ class RandomCustomerChainReversal(Operator[ReverseCustomerChainOps]):
         return route, range(start, end + 1)
 
 class CustomerBestOfkSwapInRandomRoute(BestOfCandidates[SwapCustomerChainsOps]):
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, SwapCustomerChains(sln), random_intra_route_swap_pairs, k=20)
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, SwapCustomerChains(sln), random_intra_route_swap_pairs, k=20)
 
 
 class CustomerBestOfkNeighborSwapInRandomRoute(BestOfCandidates[SwapCustomerChainsOps]):
@@ -1098,13 +1100,13 @@ class CustomerBestOfkNeighborSwapInRandomRoute(BestOfCandidates[SwapCustomerChai
     saving if the aiming holds up.
     """
 
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, SwapCustomerChains(sln), neighbor_intra_route_swap_pairs, k=5)
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, SwapCustomerChains(sln), neighbor_intra_route_swap_pairs, k=5)
 
 
 class RandomRoutePermutation(Operator[PermuteRouteOps]):
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, PermuteRoute(sln))
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, PermuteRoute(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -1127,9 +1129,9 @@ class ChangeRandomEndDepot(Operator[ChangeEndDepotOps]):
     # O(1) fix, no rejection loop: draw from [0, num_depots - 2], then increment the drawn index
     # if it is >= the current end depot's index. That maps the smaller range onto "every depot
     # except the current one" with a single comparison.
-    def __init__(self, sln: FullSolution):
+    def __init__(self, sln: FullSolution, explore_reward: Num):
         self.num_depots = len(sln.depots)
-        super().__init__(sln, ChangeEndDepot(sln))
+        super().__init__(sln, explore_reward, ChangeEndDepot(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -1149,16 +1151,16 @@ class ChangeRandomEndDepot(Operator[ChangeEndDepotOps]):
         return route, depot
 
 class DisposeOfTrivialRoutes(Operator[DisposeOfEmptyRoutesOps]):
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, DisposeOfEmptyRoutesBL(sln, dispose_only_trivial_routes = True))
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, DisposeOfEmptyRoutesBL(sln, dispose_only_trivial_routes = True))
 
     def _operand_selection_impl(self):
         # Will dispose of all routes that do absolutely nothing: no customers served, end where they started.
         return RouteSet(route for route in self.sln.all_routes if route.should_dispose()),
 
 class DisposeOfEmptyRoutes(Operator[DisposeOfEmptyRoutesOps]):
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, DisposeOfEmptyRoutesBL(sln, dispose_only_trivial_routes = False))
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, DisposeOfEmptyRoutesBL(sln, dispose_only_trivial_routes = False))
 
     def _operand_selection_impl(self):
         # Will dispose of all routes that can be disposed: they serve no customers, but may do a depot-to-depot move.
@@ -1178,8 +1180,8 @@ class DisposeOfEmptyRoutes(Operator[DisposeOfEmptyRoutesOps]):
         return self.evaluate(self._operand_selection_impl())
 
 class SplitRandomRoute(Operator[SplitRouteOps]):
-    def __init__(self, sln: FullSolution):
-        super().__init__(sln, SplitRoute(sln))
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, SplitRoute(sln))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -1197,5 +1199,5 @@ class SplitRandomRoute(Operator[SplitRouteOps]):
 
 
 class CombineRandomRoutes(BestOfCandidates[CombineRoutesOps]):
-    def __init__(self, sln: FullSolution, k: int = 10):
-        super().__init__(sln, CombineRoutes(sln), random_route_pairs, k=k)
+    def __init__(self, sln: FullSolution, explore_reward: Num, k: int = 10):
+        super().__init__(sln, explore_reward, CombineRoutes(sln), random_route_pairs, k=k)

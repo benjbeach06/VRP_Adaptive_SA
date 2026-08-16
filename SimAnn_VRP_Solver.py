@@ -88,7 +88,7 @@ class SimAnnVRPSolver:
                  max_plateau_size: int = 2000,
                  plateau_reheat_exponent: float = 0.2,
                  empty_route_cleanup_interval: int = 100,
-                 min_weight: float = 1e-6):
+                 explore_reward: Num = 1e-6):
         self.sln = sln
         self.operators: list[Operator] = []
 
@@ -105,11 +105,11 @@ class SimAnnVRPSolver:
         # Starting temperature, as a fraction of the initial solution's objective (see solve()).
         self.initial_temp_factor = initial_temp_factor
 
+        self.explore_reward = explore_reward
+
         self.curr_plateau_size = 0
         self.max_plateau_size = max_plateau_size
         self.plateau_reheat_exponent = plateau_reheat_exponent # Fractional exponent of "reheat to this factor of plateau start"
-
-        self.min_weight = min_weight
 
         self.best_objective = float("inf")
         self.curr_objective = float("inf")
@@ -120,26 +120,26 @@ class SimAnnVRPSolver:
         self.report_every = 1.0
 
         self.operators.extend((
-            RandomRouteReassignment(sln),
-            RandomCustomerReassignment(sln),
-            RandomCustomerChainReassignment(sln),
-            ReassignClosestChainWithRandomCustomer(sln),
-            ReassignClosestChainNextToNeighbor(sln),
-            ReassignChainNextToNeighbor(sln),
-            SwapChainsWithNeighbor(sln),
-            ReverseClosestPairTogether(sln),
-            RandomCustomerChainReversal(sln),
-            RandomCustomerSwap(sln),
-            RandomSameLengthChainSwap(sln),
-            RandomChainSwap(sln),
-            SwapRouteHeadsAtSharedDepot(sln),
-            SwapRouteTailsAtSharedDepot(sln),
-            CustomerBestOfkSwapInRandomRoute(sln),
-            CustomerBestOfkNeighborSwapInRandomRoute(sln),
-            RandomRoutePermutation(sln),
-            ChangeRandomEndDepot(sln),
-            SplitRandomRoute(sln),
-            CombineRandomRoutes(sln)
+            RandomRouteReassignment(sln, explore_reward),
+            RandomCustomerReassignment(sln, explore_reward),
+            RandomCustomerChainReassignment(sln, explore_reward),
+            ReassignClosestChainWithRandomCustomer(sln, explore_reward),
+            ReassignClosestChainNextToNeighbor(sln, explore_reward),
+            ReassignChainNextToNeighbor(sln, explore_reward),
+            SwapChainsWithNeighbor(sln, explore_reward),
+            ReverseClosestPairTogether(sln, explore_reward),
+            RandomCustomerChainReversal(sln, explore_reward),
+            RandomCustomerSwap(sln, explore_reward),
+            RandomSameLengthChainSwap(sln, explore_reward),
+            RandomChainSwap(sln, explore_reward),
+            SwapRouteHeadsAtSharedDepot(sln, explore_reward),
+            SwapRouteTailsAtSharedDepot(sln, explore_reward),
+            CustomerBestOfkSwapInRandomRoute(sln, explore_reward),
+            CustomerBestOfkNeighborSwapInRandomRoute(sln, explore_reward),
+            RandomRoutePermutation(sln, explore_reward),
+            ChangeRandomEndDepot(sln, explore_reward),
+            SplitRandomRoute(sln, explore_reward),
+            CombineRandomRoutes(sln, explore_reward)
         ))
         # DisposeOfEmptyRoutes / DisposeOfTrivialRoutes are deliberately NOT in the weighted
         # roster: disposal already happens unconditionally every empty_route_cleanup_interval
@@ -151,8 +151,8 @@ class SimAnnVRPSolver:
         # new-route case (it prices a "swap" from a VirtualDepot placeholder start, but a brand
         # new route never had a real old start to swap from). Needs a purpose-built Core delta
         # function rather than reusing cost_deltas_if_inserted_before. Disabled until fixed.
-        # self.operators.append(ReassignWorstCustomerOutOfRandomKToNewRoute(sln, k=10))
-        # self.operators.append(RandomCustomerReassignmentToNewRoute(sln))
+        # self.operators.append(ReassignWorstCustomerOutOfRandomKToNewRoute(sln, explore_reward, k=10))
+        # self.operators.append(RandomCustomerReassignmentToNewRoute(sln, explore_reward))
 
         self.snapshots: list[tuple[float, FullSolution]] = []
         self.max_snapshots = 10
@@ -167,7 +167,7 @@ class SimAnnVRPSolver:
         # The Operator wrapper, not the bare OperatorBL: it owns the already_applied bookkeeping
         # that _dispose_empty_routes / take_sln_snapshot depend on. Kept OUT of self.operators, so
         # it is never selected by weight and never reaches update_weights.
-        self._dispose_op = DisposeOfEmptyRoutes(sln)
+        self._dispose_op = DisposeOfEmptyRoutes(sln, explore_reward)
 
     def set_deterministic_weighting(self, deterministic: bool = True):
         """
