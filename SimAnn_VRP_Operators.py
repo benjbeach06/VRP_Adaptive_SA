@@ -103,16 +103,22 @@ class Operator[Ops: tuple](ABC):
 
         self.num_neutral_calls = 0
 
+    # All three guard a zero denominator. An operator CAN finish a run having never been selected
+    # -- a short run, a large roster, or a weight driven to the floor -- and report_stats() reads
+    # every one of these at the end of solve(). mean_apply_time was already guarded; the other two
+    # were not, so adding roster entries was enough to crash a passing test suite.
     @property
     def mean_apply_time(self) -> float:
         count = self._apply_count
-        return 0 if count==0 else self._apply_time_total/self._apply_count
+        return 0 if count == 0 else self._apply_time_total / count
     @property
     def mean_propose_time(self) -> float:
-        return self._propose_time_total/self._proposal_count
+        count = self._proposal_count
+        return 0 if count == 0 else self._propose_time_total / count
     @property
-    def mean_call_time(self)->float:
-        return (self._propose_time_total + self._apply_time_total) / (self._apply_count + self._proposal_count)
+    def mean_call_time(self) -> float:
+        count = self._apply_count + self._proposal_count
+        return 0 if count == 0 else (self._propose_time_total + self._apply_time_total) / count
 
     def propose(self) -> Move[Ops]:
         """Select operands and price the move. Never mutates the solution (unless the base
@@ -370,6 +376,43 @@ def random_intra_route_swap_pairs(sln: FullSolution, k: int = 20) -> Iterator[Sw
         yield route, i, route, j, False, False
 
 
+def neighbor_intra_route_swap_pairs(sln: FullSolution, k: int = 5) -> Iterator[SwapCustomerChainsOps]:
+    """
+    Swaps pairing ONE anchor with its k nearest route-mates, nearest first.
+
+    The random version above draws k independent index pairs. In a 71-customer route that is k
+    lottery tickets, and the operator still reached 9.79% acceptance while consuming 44% of all
+    solver time -- the move is good, the aiming is not.
+
+    One scan serves every candidate here, rather than one scan per candidate: the anchor is fixed,
+    so its near route-mates are collected in a single pass and then yielded in rank order.
+    BestOfCandidates prices them in that order, so a smaller k costs the WORST candidates, not
+    random ones. That is why k=5 is defensible where k=5 random pairs would not be.
+
+    Sequence-adjacent positions are skipped for the same reason
+    Route.closest_non_adjacent_customer skips them: two customers already side by side have
+    nothing to gain from a swap that brings them together.
+    """
+    route = sln.choose_random_nonempty_route()
+    if route is None or route.path_len <= 2:
+        return
+
+    anchor = rand_index(route.path_len)
+    ranks = sln.neighbor_rank[route.path[anchor].cID]
+
+    hits = []
+    for i, visit in enumerate(route.path):
+        if abs(i - anchor) <= 1:
+            continue
+        rank = ranks.get(visit.cID)
+        if rank is not None:
+            hits.append((rank, i))
+
+    hits.sort()
+    for _, i in hits[:k]:
+        yield route, anchor, route, i, False, False
+
+
 def random_route_pairs(sln: FullSolution, k: int = 10) -> Iterator[CombineRoutesOps]:
     # choose_n(2) needs two routes to draw from; with few customers and many vehicles the route
     # count really can collapse to one (or zero) after disposals, and sampling then raises rather
@@ -454,6 +497,52 @@ def draw_route_with_neighbor(sln: FullSolution, anchor_cid: int,
             return route, best_index
 
     return None
+
+
+def neighbor_destination(sln: FullSolution, src_route: Route,
+                         chain: Chain) -> tuple[Route, int] | None:
+    """
+    Land a chain beside one of its own near neighbors, in a different route.
+
+    Shared by every reassignment selector that wants a geometric destination, so the
+    "before or after the neighbor" convention lives in one place rather than per operator.
+    """
+    anchor = src_route.path[as_chain_range(chain).start]
+    found = draw_route_with_neighbor(sln, anchor.cID, exclude=src_route)
+    if found is None:
+        return None
+
+    dest_route, neighbor_index = found
+    # Immediately before or after the neighbor, drawn evenly. Both put the chain one arc from it,
+    # and which side wins depends on the neighbor's OTHER neighbor -- not something this selector
+    # prices. dest_idx == len(path) is a legal append, so +1 never overruns.
+    return dest_route, neighbor_index + rand_int_inclusive(0, 1)
+
+
+def best_neighbor_in_same_route(sln: FullSolution, route: Route, index: int) -> int | None:
+    """
+    Index of the nearest customer to path[index] that shares its route and is NOT beside it.
+
+    Same shape and same exclusion rationale as Route.closest_non_adjacent_customer -- a pair that
+    is already adjacent has nothing to gain from being brought together -- but it tests
+    neighbor_rank membership instead of computing a distance per step, so the inner loop is a dict
+    lookup rather than a cached hypot.
+
+    The tradeoff is reach: this only sees customers in the anchor's global top-k, so it returns
+    None when no near neighbor happens to share the route. The caller treats that as a dead draw.
+    """
+    ranks = sln.neighbor_rank[route.path[index].cID]
+    path = route.path
+
+    best_index, best_rank = None, len(ranks)
+    for i, visit in enumerate(path):
+        if abs(i - index) <= 1:
+            continue
+        rank = ranks.get(visit.cID)
+        if rank is not None and rank < best_rank:
+            best_index, best_rank = i, rank
+
+    return best_index
 
 
 class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
@@ -541,16 +630,7 @@ class ReassignChainNextToNeighbor(_ChainReassignmentBase):
         return rand_int_inclusive(0, len(src_route.path) - 1)
 
     def _choose_destination(self, src_route: Route, chain: Chain) -> tuple[Route, int] | None:
-        anchor = src_route.path[as_chain_range(chain).start]
-        found = draw_route_with_neighbor(self.sln, anchor.cID, exclude=src_route)
-        if found is None:
-            return None
-
-        dest_route, neighbor_index = found
-        # Immediately before or after the neighbor, drawn evenly. Both put the customer one arc
-        # from it, and which side wins depends on the neighbor's OTHER neighbor -- not something
-        # this selector prices. dest_idx == len(path) is a legal append, so +1 never overruns.
-        return dest_route, neighbor_index + rand_int_inclusive(0, 1)
+        return neighbor_destination(self.sln, src_route, chain)
 
 
 class RandomCustomerChainReassignment(_ChainReassignmentBase):
@@ -603,6 +683,21 @@ class ReassignClosestChainWithRandomCustomer(_ChainReassignmentBase):
         # The open interval leaves both anchors in place, so it spans at most num_customers - 2
         # and can never empty the source route. The whole-route case simply cannot arise here.
         return range(low + 1, high)
+
+
+class ReassignClosestChainNextToNeighbor(ReassignClosestChainWithRandomCustomer):
+    """
+    The detour chain above, but landed beside a near neighbor instead of anywhere.
+
+    Its parent uses geometry to decide what to REMOVE and then picks the destination at random,
+    which is half a move: it accepted 0.04% of proposals at 500 customers. Both operators stay in
+    the roster so the adaptive weighting arbitrates between them inside one run, which is the only
+    comparison on this project that reliably resolves anything -- a paired 60s objective A/B could
+    not separate a 15-unit difference across five seeds.
+    """
+
+    def _choose_destination(self, src_route: Route, chain: Chain) -> tuple[Route, int] | None:
+        return neighbor_destination(self.sln, src_route, chain)
 
 
 def closest_pair_reversals(sln: FullSolution) -> Iterator[ReverseCustomerChainOps]:
@@ -981,6 +1076,23 @@ class RandomCustomerChainReversal(Operator[ReverseCustomerChainOps]):
 class CustomerBestOfkSwapInRandomRoute(BestOfCandidates[SwapCustomerChainsOps]):
     def __init__(self, sln: FullSolution):
         super().__init__(sln, SwapCustomerChains(sln), random_intra_route_swap_pairs, k=20)
+
+
+class CustomerBestOfkNeighborSwapInRandomRoute(BestOfCandidates[SwapCustomerChainsOps]):
+    """
+    Same intra-route swap, aimed geometrically and at a quarter the candidate count.
+
+    Both this and the k=20 random version stay in the roster so the adaptive weighting arbitrates
+    between them inside one run. Note what that comparison can and cannot say: the two differ in
+    BOTH k and candidate selection, so a win identifies the better OPERATOR and attributes nothing
+    to either factor alone. A clean k ablation would need a third entry holding selection fixed.
+
+    Cost is linear in k, and the random version is 44% of all solver time, so k=20 -> 5 is a large
+    saving if the aiming holds up.
+    """
+
+    def __init__(self, sln: FullSolution):
+        super().__init__(sln, SwapCustomerChains(sln), neighbor_intra_route_swap_pairs, k=5)
 
 
 class RandomRoutePermutation(Operator[PermuteRouteOps]):
