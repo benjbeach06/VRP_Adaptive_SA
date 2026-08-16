@@ -1,0 +1,55 @@
+
+  _     ._   __/__   _ _  _  _ _/_   Recorded: 21:01:41  Samples:  117376
+ /_//_/// /_\ / //_// / //_'/ //     Duration: 60.029    CPU time: 57.094
+/   _/                      v5.1.3
+
+Profile at C:\Users\Bben6\PycharmProjects\PythonProject\tools\profile_one_operator.py:90
+
+60.0288 main  profile_one_operator.py:54
+`- 60.0012 SimAnnVRPSolver.solve  SimAnn_VRP_Solver.py:400
+   |- 57.9911 CustomerBestOfkSwapInRandomRoute.propose  SimAnn_VRP_Operators.py:332
+   |  |- 42.4166 CustomerBestOfkSwapInRandomRoute.evaluate  SimAnn_VRP_Operators.py:136
+   |  |  `- 41.8193 SwapCustomerChains.evaluate  SimAnn_VRP_BLOperators.py:160
+   |  |     |- 28.2075 SwapCustomerChains._evaluate_impl  SimAnn_VRP_BLOperators.py:407
+   |  |     |  |- 17.9789 Route.cost_deltas_for_customer_chain_swap  SimAnn_VRP_Core_Model.py:2128
+   |  |     |  |  |- 14.2815 cost_deltas_for_customer_swap  SimAnn_VRP_Core_Model.py:2095
+   |  |     |  |  |  |- 10.1339 CustomerVisit.travel_delta_if_swapped_with  SimAnn_VRP_Core_Model.py:468
+   |  |     |  |  |  |  |- 5.6961 CustomerVisit.travel_delta_if_customer_replaced  SimAnn_VRP_Core_Model.py:463
+   |  |     |  |  |  |  |  |- 2.7851 CustomerVisit.distance_surrounding  SimAnn_VRP_Core_Model.py:394
+   |  |     |  |  |  |  |  |  |- 1.0915 CustomerVisit.distance_in  SimAnn_VRP_Core_Model.py:386
+   |  |     |  |  |  |  |  |  |  `- 0.6050 CustomerVisit.distance  SimAnn_VRP_Core_Model.py:216
+   |  |     |  |  |  |  |  |  |- 0.9962 CustomerVisit.distance_out  SimAnn_VRP_Core_Model.py:390
+   |  |     |  |  |  |  |  |  `- 0.6975 [self]  SimAnn_VRP_Core_Model.py
+   |  |     |  |  |  |  |  |- 1.1509 [self]  SimAnn_VRP_Core_Model.py
+   |  |     |  |  |  |  |  |- 0.9094 CustomerVisit.distance  SimAnn_VRP_Core_Model.py:216
+   |  |     |  |  |  |  |  `- 0.8506 FirstRouteVisit.distance  SimAnn_VRP_Core_Model.py:673
+   |  |     |  |  |  |  |- 1.7577 [self]  SimAnn_VRP_Core_Model.py
+   |  |     |  |  |  |  |- 0.6292 CustomerVisit.distance_in  SimAnn_VRP_Core_Model.py:386
+   |  |     |  |  |  |  `- 0.6210 FirstRouteVisit.distance  SimAnn_VRP_Core_Model.py:673
+   |  |     |  |  |  |- 1.9942 [self]  SimAnn_VRP_Core_Model.py
+   |  |     |  |  |  |- 1.3405 total_overload_deltas_for_customer_swap  SimAnn_VRP_Core_Model.py:2081
+   |  |     |  |  |  `- 0.8128 <lambda>  <string>:1
+   |  |     |  |  |- 2.2356 [self]  SimAnn_VRP_Core_Model.py
+   |  |     |  |  `- 1.0941 as_chain_range  SimAnn_VRP_Core_Model.py:33
+   |  |     |  |- 6.2156 [self]  SimAnn_VRP_BLOperators.py
+   |  |     |  |- 1.5454 as_chain_range  SimAnn_VRP_Core_Model.py:33
+   |  |     |  |- 0.9614 Route.num_customers  SimAnn_VRP_Core_Model.py:1214
+   |  |     |  `- 0.8219 <lambda>  SimAnn_VRP_BLOperators.py:427
+   |  |     |- 7.0197 [self]  SimAnn_VRP_BLOperators.py
+   |  |     |- 2.0849 SwapCustomerChains.improvement_from_deltas  SimAnn_VRP_BLOperators.py:251
+   |  |     |  |- 1.3596 ObjectiveTermDelta.get_cost_improvement  SimAnn_VRP_Core_Model.py:200
+   |  |     |  |  |- 0.7415 ObjectiveTermDelta.get_cost_delta  SimAnn_VRP_Core_Model.py:192
+   |  |     |  |  `- 0.6181 [self]  SimAnn_VRP_Core_Model.py
+   |  |     |  `- 0.7253 [self]  SimAnn_VRP_BLOperators.py
+   |  |     |- 2.0463 Move.__init__  <string>:2
+   |  |     `- 1.5907 <genexpr>  SimAnn_VRP_BLOperators.py:171
+   |  |- 12.7174 random_intra_route_swap_pairs  SimAnn_VRP_Operators.py:361
+   |  |  |- 10.3061 rand_distinct_indices  SimAnn_VRP_Core_Model.py:85
+   |  |  |  |- 9.3676 Random.sample  random.py:365
+   |  |  |  |     [7 frames hidden]  random, <built-in>, <frozen abc>
+   |  |  |  `- 0.9384 [self]  SimAnn_VRP_Core_Model.py
+   |  |  |- 1.1276 [self]  SimAnn_VRP_Operators.py
+   |  |  `- 0.7019 FullSolution.choose_random_nonempty_route  SimAnn_VRP_Core_Model.py:4170
+   |  `- 2.1570 [self]  SimAnn_VRP_Operators.py
+   `- 0.6643 CustomerBestOfkSwapInRandomRoute.apply_for_acceptance  SimAnn_VRP_Operators.py:147
+

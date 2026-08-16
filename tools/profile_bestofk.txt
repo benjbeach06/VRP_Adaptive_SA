@@ -1,0 +1,77 @@
+
+  _     ._   __/__   _ _  _  _ _/_   Recorded: 20:58:02  Samples:  119915
+ /_//_/// /_\ / //_// / //_'/ //     Duration: 60.318    CPU time: 60.047
+/   _/                      v5.1.3
+
+Profile at C:\Users\Bben6\AppData\Local\Temp\claude\C--Users-Bben6-PycharmProjects-PythonProject\5ec5ee3f-96a6-4083-922d-e061ed8a097c\scratchpad\run_pyinstrument.py:27
+
+60.3172 <module>  run_pyinstrument.py:1
+`- 60.3143 <module>  SimAnn_VRP.py:1
+   `- 60.0642 build_vrp_model  SimAnn_VRP.py:6
+      `- 60.0017 SimAnnVRPSolver.solve  SimAnn_VRP_Solver.py:400
+         |- 34.7277 CustomerBestOfkSwapInRandomRoute.propose  SimAnn_VRP_Operators.py:332
+         |  |- 24.6914 CustomerBestOfkSwapInRandomRoute.evaluate  SimAnn_VRP_Operators.py:136
+         |  |  `- 24.3078 SwapCustomerChains.evaluate  SimAnn_VRP_BLOperators.py:160
+         |  |     |- 12.2423 SwapCustomerChains._evaluate_impl  SimAnn_VRP_BLOperators.py:407
+         |  |     |  |- 7.8330 Route.cost_deltas_for_customer_chain_swap  SimAnn_VRP_Core_Model.py:2128
+         |  |     |  |  |- 6.2456 cost_deltas_for_customer_swap  SimAnn_VRP_Core_Model.py:2095
+         |  |     |  |  |  |- 4.4599 CustomerVisit.travel_delta_if_swapped_with  SimAnn_VRP_Core_Model.py:468
+         |  |     |  |  |  |  |- 2.6051 CustomerVisit.travel_delta_if_customer_replaced  SimAnn_VRP_Core_Model.py:463
+         |  |     |  |  |  |  |  `- 1.2882 CustomerVisit.distance_surrounding  SimAnn_VRP_Core_Model.py:394
+         |  |     |  |  |  |  `- 0.7406 [self]  SimAnn_VRP_Core_Model.py
+         |  |     |  |  |  |- 0.8226 [self]  SimAnn_VRP_Core_Model.py
+         |  |     |  |  |  `- 0.6165 total_overload_deltas_for_customer_swap  SimAnn_VRP_Core_Model.py:2081
+         |  |     |  |  `- 0.9237 [self]  SimAnn_VRP_Core_Model.py
+         |  |     |  |- 2.6744 [self]  SimAnn_VRP_BLOperators.py
+         |  |     |  `- 0.6822 as_chain_range  SimAnn_VRP_Core_Model.py:33
+         |  |     |- 3.7557 CombineRoutes._evaluate_impl  SimAnn_VRP_BLOperators.py:617
+         |  |     |  `- 3.6025 Route.cost_deltas_for_combine_with  SimAnn_VRP_Core_Model.py:2533
+         |  |     |     |- 1.6860 Route.depot_activation_delta_for_combine_with  SimAnn_VRP_Core_Model.py:2464
+         |  |     |     |  `- 1.6425 Route.depot_activation_delta_for_combine_with_nonadjacent  SimAnn_VRP_Core_Model.py:2477
+         |  |     |     |     `- 1.0209 Route.depot_num_usage_deltas_if_removed  SimAnn_VRP_Core_Model.py:1521
+         |  |     |     |        `- 0.6366 FirstRouteVisit.num_depot_usage_deltas_if_depot_swapped  SimAnn_VRP_Core_Model.py:729
+         |  |     |     `- 1.1735 Route.travel_delta_for_combine_with  SimAnn_VRP_Core_Model.py:2347
+         |  |     |        `- 1.1050 Route.travel_delta_for_combine_with_nonadjacent  SimAnn_VRP_Core_Model.py:2362
+         |  |     |- 3.4549 [self]  SimAnn_VRP_BLOperators.py
+         |  |     |- 1.3521 ReverseCustomerChain._evaluate_impl  SimAnn_VRP_BLOperators.py:461
+         |  |     |  `- 1.0410 Route.cost_deltas_if_customer_chain_reversed  SimAnn_VRP_Core_Model.py:2551
+         |  |     |- 1.2018 Move.__init__  <string>:2
+         |  |     |- 1.1842 SwapCustomerChains.improvement_from_deltas  SimAnn_VRP_BLOperators.py:251
+         |  |     |  `- 0.7690 ObjectiveTermDelta.get_cost_improvement  SimAnn_VRP_Core_Model.py:200
+         |  |     `- 0.6867 <genexpr>  SimAnn_VRP_BLOperators.py:171
+         |  |- 5.4053 random_intra_route_swap_pairs  SimAnn_VRP_Operators.py:361
+         |  |  `- 4.3903 rand_distinct_indices  SimAnn_VRP_Core_Model.py:85
+         |  |     `- 3.9805 Random.sample  random.py:365
+         |  |           [3 frames hidden]  random, <frozen abc>
+         |  |- 1.6657 [self]  SimAnn_VRP_Operators.py
+         |  |- 1.5470 closest_pair_reversals  SimAnn_VRP_Operators.py:522
+         |  |  `- 0.7487 FullSolution.choose_random_nonempty_route  SimAnn_VRP_Core_Model.py:4170
+         |  `- 0.7945 random_route_pairs  SimAnn_VRP_Operators.py:373
+         |     `- 0.6089 RouteSet.choose_n  SimAnn_VRP_Core_Model.py:3472
+         |- 16.2002 SwapRouteHeadsAtSharedDepot.propose  SimAnn_VRP_Operators.py:117
+         |  |- 11.3029 SwapCustomerChains.evaluate  SimAnn_VRP_BLOperators.py:160
+         |  |  |- 5.9514 SwapCustomerChains._evaluate_impl  SimAnn_VRP_BLOperators.py:407
+         |  |  |  |- 4.8996 Route.cost_deltas_for_customer_chain_swap  SimAnn_VRP_Core_Model.py:2128
+         |  |  |  |  |- 1.1914 cost_deltas_for_customer_swap  SimAnn_VRP_Core_Model.py:2095
+         |  |  |  |  |  `- 0.7037 CustomerVisit.travel_delta_if_swapped_with  SimAnn_VRP_Core_Model.py:468
+         |  |  |  |  |     `- 0.6452 CustomerVisit.travel_delta_if_customer_replaced  SimAnn_VRP_Core_Model.py:463
+         |  |  |  |  |- 0.9660 [self]  SimAnn_VRP_Core_Model.py
+         |  |  |  |  |- 0.8930 FirstRouteVisit.distance  SimAnn_VRP_Core_Model.py:673
+         |  |  |  |  `- 0.6161 total_overload_deltas_for_load_swap  SimAnn_VRP_Core_Model.py:2065
+         |  |  |  `- 0.6509 [self]  SimAnn_VRP_BLOperators.py
+         |  |  |- 1.7230 ReassignCustomerChain._evaluate_impl  SimAnn_VRP_BLOperators.py:303
+         |  |  |  `- 1.5319 Route.cost_deltas_if_customer_chain_moved  SimAnn_VRP_Core_Model.py:1994
+         |  |  `- 1.2737 [self]  SimAnn_VRP_BLOperators.py
+         |  |- 2.4315 SwapRouteHeadsAtSharedDepot._operand_selection_impl  SimAnn_VRP_Operators.py:673
+         |  |  `- 1.6938 SwapRouteHeadsAtSharedDepot._choose_chains  SimAnn_VRP_Operators.py:786
+         |  |     `- 0.6706 SwapRouteHeadsAtSharedDepot._draw_partner  SimAnn_VRP_Operators.py:805
+         |  `- 0.9021 RandomCustomerReassignment._operand_selection_impl  SimAnn_VRP_Operators.py:435
+         |- 2.9296 SimAnnVRPSolver.choose_operator  SimAnn_VRP_Solver.py:226
+         |  |- 1.6343 [self]  SimAnn_VRP_Solver.py
+         |  `- 1.0261 <genexpr>  SimAnn_VRP_Solver.py:228
+         |- 1.9520 [self]  SimAnn_VRP_Solver.py
+         `- 1.7642 SwapRouteHeadsAtSharedDepot.apply_for_acceptance  SimAnn_VRP_Operators.py:147
+            `- 1.6051 SwapCustomerChains.apply  SimAnn_VRP_BLOperators.py:199
+               `- 1.1448 SwapCustomerChains._apply_impl  SimAnn_VRP_BLOperators.py:430
+                  `- 1.0353 Route.swap_customer_chains_with  SimAnn_VRP_Core_Model.py:3314
+

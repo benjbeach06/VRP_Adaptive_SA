@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# Generated profiler HTML; the .txt call trees are the committed record.
+tools/profile_*.html
