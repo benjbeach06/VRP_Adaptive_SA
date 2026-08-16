@@ -119,22 +119,24 @@ class SimAnnVRPSolver:
         self.num_reports_so_far = 0.0
         self.report_every = 1.0
 
-        self.operators.append(RandomRouteReassignment(sln))
-        self.operators.append(RandomCustomerReassignment(sln))
-        self.operators.append(RandomCustomerChainReassignment(sln))
-        self.operators.append(ReassignClosestChainWithRandomCustomer(sln))
-        self.operators.append(ReverseClosestPairTogether(sln))
-        self.operators.append(RandomCustomerChainReversal(sln))
-        self.operators.append(RandomCustomerSwap(sln))
-        self.operators.append(RandomSameLengthChainSwap(sln))
-        self.operators.append(RandomChainSwap(sln))
-        self.operators.append(SwapRouteHeadsAtSharedDepot(sln))
-        self.operators.append(SwapRouteTailsAtSharedDepot(sln))
-        self.operators.append(CustomerBestOfkSwapInRandomRoute(sln))
-        self.operators.append(RandomRoutePermutation(sln))
-        self.operators.append(ChangeRandomEndDepot(sln))
-        self.operators.append(SplitRandomRoute(sln))
-        self.operators.append(CombineRandomRoutes(sln))
+        self.operators.extend((
+            RandomRouteReassignment(sln),
+            RandomCustomerReassignment(sln),
+            RandomCustomerChainReassignment(sln),
+            ReassignClosestChainWithRandomCustomer(sln),
+            ReverseClosestPairTogether(sln),
+            RandomCustomerChainReversal(sln),
+            RandomCustomerSwap(sln),
+            RandomSameLengthChainSwap(sln),
+            RandomChainSwap(sln),
+            SwapRouteHeadsAtSharedDepot(sln),
+            SwapRouteTailsAtSharedDepot(sln),
+            CustomerBestOfkSwapInRandomRoute(sln),
+            RandomRoutePermutation(sln),
+            ChangeRandomEndDepot(sln),
+            SplitRandomRoute(sln),
+            CombineRandomRoutes(sln)
+        ))
         # DisposeOfEmptyRoutes / DisposeOfTrivialRoutes are deliberately NOT in the weighted
         # roster: disposal already happens unconditionally every empty_route_cleanup_interval
         # iterations and again before every snapshot (see _cleanup_empty_routes and

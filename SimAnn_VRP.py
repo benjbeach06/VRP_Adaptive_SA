@@ -18,7 +18,7 @@ def build_vrp_model():
         ]
 
         # Customer data: id -> (x, y, demand)
-        num_customers = 200  # 5000
+        num_customers = 500  # 5000
         customer_data = [
             {
                 "location": tuple(np.random.randint(0, 100, size=2)),
@@ -49,7 +49,7 @@ def build_vrp_model():
 
     base_supply_limit = 35
     base_vehicles_per_depot = 1
-    capacity_per_vehicle = 25
+    capacity_per_vehicle = 400
 
     # For now, we unconstrain the max #routes, as they can be added and removed dynamically.
     cost_per_vehicle = 10
@@ -66,7 +66,7 @@ def build_vrp_model():
 
     sln.set_objectives(cost_per_depot = cost_per_depot, cost_per_vehicle = cost_per_vehicle, unit_travel_cost = unit_travel_cost)
 
-    solver = SimAnnVRPSolver(sln, max_time=60, max_plateau_size=1800)
+    solver = SimAnnVRPSolver(sln, max_time=30, max_plateau_size=1800)
 
     """
     route1 = Route([customers[cID] for cID in [1, 15, 18, 17, 5]], depots[2])
