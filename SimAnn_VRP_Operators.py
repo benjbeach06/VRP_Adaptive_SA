@@ -103,10 +103,17 @@ class Operator[Ops: tuple](ABC):
 
         self.num_neutral_calls = 0
 
-    # All three guard a zero denominator. An operator CAN finish a run having never been selected
-    # -- a short run, a large roster, or a weight driven to the floor -- and report_stats() reads
-    # every one of these at the end of solve(). mean_apply_time was already guarded; the other two
-    # were not, so adding roster entries was enough to crash a passing test suite.
+    # All three guard a zero denominator, because report_stats() reads every one at the end of
+    # solve() and a proposal count really can be zero.
+    #
+    # In a REAL solve that would be alarming -- at millions of iterations even a 0.02% selection
+    # share is hundreds of proposals. It is reachable only under an ITERATION CAP. Measured on the
+    # 2000-iteration test at 20 customers: weights had already spread 5800:1
+    # (SwapRouteHeadsAtSharedDepot 6.2e3 against 1.08 for most of the roster), so the leader took
+    # 67% of all proposals and the tail got one to three each. Nothing was near min_weight; the
+    # distribution was simply that peaked that early, and one more roster entry was enough to push
+    # an operator to zero. mean_apply_time was already guarded; the other two were not, so adding
+    # operators turned a passing suite into ZeroDivisionError.
     @property
     def mean_apply_time(self) -> float:
         count = self._apply_count
