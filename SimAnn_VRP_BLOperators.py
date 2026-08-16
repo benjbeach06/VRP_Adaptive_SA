@@ -205,7 +205,19 @@ class OperatorBL[Ops: tuple](ABC):
         without tracking which operators happen to mutate during evaluate().
         """
         assert move.is_actionable, f"{type(self).__name__}.apply() called on a non-actionable move."
-        assert not (move.already_applied or self.is_applied), f"{type(self).__name__}.apply() called on an already-applied move."
+
+        # The no-op the docstring promises. This asserted instead until the split/combine
+        # conversion, and the contradiction stayed hidden because PermuteRoute was the only
+        # by-applying operator and the solver only ever reaches it through Operator.apply, which
+        # gatekeeps first. Driving a by-applying BL directly -- as the tests do -- hit the assert.
+        if move.already_applied:
+            assert self._applied is move, (
+                f"{type(self).__name__}.apply() got an applied move that is not the one this "
+                f"operator holds; two moves are live at once.")
+            return
+
+        assert not self.is_applied, (
+            f"{type(self).__name__}.apply() called while a different move is still applied.")
         assert move.eval_version == self.sln.version, (
             f"Stale move for {type(self).__name__}: attempted to apply at version {move.eval_version}, "
             f"solution is now at {self.sln.version}.")
@@ -588,6 +600,10 @@ class DisposeOfEmptyRoutesBL(OperatorBL[DisposeOfEmptyRoutesOps]):
 
 
 class SplitRoute(OperatorBL[SplitRouteOps]):
+    # Still predictive. Splitting CREATES a route, and the sequential decomposition of that needs
+    # a priced "insert an empty route into this vehicle" primitive, which does not exist yet.
+    # cost_deltas_for_split_at is cheap (SplitRandomRoute proposes in ~9us) and correct, so it
+    # stays until that primitive exists. CombineRoutes below is the decomposed one.
     def _evaluate_impl(self, operands: SplitRouteOps):
         route, split_index, intermediate_end_depot = operands
         # To be splittable: src_route must have multiple customers (each customer to a different src_route).
@@ -614,6 +630,10 @@ class SplitRoute(OperatorBL[SplitRouteOps]):
 class CombineRoutes(OperatorBL[CombineRoutesOps]):
     # Merges route2's customers onto the end of route1 and discards route2. Not adjacency-
     # restricted -- any two non-trivial routes (in the same or different vehicles) can combine.
+    #
+    # Predictive, and staying that way. _SequentialCombineRoutes below is the same operator built
+    # from priced primitives; it was measured at 3.7x this one's cost on short routes and 8.5x on
+    # long ones. See that class for why, and for when the trade goes the other way.
     def _evaluate_impl(self, operands: CombineRoutesOps):
         route1, route2 = operands
         # is_empty (zero customers), not just is_trivial (empty AND a depot round-trip): combine_with
@@ -645,19 +665,145 @@ class CombineRoutes(OperatorBL[CombineRoutesOps]):
         return route1, split_index, own_end_depot, other_prev_route, other_slot, route2
 
     def _revert_impl(self, move, revert_info):
-        # TODO(revert-identity): restore into the ORIGINAL route2 object rather than building a
-        # new one -- see the matching TODO on Route.split_at (needs its planned `into=` argument,
-        # and route2 itself captured in the revert payload). Until then, revert is only
-        # value-correct, not identity-correct: after an apply->revert cycle this Move's operands
-        # still name the disposed route2, so re-evaluating the same Move (as the solver's
-        # debug_level>=3 check does) reads a dead route.
         route1, split_index, own_end_depot, other_prev_route, other_slot, route2 = revert_info
+        # split_at's third argument refills THIS route object rather than constructing a new one,
+        # so route2 keeps its identity across an apply -> revert cycle.
         new_route = route1.split_at(split_index, own_end_depot, route2)
         self.sln.all_routes.undo_remove(new_route, other_slot)
         if other_prev_route is not None:
             # split_at already linked new_route directly after route1; move it back to route2's
             # original slot (a no-op when route2 was route1's immediate successor).
             new_route.link_to_vehicle_after(other_prev_route)
+
+
+class _SequentialCombineRoutes(OperatorBL[CombineRoutesOps]):
+    """
+    REFERENCE ONLY -- not in the roster, not intended for use. Leading underscore is deliberate.
+
+    CombineRoutes rebuilt as a chain of primitives that are each already priced and already
+    tested, to establish the pattern a compound operator should follow. It is correct: it passed
+    the suite and a clean stress run while it was the live implementation.
+
+    IT IS ALSO MUCH SLOWER, measured per propose->revert cycle:
+
+        capacity  median route   predictive   sequential   factor
+            25          4          137.7us      514.5us     3.7x
+           400         71          112.5us     1050.0us     8.5x
+
+    The reason is structural, not a tuning problem. A by-applying operator physically performs
+    the move and then undoes it on every REJECTED proposal, which is O(chain length) twice, where
+    the predictive version computes O(1) boundary arcs and touches nothing. CombineRandomRoutes
+    is accepted essentially never, so it pays the full cost every time. Note the shape as well as
+    the size: predictive is flat in route length, sequential is not.
+
+    WHEN THE TRADE GOES THE OTHER WAY. Combine is the worst case for this pattern -- it has cheap
+    predictive math and near-zero acceptance. Ruin-and-recreate is the best case:
+
+      * there is no predictive alternative. You cannot price a ruin-and-recreate without
+        performing it, so "slower than predicting" has no meaning;
+      * greedy reinsertion mostly improves, so acceptance is high and the do-then-undo cost is
+        amortized over moves that actually land;
+      * the customers it removes are placed much later, by a different decision, which is exactly
+        what cost_deltas_if_customer_chain_removed / ..._inserted_before were split apart for.
+
+    WHAT TO COPY FROM IT:
+      * _evaluates_by_applying = True, with _revert_info set before returning VALID;
+      * each step priced against the state the previous step LEFT -- overload is nonlinear in
+        load, so deltas are only additive when measured against the solution that really existed;
+      * _revert_impl running the steps backwards, same shape as DisposeOfEmptyRoutesBL's revert
+        stack, which keeps route identity intact because nothing is ever disposed and rebuilt;
+      * _apply_impl kept as a separate near-copy without the pricing, so the snapshot round trip
+        can re-apply a reverted move without computing deltas it would discard.
+    """
+    _evaluates_by_applying = True
+
+    def _evaluate_impl(self, operands: CombineRoutesOps):
+        route1, route2 = operands
+        # is_empty (zero customers), not just is_trivial (empty AND a depot round-trip): combine_with
+        # appends route2's customers onto route1 and then relinks at the boundary index, which is
+        # out of range whenever route2 has zero customers, trivial or not.
+        if route1 is route2 or route1.is_empty or route2.is_empty:
+            return None, MoveKind.INVALID
+
+        sln = self.sln
+        chain = range(0, route2.num_customers)
+        dest_idx = route1.num_customers
+        own_end_depot = route1.end_depot
+        inherited_end_depot = route2.end_depot
+        other_prev_route = route2.prev_route
+
+        # Four primitives that are already priced and already tested. Each reads its delta from
+        # the state the previous step left, which is what makes them SUM: overload is nonlinear in
+        # load, so a delta is additive only when measured against the solution that actually
+        # existed at that moment. No new delta math is written here -- that is the point.
+        #
+        # Removal and insertion are charged SEPARATELY rather than through
+        # cost_deltas_if_customer_chain_moved. The joint version has to price both sides before
+        # either happens, so its depot and vehicle terms are "activates at the destination minus
+        # deactivates at the source". Split, each half stands alone -- which is what a ruin step
+        # needs, since it removes customers long before it decides where they land.
+        chain_removal = route2.cost_deltas_if_customer_chain_removed(chain)
+        visits = route2.remove_customer_chain(chain)
+
+        insert_visit = route1.get_visit_at(dest_idx)
+        chain_insert, _reversed = route1.cost_deltas_if_customer_chain_inserted_before(
+            visits, insert_visit)
+        route1.insert_customer_chain(visits, dest_idx, False)
+
+        depot_change = route1.cost_deltas_if_end_depot_changes(inherited_end_depot)
+        route1.set_end_depot(inherited_end_depot)
+
+        route_removal = route2.cost_deltas_if_removed()
+        route2.unlink_from_vehicle()
+        other_slot = sln.all_routes.remove(route2)
+
+        self._revert_info = (route1, chain, dest_idx, own_end_depot,
+                             route2, other_prev_route, other_slot)
+        return chain_removal + chain_insert + depot_change + route_removal, MoveKind.VALID
+
+    def _apply_impl(self, operands: CombineRoutesOps) -> tuple:
+        """
+        The same three steps without the pricing, for callers that only want the mutation.
+
+        Deliberately a near-copy of _evaluate_impl's body rather than shared with it. Pricing has
+        to interleave -- step 2's delta is only meaningful once step 1 has run -- so factoring the
+        two together would mean computing three deltas on this path and discarding them. The
+        snapshot round trip re-applies moves purely to mutate, and should not pay for that.
+        """
+        sln = self.sln
+        route1, route2 = operands
+        chain = range(0, route2.num_customers)
+        dest_idx = route1.num_customers
+        own_end_depot = route1.end_depot
+        other_prev_route = route2.prev_route
+
+        visits = route2.remove_customer_chain(chain)
+        route1.insert_customer_chain(visits, dest_idx, False)
+        route1.set_end_depot(route2.end_depot)
+        route2.unlink_from_vehicle()
+        other_slot = sln.all_routes.remove(route2)
+
+        return route1, chain, dest_idx, own_end_depot, route2, other_prev_route, other_slot
+
+    def _revert_impl(self, move, revert_info):
+        # The three steps run backwards, same shape as DisposeOfEmptyRoutesBL's revert stack.
+        # route2 is the ORIGINAL object throughout -- only emptied and unlinked, never disposed --
+        # so this is identity-correct by construction, which is what the old split_at-based revert
+        # had to work to achieve and what TODO(revert-identity) was about.
+        route1, chain, dest_idx, own_end_depot, route2, other_prev_route, other_slot = revert_info
+        sln = self.sln
+
+        # Step 3 undone: route2 goes back into all_routes at its original slot, and back into the
+        # vehicle chain after whoever preceded it.
+        sln.all_routes.undo_remove(route2, other_slot)
+        route2.link_to_vehicle_after(other_prev_route)
+
+        # Step 2 undone.
+        route1.set_end_depot(own_end_depot)
+
+        # Step 1 undone: the customers go home.
+        visits = route1.remove_customer_chain(range(dest_idx, dest_idx + len(chain)))
+        route2.insert_customer_chain(visits, 0, False)
 
 
 # TODO(future-operator): SubPermuteRoute, using the existing (unused)

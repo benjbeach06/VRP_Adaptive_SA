@@ -1265,8 +1265,14 @@ class Route(VehicleNode):
         #region Path distance computations
         # Any of these could be useful in computing cost deltas within solution operators.
         def total_distance(self):
-            if self.start_depot is None or self.vehicle is None:
-                raise Exception("Route must be assigned to a vehicle to compute total distance")
+            # Vehicle assignment is NOT required. Travel distance is a function of start_depot,
+            # path and end_depot only -- start_depot reads through first_visit.source_depot, which
+            # is route-local and survives unlinking. The old guard also demanded self.vehicle,
+            # which made it impossible to price a route while it was detached: exactly what an
+            # operator that measures by mutating has to do, and what ruin-and-recreate will need
+            # while customers are in flight.
+            if self.start_depot is None:
+                raise Exception("Route must have a start depot to compute total distance")
 
             return self.first_move_distance() + self.tail_distance()
 
@@ -1966,6 +1972,114 @@ class Route(VehicleNode):
 
         def cost_deltas_if_customer_appended(self, customer):
             return self.cost_deltas_if_customer_inserted_before(customer, self.last_visit)
+
+        #region Sequential halves: remove, then insert
+        # cost_deltas_if_customer_chain_moved prices a move as ONE joint quantity, because it
+        # prices before performing anything: its depot and vehicle terms are literally
+        # "activates at the destination MINUS deactivates at the source" (see
+        # depot_activation_delta_if_customers_added). That is unavoidable when nothing has
+        # happened yet, and it is also what makes the move impossible to reuse -- a ruin step
+        # removes k customers now and decides where they land much later.
+        #
+        # These two price the same thing as two independent halves. Remove is charged against the
+        # live route; insert is then charged against the state the removal LEFT, so the two sum.
+        # Overload is nonlinear in load, so that ordering is a correctness requirement, not a
+        # convenience.
+        #
+        # The insert half is destination-only. It takes detached visits and never asks where they
+        # came from, which is what the note on cost_deltas_if_customer_inserted_before called the
+        # "Unassigned" version it did not yet have.
+
+        def travel_delta_if_customer_chain_removed(self, chain: Chain) -> Num:
+            """Closing the gap a chain leaves behind. Orientation-independent."""
+            rng = as_chain_range(chain)
+            path = self.path
+            first = path[rng.start]
+            last = path[rng.stop - 1]
+            before_chain = first.prev_visit
+            after_chain = last.next_visit
+
+            return (before_chain.distance(after_chain)
+                    - before_chain.distance(first) - last.distance(after_chain))
+
+        def cost_deltas_if_customer_chain_removed(self, chain: Chain) -> ObjectiveTermDelta:
+            """
+            Price taking `chain` out of this route, charged BEFORE the removal happens.
+
+            A chain of one is the single-customer removal, so this widens
+            cost_deltas_if_customer_removed rather than sitting beside it.
+            """
+            rng = as_chain_range(chain)
+            k = len(rng)
+            if k == 0:
+                return ObjectiveTermDelta()
+
+            path = self.path
+            chain_load = sum(path[i].demand for i in rng)
+
+            return ObjectiveTermDelta(
+                travel_distance=self.travel_delta_if_customer_chain_removed(rng),
+                vehicles_activated=-self.vehicle_deactivates_if_customers_removed(k),
+                depots_activated=-self.depot_deactivates_if_customers_removed(k),
+                total_route_overload=self.overload_delta_if_load_changes(-chain_load),
+                vehicles_overloaded=self.is_vehicle_overloaded_delta_if_load_changes(-chain_load))
+
+        @staticmethod
+        def travel_deltas_if_customer_chain_inserted_before(
+                visits: Sequence[CustomerVisit],
+                insert_visit: CustomerVisit | LastRouteVisit) -> tuple[Num, Num]:
+            """
+            (not_reversed, reversed) travel for splicing detached `visits` in before insert_visit.
+
+            The chain's INTERIOR arcs are identical either way -- Node.distance is Euclidean and
+            therefore symmetric -- so orientation reaches exactly the two boundary arcs.
+            """
+            first, last = visits[0], visits[-1]
+            prev_insert = insert_visit.prev_visit
+            reconnect = -prev_insert.distance(insert_visit)
+
+            return (prev_insert.distance(first) + last.distance(insert_visit) + reconnect,
+                    prev_insert.distance(last) + first.distance(insert_visit) + reconnect)
+
+        def cost_deltas_if_customer_chain_inserted_before(
+                self, visits: Sequence[CustomerVisit],
+                insert_visit: CustomerVisit | LastRouteVisit
+        ) -> tuple[ObjectiveTermDelta, ObjectiveTermDelta]:
+            """
+            Price splicing detached `visits` into THIS route before insert_visit.
+
+            Returns (not_reversed, reversed); only travel_distance differs between them. Makes no
+            decision -- the caller picks, exactly as cost_deltas_if_customer_chain_moved does.
+
+            Destination-only by design: `visits` are detached, so there is no source route to
+            offset against. Whoever detached them already charged that side.
+            """
+            k = len(visits)
+            if k == 0:
+                return ObjectiveTermDelta(), ObjectiveTermDelta()
+
+            chain_load = sum(visit.demand for visit in visits)
+            vehicle = self.vehicle
+
+            # The destination halves of depot_activation_delta_if_customers_added and
+            # vehicle_activation_delta_if_customers_added, with the source subtraction dropped.
+            vehicle_delta = int(vehicle is not None and vehicle.is_inactive)
+            depot_delta = int(self.activates_after_customer_insert()
+                              and self.first_visit.num_routes_starting_here == 0)
+            overload_delta = self.overload_delta_if_load_changes(chain_load)
+            vehicles_overloaded_delta = self.is_vehicle_overloaded_delta_if_load_changes(chain_load)
+
+            fwd_travel, rev_travel = Route.travel_deltas_if_customer_chain_inserted_before(
+                visits, insert_visit)
+
+            def terms(travel: Num) -> ObjectiveTermDelta:
+                return ObjectiveTermDelta(travel_distance=travel, vehicles_activated=vehicle_delta,
+                                          depots_activated=depot_delta,
+                                          total_route_overload=overload_delta,
+                                          vehicles_overloaded=vehicles_overloaded_delta)
+
+            return terms(fwd_travel), terms(rev_travel)
+        #endregion
 
         def travel_deltas_if_customer_chain_moved(self, chain: Chain,
                                                   insert_visit: CustomerVisit | LastRouteVisit) -> tuple[Num, Num]:
@@ -3099,12 +3213,11 @@ class Route(VehicleNode):
         def split_at(self, split_index: int, refill_depot: Depot, new_route: Route | None = None) -> Route:
             # Removes the customers at or after the index. Then returns a new src_route with those customers and
             # the given end depot. Idea is that vehicle will handle the insertion of the new src_route.
-            # TODO(revert-identity): take an optional `into: Route | None = None` and, when given,
-            # refill THAT route object with the tail customers instead of constructing a new one.
-            # Needed so CombineRoutes._revert_impl can restore the route combine_with disposed of,
-            # rather than substituting a fresh object. Right now any caller holding a reference to
-            # the original route (an already-evaluated Move's operands, a future undo stack, a
-            # debug re-evaluate) is left pointing at a dead route after an apply->revert cycle.
+            # `new_route` IS the identity-preserving path that TODO(revert-identity) asked for:
+            # pass the original object and it gets refilled with the tail customers instead of a
+            # fresh one being constructed. CombineRoutes._revert_impl passes route2 through, so a
+            # caller holding a reference across an apply -> revert cycle -- an evaluated Move's
+            # operands, an undo stack, a debug re-evaluate -- still names a live route.
             path = self.path
             path_len = self.path_len
 
