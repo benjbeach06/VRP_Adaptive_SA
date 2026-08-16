@@ -1,0 +1,29 @@
+26 variants x 3 sizes = 78 cells
+roster of 20; not ablated: ['ChangeRandomEndDepot', 'CombineRandomRoutes', 'SplitRandomRoute']
+~28.2 min per seed-round, budget 10h -> about 21 seeds
+
+seed 0 done in 28.5 min, 78 runs, 571 min left
+seed 1 done in 28.5 min, 156 runs, 543 min left
+seed 2 done in 28.5 min, 234 runs, 514 min left
+seed 3 done in 28.5 min, 312 runs, 486 min left
+seed 4 done in 28.6 min, 390 runs, 457 min left
+seed 5 done in 28.5 min, 468 runs, 429 min left
+seed 6 done in 28.5 min, 546 runs, 400 min left
+seed 7 done in 28.6 min, 624 runs, 372 min left
+seed 8 done in 28.5 min, 702 runs, 343 min left
+seed 9 done in 28.6 min, 780 runs, 315 min left
+seed 10 done in 28.6 min, 858 runs, 286 min left
+seed 11 done in 28.6 min, 936 runs, 257 min left
+seed 12 done in 28.6 min, 1014 runs, 229 min left
+seed 13 done in 28.6 min, 1092 runs, 200 min left
+seed 14 done in 28.6 min, 1170 runs, 172 min left
+seed 15 done in 28.6 min, 1248 runs, 143 min left
+seed 16 done in 28.6 min, 1326 runs, 115 min left
+seed 17 done in 28.6 min, 1404 runs, 86 min left
+seed 18 done in 28.6 min, 1482 runs, 57 min left
+seed 19 done in 28.6 min, 1560 runs, 29 min left
+seed 20 done in 28.6 min, 1638 runs, 0 min left
+seed 21 done in 0.5 min, 1641 runs, -0 min left
+
+1641 runs over 22 seed-rounds -> tools/ablation_results.json
+no failures
