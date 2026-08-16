@@ -124,6 +124,8 @@ class SimAnnVRPSolver:
             RandomCustomerReassignment(sln),
             RandomCustomerChainReassignment(sln),
             ReassignClosestChainWithRandomCustomer(sln),
+            ReassignChainNextToNeighbor(sln),
+            SwapChainsWithNeighbor(sln),
             ReverseClosestPairTogether(sln),
             RandomCustomerChainReversal(sln),
             RandomCustomerSwap(sln),
@@ -252,46 +254,96 @@ class SimAnnVRPSolver:
 
         vehicles = sln.vehicles
 
-        customers_remaining = customers.copy()
+        # A set for O(1) membership, since the neighbor walks below test it once per candidate.
+        # The FULL customer list stays the iteration order for every fallback scan: `customers` is
+        # in cID order, so "first remaining" means "lowest cID among remaining" -- exactly the tie
+        # rule argmin used before, and what keeps the constructed solution bit-identical.
+        remaining = set(customers)
+
+        def _first_remaining_from(anchor, row, source_list):
+            """
+            First entry of a precomputed neighbor row that is still unassigned, or None.
+
+            Trusted only when the hit is STRICTLY nearer than the row's last entry, or the row
+            already spans everything. A row holds the k smallest distances with ties broken
+            arbitrarily at the cut, so a hit merely TIED with the last entry may have a lower-cID
+            twin that fell outside the row. Strictly nearer means every node at that distance or
+            less is inside the row; the row is ordered by (distance, index), so the first remaining
+            entry is then exactly what argmin would have returned.
+
+            Comparing against the last entry's distance, not its identity: several entries can share
+            one distance, and an identity check would wave those through.
+            """
+            if not row:
+                return None
+
+            complete = len(row) >= len(source_list) - 1
+            cutoff = anchor.distance(source_list[row[-1]])
+            for index in row:
+                candidate = source_list[index]
+                if candidate in remaining:
+                    if complete or anchor.distance(candidate) < cutoff:
+                        return candidate
+                    return None
+            return None
 
         def get_closest_depot(customer: Customer):
-            return depots[argmin([customer.distance(depot) for depot in depots])]
+            # Rows break ties by index, so this matches argmin's lowest-dID choice.
+            return depots[sln.customer_depots[customer.cID][0]]
 
-        def get_closest_remaining_customer(customer: Customer) -> Customer:
-            return customers_remaining[argmin([customer.distance(other_customer) for other_customer in customers_remaining])]
+        def get_closest_remaining_customer_to_customer(customer: Customer) -> Customer:
+            hit = _first_remaining_from(customer, sln.neighbors[customer.cID], customers)
+            if hit is not None:
+                return hit
+            # Row exhausted, or the only hit was tied with the cut. Fall back to the original scan.
+            return min((other for other in customers if other in remaining),
+                       key=customer.distance)
 
-        def get_closest_customer_remaining(vehicle: Vehicle):
+        def get_closest_remaining_customer_to_depot(vehicle: Vehicle):
             depot = vehicle.final_depot
-            return min(((customer, depot.distance(customer)) for customer in customers_remaining), key = lambda t : t[1])
+            row = sln.depot_neighbors[depot.dID]
+            while True:
+                hit = _first_remaining_from(depot, row, customers)
+                if hit is not None:
+                    return hit, depot.distance(hit)
+                # Widen this depot's row rather than dropping to a scan: depots are few, so the
+                # rebuild is cheap and every later route start stays O(1).
+                if not sln.grow_depot_neighbors(depot.dID):
+                    break
+                row = sln.depot_neighbors[depot.dID]
+
+            best = min((customer for customer in customers if customer in remaining),
+                       key=depot.distance)
+            return best, depot.distance(best)
 
         def get_closest_remaining_service():
-            closest_customers = [(v,)+get_closest_customer_remaining(v) for (i,v) in enumerate(vehicles)]
+            closest_customers = [(v,)+get_closest_remaining_customer_to_depot(v) for (i,v) in enumerate(vehicles)]
             # Tuples at this point have values (vehicle, customer, distance)
             return min(closest_customers, key = lambda kvp: kvp[2])
 
         def add_next_route():
             (vehicle, customer1, _) = get_closest_remaining_service()
-            customers_remaining.remove(customer1)
+            remaining.discard(customer1)
             # End depot isn't decided until the route is full; DEFAULT_DEPOT is a harmless
             # placeholder always replaced by set_end_depot below before the route is used.
             route = Route([CustomerVisit(customer1)], DEFAULT_DEPOT)
 
-            if customers_remaining:
-                next_customer = get_closest_remaining_customer(customer1)
+            if remaining:
+                next_customer = get_closest_remaining_customer_to_customer(customer1)
                 capacity_so_far = customer1.demand
                 next_capacity = next_customer.demand
 
                 can_add_route = lambda : capacity_so_far + next_capacity <= vehicle.capacity
 
-                while customers_remaining and can_add_route():
+                while remaining and can_add_route():
                     route.append_customer(CustomerVisit(next_customer))
                     capacity_so_far += next_customer.demand
-                    customers_remaining.remove(next_customer)
+                    remaining.discard(next_customer)
 
-                    if not customers_remaining:
+                    if not remaining:
                         break
 
-                    next_customer = get_closest_remaining_customer(next_customer)
+                    next_customer = get_closest_remaining_customer_to_customer(next_customer)
                     next_capacity = next_customer.demand
 
             # NOTE: Assumes that any vehicle has enough capacity to serve any single customer.
@@ -299,7 +351,7 @@ class SimAnnVRPSolver:
 
             sln.add_route_to_vehicle(route, vehicle)
 
-        while customers_remaining:
+        while remaining:
             add_next_route()
 
         self.best_objective = sln.solution_cost()

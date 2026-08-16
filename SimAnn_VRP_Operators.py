@@ -415,13 +415,58 @@ def random_chain_destination(sln: FullSolution, src_route: Route, chain_len: int
     return dest_route, rand_int_inclusive(0, max_dest)
 
 
+# How many routes a neighbor-guided selector will draw before giving up. Higher than
+# DEPOT_PARTNER_DRAWS because each draw here is a handful of dict lookups, not a delta computation.
+NEIGHBOR_ROUTE_DRAWS = 8
+
+
+def draw_route_with_neighbor(sln: FullSolution, anchor_cid: int,
+                             exclude: Route) -> tuple[Route, int] | None:
+    """
+    A route holding one of anchor's nearest customers, and that customer's index within it.
+
+    Returns the BEST-ranked neighbor present, not the first one found, so a route containing
+    several of them lands the chain beside the closest.
+
+    Cost is bounded by ROUTE length, not customer count: one dict lookup per visit and no distance
+    arithmetic at all. That is ~2.8us on a 71-customer route and ~0.16us on a 4-customer one.
+    Drawing routes at random and rejecting misses, rather than building a candidate list, mirrors
+    _draw_partner -- O(1) per draw against O(routes) to filter.
+
+    `exclude` is the source route. Skipping it keeps every move cross-route, which is what makes
+    the caller's dest_idx a plain index with no after-removal adjustment.
+    """
+    ranks = sln.neighbor_rank[anchor_cid]
+    all_routes = sln.all_routes
+
+    for _ in range(NEIGHBOR_ROUTE_DRAWS):
+        route = rand_choice(all_routes)
+        if route is exclude or route.is_empty:
+            continue
+
+        best_index, best_rank = None, len(ranks)
+        for index, visit in enumerate(route.path):
+            rank = ranks.get(visit.cID)
+            if rank is not None and rank < best_rank:
+                best_index, best_rank = index, rank
+
+        if best_index is not None:
+            return route, best_index
+
+    return None
+
+
 class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
     """
     Shared operand selection for the chain-reassignment family.
 
-    Subclasses override _choose_chain and nothing else. The roster carries these as separate
-    entries so the adaptive weighting can price chain LENGTH separately -- length is therefore the
-    only thing that should differ, and source/destination selection lives here once.
+    Subclasses override _choose_chain, and optionally _choose_destination. Most override only the
+    first: the roster carries the length variants as separate entries so the adaptive weighting can
+    price chain LENGTH separately, and for those, source selection lives here once.
+
+    _choose_destination exists because "where does this chain go" is the other half of the move, and
+    the measured evidence is that it matters more. Random destinations accept 0.00-0.04% of
+    proposals at 500 customers; the one operator with no destination to choose accepts 18.51%.
     """
 
     def __init__(self, sln: FullSolution):
@@ -431,6 +476,15 @@ class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
     def _choose_chain(self, src_route: Route) -> Chain | None:
         """None means this route cannot supply the kind of chain this operator makes."""
         raise NotImplementedError
+
+    def _choose_destination(self, src_route: Route, chain: Chain) -> tuple[Route, int] | None:
+        """
+        Where the chosen chain should land. None means this draw found nowhere legal.
+
+        Takes the CHAIN, not just its length: a geometric selector needs the endpoint customers to
+        decide, and only the chain identifies them.
+        """
+        return random_chain_destination(self.sln, src_route, len(as_chain_range(chain)))
 
     def _operand_selection_impl(self):
         sln = self.sln
@@ -447,12 +501,15 @@ class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
 
         assert isinstance(src_route, Route)
         customer_chain = self._choose_chain(src_route) if valid else None
-        if customer_chain is None:
+        destination = (self._choose_destination(src_route, customer_chain)
+                       if customer_chain is not None else None)
+        if destination is None:
             # Empty range reports INVALID rather than raising. Shows up in the operator's own
-            # invalid-call counter, which is where a degenerate selector becomes visible.
+            # invalid-call counter, which is where a degenerate selector becomes visible. Both
+            # hooks failing land here, so one counter covers both kinds of degeneracy.
             return src_route, range(0, 0), src_route, 0, False
 
-        dest_route, dest_index = random_chain_destination(sln, src_route, len(as_chain_range(customer_chain)))
+        dest_route, dest_index = destination
 
         # Trailing False is a placeholder: ReassignCustomerChain sets _evaluates_in_batch, so
         # evaluate() replaces this with the orientation it priced as better.
@@ -465,6 +522,35 @@ class RandomCustomerReassignment(_ChainReassignmentBase):
     def _choose_chain(self, src_route: Route) -> Chain | None:
         # A bare int IS a Chain; as_chain_range normalizes it downstream.
         return rand_int_inclusive(0, len(src_route.path) - 1)
+
+
+class ReassignChainNextToNeighbor(_ChainReassignmentBase):
+    """
+    Relocate one customer to sit beside a near neighbor of its own, in a different route.
+
+    Same move as RandomCustomerReassignment; the only difference is that the destination is chosen
+    rather than drawn. That difference is the whole point: a random destination in a 500-customer
+    instance is essentially never right, and the roster's random-destination operators accept
+    0.00-0.04% of proposals against 18.51% for the one operator that has no destination to choose.
+
+    Or-opt with neighbor lists, from the VRP literature. The diagnosis that the roster needed it is
+    from this solver's own acceptance data.
+    """
+
+    def _choose_chain(self, src_route: Route) -> Chain | None:
+        return rand_int_inclusive(0, len(src_route.path) - 1)
+
+    def _choose_destination(self, src_route: Route, chain: Chain) -> tuple[Route, int] | None:
+        anchor = src_route.path[as_chain_range(chain).start]
+        found = draw_route_with_neighbor(self.sln, anchor.cID, exclude=src_route)
+        if found is None:
+            return None
+
+        dest_route, neighbor_index = found
+        # Immediately before or after the neighbor, drawn evenly. Both put the customer one arc
+        # from it, and which side wins depends on the neighbor's OTHER neighbor -- not something
+        # this selector prices. dest_idx == len(path) is a legal append, so +1 never overruns.
+        return dest_route, neighbor_index + rand_int_inclusive(0, 1)
 
 
 class RandomCustomerChainReassignment(_ChainReassignmentBase):
@@ -702,6 +788,37 @@ class RandomCustomerSwap(_ChainSwapBase):
             index2 = rand_int_inclusive(0, len(route2.path) - 1)
 
         return route1, index1, route2, index2
+
+class SwapChainsWithNeighbor(_ChainSwapBase):
+    """
+    Swap two chains anchored on customers that are near each other but in different routes.
+
+    Cross-exchange, guided. RandomChainSwap and RandomSameLengthChainSwap make the same move with
+    both anchors drawn at random and accept 0.00% of proposals at 500 customers; the move type is
+    not the problem, the blind pairing is.
+
+    Both routes differ by construction, so the chains cannot overlap and the BL's same-route
+    overlap guard is never the thing that rejects this.
+    """
+
+    def _choose_chains(self, sln: FullSolution):
+        route1 = rand_choice(sln.all_routes)
+        if route1.is_empty:
+            return None
+
+        index1 = rand_int_inclusive(0, len(route1.path) - 1)
+        found = draw_route_with_neighbor(sln, route1.path[index1].cID, exclude=route1)
+        if found is None:
+            return None
+
+        route2, index2 = found
+        # Chains grow FORWARD from each anchor so the anchors themselves are always included --
+        # they are the pair we chose these routes for. Clipping to each route keeps both non-empty.
+        length1 = geometric_chain_length(len(route1.path) - index1)
+        length2 = geometric_chain_length(len(route2.path) - index2)
+
+        return route1, range(index1, index1 + length1), route2, range(index2, index2 + length2)
+
 
 class RandomSameLengthChainSwap(_ChainSwapBase):
     """

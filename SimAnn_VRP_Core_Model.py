@@ -991,8 +991,8 @@ class LastRouteVisit(Depot, RouteVisit):
     # def uncount_route_in_depot(self):
     #     self.change_depot_uses(self.source_depot, -1)
 
-    def change_my_depot_uses(self, num_uses_delta: int):
-        self.change_depot_uses(self.source_depot, num_uses_delta)
+    #def change_my_depot_uses(self, num_uses_delta: int):
+    #    self.change_depot_uses(self.source_depot, num_uses_delta)
 
     def replace_depot(self, new_depot: Depot):
         """
@@ -4100,6 +4100,11 @@ def nearest_indices(sources: ndarray, targets: ndarray, k: int, exclude_self: bo
 
     Squared distances are compared, never rooted. sqrt is monotonic, so the ordering is identical
     and the per-pair cost drops.
+
+    TIES BREAK BY INDEX, deterministically. Coordinates here are integers on a small lattice, so
+    equal distances are common rather than exotic, and `argmin` -- which callers are replacing with
+    these tables -- resolves a tie by taking the lowest index. lexsort reproduces that rule exactly;
+    plain argsort would not, since its default quicksort is unstable.
     """
     limit = len(targets) - (1 if exclude_self else 0)
     k = min(k, limit)
@@ -4115,10 +4120,12 @@ def nearest_indices(sources: ndarray, targets: ndarray, k: int, exclude_self: bo
             for i in range(len(block)):
                 squared[i, start + i] = np.inf
 
-        # argpartition puts the k smallest in front, unordered; sort just those k.
+        # argpartition puts the k smallest in front, unordered; order just those k.
         candidates = np.argpartition(squared, k - 1, axis=1)[:, :k]
         distances = np.take_along_axis(squared, candidates, axis=1)
-        winners = np.take_along_axis(candidates, np.argsort(distances, axis=1), axis=1)
+        # lexsort's LAST key is primary, so this is "by distance, then by index".
+        order = np.lexsort((candidates, distances), axis=1)
+        winners = np.take_along_axis(candidates, order, axis=1)
         out.extend(tuple(int(index) for index in row) for row in winners)
     return out
 

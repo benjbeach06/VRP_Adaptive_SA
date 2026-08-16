@@ -746,6 +746,7 @@ class _SequentialCombineRoutes(OperatorBL[CombineRoutesOps]):
         visits = route2.remove_customer_chain(chain)
 
         insert_visit = route1.get_visit_at(dest_idx)
+        assert isinstance(insert_visit, CustomerVisit|LastRouteVisit)
         chain_insert, _reversed = route1.cost_deltas_if_customer_chain_inserted_before(
             visits, insert_visit)
         route1.insert_customer_chain(visits, dest_idx, False)
