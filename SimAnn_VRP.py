@@ -7,8 +7,9 @@ def build_vrp_model():
     # Random seed for reproducibility
     np.random.seed(42)
 
-    use_pre_refactor_data = True
+    use_pre_refactor_data = False
 
+    num_customers = 500  # 5000
     if use_pre_refactor_data:
         # Depot locations (x, y), and supply limits
         depot_data = [
@@ -18,7 +19,6 @@ def build_vrp_model():
         ]
 
         # Customer data: id -> (x, y, demand)
-        num_customers = 500  # 5000
         customer_data = [
             {
                 "location": tuple(np.random.randint(0, 100, size=2)),
@@ -38,7 +38,6 @@ def build_vrp_model():
         ]
 
         # Customers
-        num_customers = 200  # 5000
         generator = np.random.default_rng()
 
         gen_customer_location = lambda: tuple(generator.integers(low=0, high=100, size=2))
