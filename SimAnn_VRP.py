@@ -7,7 +7,7 @@ def build_vrp_model():
     # Random seed for reproducibility
     np.random.seed(42)
 
-    use_pre_refactor_data = False
+    use_pre_refactor_data = True
 
     num_customers = 500  # 5000
     if use_pre_refactor_data:

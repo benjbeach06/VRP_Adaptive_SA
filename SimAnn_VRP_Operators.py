@@ -467,7 +467,7 @@ def random_chain_destination(sln: FullSolution, src_route: Route, chain_len: int
 
 # How many routes a neighbor-guided selector will draw before giving up. Higher than
 # DEPOT_PARTNER_DRAWS because each draw here is a handful of dict lookups, not a delta computation.
-NEIGHBOR_ROUTE_DRAWS = 8
+NEIGHBOR_ROUTE_DRAWS = 32
 
 
 def draw_route_with_neighbor(sln: FullSolution, anchor_cid: int,
