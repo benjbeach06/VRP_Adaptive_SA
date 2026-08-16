@@ -190,7 +190,7 @@ class SimAnnVRPSolver:
 
     def update_weights(self):
         weights = [op.weight for op in self.operators]
-        reheat = 1e5 if max(weights) <= 1e-5 else 1
+        reheat = 1e5 if max(weights) <= 1e-10 else 1
 
         geom_mean_weight = math.exp(math.fsum([math.log(w) for w in weights]) / len(weights))
         total_proposals = 0

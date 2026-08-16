@@ -303,7 +303,7 @@ class Operator[Ops: tuple](ABC):
         mean_cost = (self.mean_call_time if self.weight_by_time else 1.0)
 
         sign = -1 if move.improvement < 0 else 1
-        score = max(self.explore_reward, sign * (abs(move.improvement) ** 1.5) / max(mean_cost, 1e-9))
+        score = max(self.explore_reward, sign * (abs(move.improvement) ** 1.5) )/ max(mean_cost, 1e-9)
         self.stats.record_accept(score)
 
     def get_stats(self):
