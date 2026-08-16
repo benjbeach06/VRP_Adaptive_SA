@@ -4075,6 +4075,71 @@ class Vehicle:
     #endregion
 
 
+#region Nearest-neighbor tables
+# How many nearest customers each customer remembers. Consumed by the neighbor-guided operators,
+# which scan a candidate route testing membership -- so this is "how wide is near", not a budget.
+CUSTOMER_NEIGHBORS_K = 20
+
+# How many nearest depots each customer remembers. Instances have very few depots, so this is
+# usually all of them.
+CUSTOMER_DEPOTS_K = 10
+
+
+def nearest_indices(sources: ndarray, targets: ndarray, k: int, exclude_self: bool,
+                    chunk: int = 512) -> list[tuple[int, ...]]:
+    """
+    For each row of `sources`, the indices of its `k` nearest rows in `targets`, nearest first.
+
+    Chunked so peak memory is bounded by `chunk * len(targets)` rather than the full pairwise
+    matrix -- 20MB per chunk at 5000 targets, against 200MB for the whole thing.
+
+    O(len(sources) * len(targets)) work, but entirely inside numpy. An incremental "keep a sorted
+    top-k, insert when closer than the last" loop has the same asymptotic cost with the Python
+    interpreter's constant factor on top, which is around 100x worse here. Genuinely sub-quadratic
+    needs a k-d tree or grid bucketing; neither is worth it below roughly 50k customers.
+
+    Squared distances are compared, never rooted. sqrt is monotonic, so the ordering is identical
+    and the per-pair cost drops.
+    """
+    limit = len(targets) - (1 if exclude_self else 0)
+    k = min(k, limit)
+    if k <= 0:
+        return [() for _ in range(len(sources))]
+
+    out: list[tuple[int, ...]] = []
+    for start in range(0, len(sources), chunk):
+        block = sources[start:start + chunk]
+        squared = ((block[:, None, :] - targets[None, :, :]) ** 2).sum(axis=-1)
+        if exclude_self:
+            # sources IS targets here, so row i of this block is target start + i.
+            for i in range(len(block)):
+                squared[i, start + i] = np.inf
+
+        # argpartition puts the k smallest in front, unordered; sort just those k.
+        candidates = np.argpartition(squared, k - 1, axis=1)[:, :k]
+        distances = np.take_along_axis(squared, candidates, axis=1)
+        winners = np.take_along_axis(candidates, np.argsort(distances, axis=1), axis=1)
+        out.extend(tuple(int(index) for index in row) for row in winners)
+    return out
+
+
+def _locations_array(nodes) -> ndarray:
+    return np.asarray([node.location for node in nodes], dtype=float)
+
+
+def _require_dense_ids(items, id_attr: str, label: str) -> None:
+    """
+    The tables index by ID directly, with no indirection, because every construction site in this
+    repo numbers its nodes 0..n-1. Fail loudly rather than silently mis-associating neighbors.
+    """
+    for position, item in enumerate(items):
+        if getattr(item, id_attr) != position:
+            raise ValueError(
+                f"{label} IDs must be dense and 0-based for the neighbor tables to index by ID: "
+                f"position {position} has {id_attr}={getattr(item, id_attr)}.")
+#endregion
+
+
 class FullSolution:
     # NOTE: annotations only -- no values. Every field is initialized per-instance in __init__.
     # These must never carry defaults: a class-level `vehicles: list = []` (or RouteSet()/defaultdict())
@@ -4153,6 +4218,13 @@ class FullSolution:
 
         self.depot_route_starts = defaultdict[Depot, RouteSet](RouteSet)
 
+        # Static geometry, built once by build_neighbor_tables(). Never maintained: customers and
+        # depots do not move, so these survive every mutation and are shared by copies.
+        self.neighbors: list[tuple[int, ...]] = []
+        self.neighbor_rank: list[dict[int, int]] = []
+        self.depot_neighbors: list[tuple[int, ...]] = []
+        self.customer_depots: list[tuple[int, ...]] = []
+
         self.version = 0
 
     #region Data setters
@@ -4160,9 +4232,60 @@ class FullSolution:
         self.customers = customers
         self.total_customer_capacity = sum(c.demand for c in self.customers)
         self.mean_customer_capacity = self.total_customer_capacity / len(self.customers)
+        self._build_neighbor_tables_when_ready()
 
     def set_depots(self, depots):
         self.depots = depots
+        self._build_neighbor_tables_when_ready()
+
+    def _build_neighbor_tables_when_ready(self) -> None:
+        """Two of the four tables span both node kinds, so wait until both lists have arrived."""
+        if self.customers and self.depots:
+            self.build_neighbor_tables()
+
+    def build_neighbor_tables(self) -> None:
+        """
+        Precompute the four nearest-neighbor tables. Idempotent; call again to rebuild.
+
+        `neighbors` and `neighbor_rank` are a linked pair and must be built in tandem -- the rank
+        map is derived from the list so the two cannot drift.
+        """
+        _require_dense_ids(self.customers, "cID", "Customer")
+        _require_dense_ids(self.depots, "dID", "Depot")
+
+        customer_locations = _locations_array(self.customers)
+        depot_locations = _locations_array(self.depots)
+
+        self.neighbors = nearest_indices(customer_locations, customer_locations,
+                                         CUSTOMER_NEIGHBORS_K, exclude_self=True)
+        self.neighbor_rank = [{cid: rank for rank, cid in enumerate(row)} for row in self.neighbors]
+
+        # Sized well below the full customer list: construction consumes one depot-nearest customer
+        # per new route, so a row that is too short would be exhausted early. grow_depot_neighbors
+        # doubles a row on exhaustion rather than dropping to a linear scan.
+        depot_k = max(1, len(self.customers) // (len(self.depots) * 2))
+        self.depot_neighbors = nearest_indices(depot_locations, customer_locations,
+                                               depot_k, exclude_self=False)
+
+        self.customer_depots = nearest_indices(customer_locations, depot_locations,
+                                               CUSTOMER_DEPOTS_K, exclude_self=False)
+
+    def grow_depot_neighbors(self, depot_id: int) -> bool:
+        """
+        Double one depot's customer row. Returns False when it already spans every customer.
+
+        Called when a construction pass walks a row to its end. Rebuilding one row is cheap because
+        depots are few, and it keeps the lookup O(1) afterwards instead of falling back to a scan.
+        """
+        current = len(self.depot_neighbors[depot_id])
+        if current >= len(self.customers):
+            return False
+
+        wider = min(len(self.customers), max(1, current * 2))
+        depot_location = _locations_array([self.depots[depot_id]])
+        self.depot_neighbors[depot_id] = nearest_indices(
+            depot_location, _locations_array(self.customers), wider, exclude_self=False)[0]
+        return True
 
     def set_objectives(self, unit_travel_cost: Num, cost_per_vehicle: Num, cost_per_depot: Num,
                        unit_overload_penalty: Num = 1000, vehicle_overload_penalty: Num = 100000):
@@ -4463,6 +4586,14 @@ class FullSolution:
         new_sln.depots = self.depots
         new_sln.customers = self.customers
         new_sln.capacity_per_vehicle = self.capacity_per_vehicle
+
+        # Neighbor tables are static geometry over the shared customer and depot lists, so a copy
+        # shares them by reference exactly as it shares those lists. Nothing mutates them except
+        # grow_depot_neighbors, which only ever widens a row with more of the same answer.
+        new_sln.neighbors = self.neighbors
+        new_sln.neighbor_rank = self.neighbor_rank
+        new_sln.depot_neighbors = self.depot_neighbors
+        new_sln.customer_depots = self.customer_depots
 
         # Copy calculations derived from core solution and problem data
         new_sln.total_customer_capacity = self.total_customer_capacity
