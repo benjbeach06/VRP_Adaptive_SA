@@ -18,7 +18,7 @@ be wrong.
 | **Construction** | 8.094 s → **0.209 s** at 5,000 customers (39×), producing a **bit-identical** solution |
 | **Operator selection** | `segment_length` was 10× too coarse: **1.54% ± 0.26%** (5.8σ), reproduced on unseen seeds by 5/5 configurations at 4–7σ |
 | **Roster** | 20 operators, ablated individually across 1,641 runs |
-| **Best known** | 3473.64 on the reference 200-customer instance at a 60 s budget |
+| **Best known** | 3461.10 on the reference 200-customer instance at a 60 s budget |
 
 ### The finding that mattered most
 
