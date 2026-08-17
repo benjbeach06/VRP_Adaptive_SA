@@ -25,10 +25,10 @@ def build_model():
         cost_per_vehicle = 10
         cost_per_depot = 20
 
-        capacity_per_vehicle = 25
+        capacity_per_vehicle = 400
 
         # Customer data: cID -> (x, y, demand)
-        num_customers = 200
+        num_customers = 500
         customers = [
             {
                 "location": tuple(np.random.randint(0, 100, size=2)),
