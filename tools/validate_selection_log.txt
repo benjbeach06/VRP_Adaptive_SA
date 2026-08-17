@@ -1,0 +1,23 @@
+re-measuring 6 configurations x 1 sizes x 10 runs x 60s
+seeds 200..209 (search used 0..2)
+fixed: {'initial_temp_factor': 0.0001, 'cooling_rate': 0.0001, 'plateau_reheat_exponent': 0.2}
+estimated wall time: 60 min
+
+--- size 500 ----------------------------------------------------
+  defaults    mean   1995.01   min   1971.07   sd  18.13   n=10
+  trial51     mean   1957.16   min   1917.98   sd  19.91   n=10
+  trial12     mean   1958.59   min   1935.33   sd  13.83   n=10
+  trial53     mean   1941.94   min   1915.67   sd  16.73   n=10
+  trial70     mean   1965.63   min   1943.61   sd  16.34   n=10
+  trial34     mean   1940.96   min   1888.32   sd  26.97   n=10
+
+  paired vs defaults (negative = better, same seeds):
+  trial51       -37.85 +/-  9.55    -4.0 sigma   won 9/10 seeds
+  trial12       -36.42 +/-  7.26    -5.0 sigma   won 10/10 seeds
+  trial53       -53.07 +/-  7.32    -7.2 sigma   won 10/10 seeds
+  trial70       -29.38 +/-  7.00    -4.2 sigma   won 9/10 seeds
+  trial34       -54.05 +/- 10.74    -5.0 sigma   won 10/10 seeds
+
+results written to tools/validate_selection.json
+
+A gap under ~2 sigma is not worth acting on; the search itself could not resolve below ~25 objective units at size 200, and pairing only narrows that.
