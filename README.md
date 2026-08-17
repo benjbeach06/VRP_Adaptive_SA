@@ -16,8 +16,8 @@ be wrong.
 | | |
 |---|---|
 | **Construction** | 8.094 s → **0.209 s** at 5,000 customers (39×), producing a **bit-identical** solution |
-| **Operator selection** | `segment_length` was 10× too coarse: **1.54% ± 0.26%** (5.8σ), reproduced on unseen seeds by 5/5 configurations at 4–7σ |
 | **Roster** | 20 operators, ablated individually across 1,641 runs |
+| **Operator selection** | a 5.8σ tuning result that **did not generalize** — see below |
 | **Best known** | 3461.10 on the reference 200-customer instance at a 60 s budget |
 
 ### The finding that mattered most
@@ -31,6 +31,24 @@ entire study, larger than every other operator combined.
 It is cheap and extremely high-volume, so it contributes through throughput rather than hit rate.
 The metric the roster had been ranked by could not see it. That result is why operator value here
 is now judged by ablation, and never by acceptance rate.
+
+### The result that did not survive
+
+An Optuna search over the operator-selection parameters found `segment_length = 10` against a
+shipped default of 100. It measured **1.54% ± 0.26%**, or 5.8σ. A separate paired re-measurement on
+unseen seeds reproduced it, 5 configurations out of 5, at 4–7σ. A third experiment isolated it to
+that one parameter — the other two contributed under 1σ.
+
+Three independent experiments agreed. It was not adopted.
+
+The whole search ran at 500 customers and vehicle capacity 400, which is about seven long routes.
+The instance actually being solved is 200 customers at capacity 25 — about forty-seven short ones.
+On that shape the tuned value **loses roughly 2%**. It is not a better default. It is the right
+value for one route-count regime and the wrong value for another, and the search had no way to say
+so, because every trial in it shared the same shape.
+
+Sigma measures whether an effect is real. It says nothing about where the effect applies. Tune on
+the shape you actually solve.
 
 ---
 
@@ -119,8 +137,14 @@ out of reach. Iteration-count termination would fix it.
 
 **Operator scoring is unfinished.** Accepted uphill moves — the entire escape mechanism in
 simulated annealing — were scored at zero until recently, so an operator whose value is exploration
-could never earn weight. The floor now added is not yet tuned, and the proposal/accept timing split
-it depends on is still open.
+could never earn weight. A floor now exists. Its value is *unproven* rather than untuned: a search
+across seven orders of magnitude could not constrain it, the surviving configurations disagreed by
+three orders of magnitude, and isolating it left under 1σ. Either the floor does not matter or the
+experiment could not see it, and those two have not been told apart.
+
+**One instance shape.** Almost every measurement here comes from one generated family at two
+capacities. The tuning failure above is what that costs: a result can be real, reproduced, and
+still local to its shape.
 
 ---
 
