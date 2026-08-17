@@ -63,17 +63,6 @@ That property is what makes the refactor safe to do late:
 - **Independent testability and import.** An evaluator that takes plain types can be exercised
   without constructing a solver.
 
-## An unmeasured hypothesis, flagged as such
-
-Profiling `CustomerBestOfkSwapInRandomRoute` showed close to half its time in `[self]` attribute
-lookups. Free functions with explicit parameters make it more natural to hoist repeated attribute
-reads into locals, which *might* recover some of that.
-
-**This is a hypothesis and must not be used to justify the refactor.** Do the split for structure,
-measure afterward, and treat any speedup as a bonus. See the withdrawn tuning result in
-[METHODOLOGY.md](../METHODOLOGY.md) for what happens when a plausible mechanism is priced before it
-is measured.
-
 ## Gate
 
 After publication, and **not interleaved with functional work.** It is a large diff touching nearly
