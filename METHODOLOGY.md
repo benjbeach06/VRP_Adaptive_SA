@@ -69,6 +69,17 @@ floor before the result.
 the trajectory. Two operators competing inside the same solve share every condition. Two separate
 solves do not, and that difference swamped several early comparisons.
 
+**All randomness goes through one seeded generator, and the search can be frozen.** Scattered
+`random` calls make a run unreproducible in ways that are invisible until a comparison disagrees
+with itself. One generator makes a run replayable; `set_deterministic_weighting` additionally makes
+operator weighting a pure function of recorded improvements, so weighting can be held fixed while
+something else is varied.
+
+This is the precondition for the other four rules rather than a fifth alongside them. An oracle that
+disagrees intermittently cannot be debugged, and a within-run comparison means nothing if the run
+cannot be repeated. It exists because a throwaway test suite was kept instead of discarded —
+preserving it forced reproducibility, and determinism fell out of that. Neither was the goal.
+
 ---
 
 ## The finding that mattered most
