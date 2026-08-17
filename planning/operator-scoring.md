@@ -49,6 +49,24 @@ for a rarely-accepted operator it rests on a handful of samples. `CombineRandomR
 artifact. It feeds nothing but the end-of-run print — scoring reads `mean_call_time` — but it is
 reported as though it were a cost.
 
+## The floor has since landed, and it broke a counter
+
+`explore_reward` now floors an accepted move's score at a small positive value, which is the fix this
+plan called for. It also broke the improvement counter, because `OperatorStats.record_accept` decided
+"did this improve?" by testing `score > 0` — and a positive floor removes the sign that test depended
+on. Every accepted move counted as an improvement until `improvement > 1e-9` replaced it.
+
+That invalidated the operator-selection tuning run outright. See
+[METHODOLOGY.md](../METHODOLOGY.md#the-result-that-was-accepted-and-then-withdrawn).
+
+It is a direct instance of the warning above: a statistic was tuned against before it was fixed.
+Worse, the statistic was *made* wrong by one of the parameters being tuned. The order in the Gate
+below is not stylistic.
+
 ## Gate
 
 None, but do the statistics before the formula, in that order.
+
+**Add an oracle for the improvement counter as part of this work.** It is now a control input, not a
+reporting field, and no test asserts anything about it — which is exactly why the suite stayed green
+through the defect.
