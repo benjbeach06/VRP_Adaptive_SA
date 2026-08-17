@@ -27,9 +27,8 @@ class OperatorStats:
     def record_reject(self) -> None:
         self.proposals += 1
 
-    def record_accept(self, score: Num):
-        if score > 0:
-            self.improvements += 1
+    def record_accept(self, score: Num, improved: bool) -> None:
+        self.improvements += improved
         self.accepts += 1
         self.proposals += 1
         self.score_sum += max(0, score)
@@ -302,9 +301,11 @@ class Operator[Ops: tuple](ABC):
         # pure function of improvements, and therefore reproducible (see set_deterministic_weighting).
         mean_cost = (self.mean_call_time if self.weight_by_time else 1.0)
 
-        sign = -1 if move.improvement < 0 else 1
-        score = max(self.explore_reward, sign * (abs(move.improvement) ** 1.5) )/ max(mean_cost, 1e-9)
-        self.stats.record_accept(score)
+        improvement = move.improvement
+        sign = -1 if improvement < 0 else 1
+        improved = improvement>1e-9
+        score = max(self.explore_reward, sign * (abs(improvement) ** 1.5) )/ max(mean_cost, 1e-9)
+        self.stats.record_accept(score, improved)
 
     def get_stats(self):
         stats = self.stats

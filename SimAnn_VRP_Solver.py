@@ -88,7 +88,7 @@ class SimAnnVRPSolver:
                  max_plateau_size: int = 2000,
                  plateau_reheat_exponent: float = 0.2,
                  empty_route_cleanup_interval: int = 100,
-                 explore_reward: Num = 1e-6):
+                 explore_reward: Num = 1e-5):
         self.sln = sln
         self.operators: list[Operator] = []
 

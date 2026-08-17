@@ -125,7 +125,7 @@ FIXED = {
 DEFAULTS = {
     "one_minus_K": DEFAULT_ONE_MINUS_K,
     "segment_length": 100,
-    "explore_reward": 1e-6,
+    "explore_reward": 1e-5,
 }
 
 

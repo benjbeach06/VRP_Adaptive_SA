@@ -9,7 +9,7 @@ def build_vrp_model():
 
     use_pre_refactor_data = True
 
-    num_customers = 200#500  # 5000
+    num_customers = 500 #200 #500  # 5000
     if use_pre_refactor_data:
         # Depot locations (x, y), and supply limits
         depot_data = [
@@ -48,7 +48,7 @@ def build_vrp_model():
 
     base_supply_limit = 35
     base_vehicles_per_depot = 1
-    capacity_per_vehicle = 25#400
+    capacity_per_vehicle = 400#400#25
 
     # For now, we unconstrain the max #routes, as they can be added and removed dynamically.
     cost_per_vehicle = 10
@@ -65,7 +65,7 @@ def build_vrp_model():
 
     sln.set_objectives(cost_per_depot = cost_per_depot, cost_per_vehicle = cost_per_vehicle, unit_travel_cost = unit_travel_cost)
 
-    solver = SimAnnVRPSolver(sln, max_time=60)
+    solver = SimAnnVRPSolver(sln, max_time=30)
 
     """
     route1 = Route([customers[cID] for cID in [1, 15, 18, 17, 5]], depots[2])
