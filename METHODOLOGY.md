@@ -1,5 +1,34 @@
 # Methodology
 
+## Provenance
+
+Most of the code and all of the tooling in this repository were written with heavy AI assistance
+(Claude). The architecture, the model design, and every decision about what to measure and whether
+to believe it are mine.
+
+This belongs at the top of the methodology document rather than in a footnote, because the two are
+the same subject. The discipline described below is not general good practice applied after the
+fact — it is what generating code quickly actually requires. An assistant produces plausible work at
+a rate that outpaces review, so the binding constraint moves from writing to verification. Every
+rule in the next section exists because something plausible turned out to be wrong.
+
+Concretely, the results here that most needed a human were the ones where the machine was confident:
+
+- The improvement-counter defect that voided the tuning run was found by reading solver output that
+  looked normal, not by any test.
+- The tuned `segment_length` that measured 5.8σ was rejected because it lost on the instance I
+  actually run — noticed while solving, not while analyzing.
+- Several intermediate results in this document were asserted before being measured, and were
+  retracted. The rule "report from bucket means, never the argmax" is one of those retractions.
+
+What I would claim from this project is not the code volume. It is that the numbers in this document
+are ones I checked myself, and that the ones which did not survive checking are written down here
+next to the ones that did.
+
+— Benjamin Beach
+
+---
+
 The interesting part of this project is not the metaheuristic. It is the measurement discipline
 around it. Most of what follows exists because a plausible-sounding improvement turned out, when
 measured, to be wrong — including one that had already been accepted.
