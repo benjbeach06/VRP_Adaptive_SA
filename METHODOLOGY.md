@@ -2,17 +2,29 @@
 
 ## Provenance
 
-Most of the code and all of the tooling in this repository were written with heavy AI assistance
-(Claude). The architecture, the model design, and every decision about what to measure and whether
-to believe it are mine.
+Part of this repository was written with AI assistance (Claude), and the split is specific enough to
+measure. The `Pre_AI` branch marks the last commit before any was used.
 
-This belongs at the top of the methodology document rather than in a footnote, because the two are
-the same subject. The discipline described below is not general good practice applied after the
-fact — it is what generating code quickly actually requires. An assistant produces plausible work at
-a rate that outpaces review, so the binding constraint moves from writing to verification. Every
-rule in the next section exists because something plausible turned out to be wrong.
+| | `Pre_AI`, 2026-08-07 | today |
+|---|---|---|
+| solver proper — model, operators, lifecycle, annealing | **4,902 lines** | 7,513 |
+| `tools/` — profiling, stress, ablation, tuning | 0 | 1,770 |
+| tests | 47 | 1,116 |
 
-Concretely, the results here that most needed a human were the ones where the machine was confident:
+The solver is mine. Its architecture — the delta arithmetic, the operator lifecycle, the
+oracle-twin convention, the annealing schedule — was designed and built before an assistant touched
+the project, and about two thirds of the current solver code is still that work.
+
+Assistance went almost entirely into **instruments**: the profiling, ablation, stress and tuning
+harnesses that produced every number below, plus a test suite that grew from 47 lines to roughly
+2,900.
+
+That is why provenance sits at the top of the methodology document instead of in a footnote. The two
+are the same subject. Generating code and experiments quickly moves the binding constraint from
+writing to verification — plausible work arrives faster than it can be reviewed — and every rule in
+the next section exists because something plausible turned out to be wrong.
+
+The results that most needed a human were the ones where the machine was confident:
 
 - The improvement-counter defect that voided the tuning run was found by reading solver output that
   looked normal, not by any test.
@@ -21,9 +33,9 @@ Concretely, the results here that most needed a human were the ones where the ma
 - Several intermediate results in this document were asserted before being measured, and were
   retracted. The rule "report from bucket means, never the argmax" is one of those retractions.
 
-What I would claim from this project is not the code volume. It is that the numbers in this document
-are ones I checked myself, and that the ones which did not survive checking are written down here
-next to the ones that did.
+What I would claim from this project is not the line count on either side of that table. It is that
+the numbers in this document are ones I checked myself, and that the ones which did not survive
+checking are written down here next to the ones that did.
 
 — Benjamin Beach
 
@@ -170,8 +182,10 @@ stays gated until ablation says otherwise.
 Stated because a portfolio project that lists only its strengths is not evidence of judgment.
 
 **No external benchmark.** Every number here is the solver measured against itself. Whether it is 2%
-or 20% off a commercial solver is unknown. A Hexaly comparison is the next planned step and the only
-measurement that would settle it.
+or 20% off a commercial solver is unknown, and it is the one thing a reader should most want to
+know. `Hexaly_VRP.py` builds the same instance for Hexaly and predates the rest of this work; the
+comparison is blocked on a license renewal, not on the code. It is the next planned step and the
+only measurement that would settle the question.
 
 **Operator selection is currently untuned.** The search that would have tuned it is void, per above.
 The shipped defaults are the hand-chosen originals, which beat all 47 search trials on the reference
