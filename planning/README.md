@@ -14,6 +14,7 @@ carries the evidence for its own priority, so the ordering is arguable rather th
 | [operator-scoring](operator-scoring.md) | ready to start | an operator whose accepted moves are all uphill scores exactly zero |
 | [end-depot-index](end-depot-index.md) | measured, small | the only operator whose cost grows with instance size |
 | [warm-start](warm-start.md) | small, isolated | saved solutions cannot be loaded back |
+| [module-structure](module-structure.md) | deferred by timeboxing | 4,662-line core model; a mechanical `self` -> typed-parameter split into a static evaluator |
 
 ## New: re-tune operator selection
 
