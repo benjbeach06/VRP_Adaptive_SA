@@ -6,3 +6,15 @@
 estimated 48 min
 
   defaults   mean  2001.21  min  1963.76
+  L_only     mean  1967.76  min  1939.79
+  trial53    mean  1958.75  min  1903.55
+  trial34    mean  1962.23  min  1932.71
+
+paired against defaults (negative = better, same seeds):
+  L_only       -33.45 +/-  9.00    -3.7 sigma   won 10/12
+  trial53      -42.46 +/- 10.01    -4.2 sigma   won 10/12
+  trial34      -38.97 +/-  6.26    -6.2 sigma   won 11/12
+
+paired against L_only (is the extra tuning buying anything?):
+  trial53       -9.01 +/- 11.08    -0.8 sigma   won 8/12
+  trial34       -5.52 +/-  7.23    -0.8 sigma   won 7/12
