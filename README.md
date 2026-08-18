@@ -110,8 +110,8 @@ deliberately corrupts a move's price; it must produce findings, or the harness i
 | `solutions/` | best-known solutions, with the instance descriptor needed to re-verify them |
 | `planning/` | what comes next, and what each item is waiting on |
 
-Operand selection is where most of the performance lives. The same move type accepts 0.00% of
-proposals with a randomly chosen destination and 0.46% with a geometrically chosen one.
+Operand selection is where most of the performance lives. The same move type accepts fewer
+proposals with a randomly chosen destination than with a geometrically chosen one.
 
 ---
 
