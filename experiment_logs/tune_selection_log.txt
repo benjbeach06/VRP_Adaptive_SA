@@ -1,3 +1,6 @@
+# HOW RUN: stdout of the void selection search above.
+# STATUS: VOID
+
 tuning ['explore_reward', 'one_minus_K', 'segment_length'] over sizes [500] at capacity 400; 3 runs/size x 60.0s; plateau_iterations 200000; budget 14400s
   defaults derive: reaction_factor 0.010000 (want 0.010000), max_plateau_size 2000 (want 2000)
   reference (defaults) size=500: 1977.21

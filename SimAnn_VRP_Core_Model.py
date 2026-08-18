@@ -117,6 +117,7 @@ def dist(loc1: tuple[Num, Num], loc2: tuple[Num, Num]) -> Num:
     return hypot(x2 - x1, y2 - y1)
 
 
+# UNUSED - DEPRECATE
 def sub_permute_list(subpermutation: Sequence[int], lst: List):
     # Applies subpermutation of list in place.
     if len(subpermutation) > len(lst):
@@ -136,6 +137,8 @@ def sub_permute_list(subpermutation: Sequence[int], lst: List):
         lst[subpermutation[i]] = lst[subpermutation[i + 1]]
     lst[subpermutation[-1]] = start
 
+
+# UNUSED - DEPRECATE
 def sub_permute_path(subpermutation: Sequence[int], path: List[CustomerVisit]):
     # Applies subpermutation of list in place.
     if len(subpermutation) > len(path):
@@ -2351,6 +2354,7 @@ class Route(VehicleNode):
 
             return ObjectiveTermDelta(travel_distance=travel_delta)
 
+        # UNUSED - DEPRECATE
         def cost_deltas_for_subpermutation(self, subpermutation: Sequence[int]) -> ObjectiveTermDelta:
             # WARNING: Must sub-permute anyway to get the cost delta. Could be cheaper to apply the operator, compute, then unapply.
             # We would like to compute via summing along a cycle of customer swaps instead. Issue: Need to actually swap customers before computing this.
@@ -3180,25 +3184,35 @@ class Route(VehicleNode):
             # Swap customers directly
             self.path[i].swap_customers(other.path[j])
 
-        def permute(self, permutation: Sequence[int]):
+        def permute(self, permutation: Sequence[int], start: int = 0):
+            """
+            Reorder path[start : start+len(permutation)] in place.
+
+            `permutation` is RELATIVE to start: entry i names the source offset for new offset i.
+            CS convention -- [2,3,4,1] means new is [path[2], path[3], path[4], path[1]], not
+            "path[1] moves to 2".
+
+            start defaults to 0, so a whole-path permutation is unchanged. A sub-range permutation
+            touches only that range, which is what lets an operator reorder a short span of a long
+            route without building a full-length identity array first.
+            """
             path = self.path
-            path_len = len(path)
-            if path_len <=1:
-                return # nothing to permute!
+            span_len = len(permutation)
+            if span_len <= 1 or len(path) <= 1:
+                return  # nothing to permute!
 
-            if len(permutation) != path_len:
-                raise ValueError("Permutation has wrong length")
+            if start < 0 or start + span_len > len(path):
+                raise ValueError("Permutation range falls outside the path")
 
-            if set(permutation) != set(range(path_len)):
-                raise ValueError("Permutation indices must be in the range from 0 to the path length - 1.")
+            if set(permutation) != set(range(span_len)):
+                raise ValueError("Permutation indices must be in the range from 0 to its length - 1.")
 
-            # Use set_values to re-link customers
-            # CS convention: ith value of permutation defines source for new path: [2,3,4,1] means new is [path[2], path[3], path[4], path[1]], not (path[1] goes to 2) etc.
-            new_path = [path[i].source_customer for i in permutation]
+            new_path = [path[start + i].source_customer for i in permutation]
 
-            for i in range(path_len):
-                path[i].replace_customer(new_path[i])
+            for i in range(span_len):
+                path[start + i].replace_customer(new_path[i])
 
+        # UNUSED - DEPRECATE
         def sub_permute(self, subpermutation: Sequence[int]):
             # Like permute, but e.g. if subpermutation is 1,3,5, then we move item 1->3->5->1
 
@@ -4411,6 +4425,10 @@ class FullSolution:
 
     #region Route operations
     def choose_random_nonempty_route(self) -> Route|None:
+        # Leaves all_routes PERMUTED when it passes over empty routes: remove() is swap-with-last
+        # and update() appends, so set-aside routes come back at the end rather than where they
+        # were. Harmless for callers that only need a route; see
+        # choose_random_nonempty_route_ordered() for callers that must not disturb draw order.
         new_empty_routes = RouteSet()
         all_routes = self.all_routes
 
@@ -4430,6 +4448,52 @@ class FullSolution:
 
         # No non-empty route found. The solution died. Utterly dead. Decimated. Destroyed. Desolate. Disintegrated. Diabolically dismantled.
         # All routes are agon and in empty_routes. But we don't care. We will crash and burn.
+        return None
+
+    def readd_set_aside_routes(self, routes_to_readd: list[tuple[Route, int]]) -> None:
+        """
+        Undo a sequence of all_routes.remove() calls, restoring positions EXACTLY.
+
+        Each entry is (route, swap_index) as remove() returned it. Unwound LIFO, because a swap
+        index is relative to the RouteSet state at the moment of its own removal.
+
+        A method rather than a closure inside the caller: a nested def allocates a new function
+        object on every call, on a path that runs once per proposal.
+        """
+        all_routes = self.all_routes
+        for route, swap_index in reversed(routes_to_readd):
+            all_routes.undo_remove(route, swap_index)
+            self.empty_routes.add(route)
+
+    def choose_random_nonempty_route_ordered(self) -> Route|None:
+        """
+        As choose_random_nonempty_route, but leaves all_routes in exactly the order it found it.
+
+        Separate method on purpose. Most operators do not care where a set-aside empty route lands,
+        and making them pay for undo_remove bookkeeping they will never read would be a tax on the
+        common path. Callers that DO care are the ones whose revert is checked for exact structural
+        round-trip: operands are drawn POSITIONALLY via rand_choice, so a permuted RouteSet changes
+        which route a later draw returns. Selection alone then diverts the search while leaving
+        cost, vehicle chains and depot membership perfectly intact -- correct by every value check
+        and still wrong.
+        """
+        set_aside: list[tuple[Route, int]] = []
+        all_routes = self.all_routes
+        num_routes = len(all_routes)
+
+        while num_routes > 0:
+            route = all_routes.choose_random()
+            if route.is_empty:
+                num_routes -= 1
+                set_aside.append((route, all_routes.remove(route)))
+            else:
+                self.readd_set_aside_routes(set_aside)
+                return route
+
+        # Nothing non-empty exists, but the RouteSet still comes back intact -- a caller handling
+        # None must not be handed a mutated solution as a side effect.
+        self.readd_set_aside_routes(set_aside)
+        return None
         return None
 
     def choose_random_route_insertion_destination(self) -> Route | LastRoute | None:

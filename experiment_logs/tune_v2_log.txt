@@ -1,3 +1,6 @@
+# HOW RUN: stdout of the v2 selection search above.
+# STATUS: VALID
+
 tuning ['explore_reward', 'one_minus_K', 'segment_length'] over sizes [200] at capacity 25; 4 runs/size x 60.0s; plateau_iterations 200000; budget 36000s
   defaults derive: reaction_factor 0.010000 (want 0.010000), max_plateau_size 2000 (want 2000)
   reference (defaults) size=200: 3467.08

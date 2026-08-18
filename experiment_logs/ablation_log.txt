@@ -1,3 +1,6 @@
+# HOW RUN: stdout of the ablation run above.
+# STATUS: VALID
+
 26 variants x 3 sizes = 78 cells
 roster of 20; not ablated: ['ChangeRandomEndDepot', 'CombineRandomRoutes', 'SplitRandomRoute']
 ~28.2 min per seed-round, budget 10h -> about 21 seeds

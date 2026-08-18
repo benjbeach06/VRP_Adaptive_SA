@@ -1,3 +1,6 @@
+# HOW RUN: pyinstrument tree for CustomerBestOfkSwapInRandomRoute, via tools/profile_one_operator.py. Absolute times inflated ~2.65x by instrumentation; compare proportions.
+# STATUS: VALID
+
 
   _     ._   __/__   _ _  _  _ _/_   Recorded: 20:58:02  Samples:  119915
  /_//_/// /_\ / //_// / //_'/ //     Duration: 60.318    CPU time: 60.047

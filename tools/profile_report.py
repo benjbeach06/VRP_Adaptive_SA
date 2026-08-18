@@ -21,8 +21,8 @@ operators cannot find legal operands. Treat any cell under ~60% actionable as a 
 early exit, not of work.
 
 USAGE
-    python tools/profile_report.py tools/profile_cold.json
-    python tools/profile_report.py tools/profile_cold.json tools/profile_warm.json
+    python tools/profile_report.py experiment_logs/profile_cold.json
+    python tools/profile_report.py experiment_logs/profile_cold.json experiment_logs/profile_warm.json
 """
 from __future__ import annotations
 

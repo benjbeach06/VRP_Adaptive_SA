@@ -13,8 +13,8 @@ def argmin(values):
 
 
 # NOTE(tuning): results of a 704-trial Optuna/TPE search over the annealing constants
-# (2026-08-11). Full report in tools/tuning_report.txt; harness in tools/tune.py; raw trials in
-# tools/tune_results.json. Defaults below are UNCHANGED -- this is a record, not an application.
+# (2026-08-11). Full report in experiment_logs/tuning_report.txt; harness in tools/tune.py; raw
+# trials in experiment_logs/tune_results.json. Defaults below are UNCHANGED -- this is a record, not an application.
 #
 #   The landscape is FLAT. Best-to-worst across the whole searched space is 3.6%, so no parameter
 #   setting is going to rescue or ruin a run. The existing hand-tuned values were already within
@@ -137,6 +137,9 @@ class SimAnnVRPSolver:
             CustomerBestOfkSwapInRandomRoute(sln, explore_reward),
             CustomerBestOfkNeighborSwapInRandomRoute(sln, explore_reward),
             RandomRoutePermutation(sln, explore_reward),
+            ReorderSpanByFarthestInsertion(sln, explore_reward),
+            ReorderRandomRouteByFarthestInsertion(sln, explore_reward),
+            ReorderLongRouteByFarthestInsertion(sln, explore_reward),
             ChangeRandomEndDepot(sln, explore_reward),
             SplitRandomRoute(sln, explore_reward),
             CombineRandomRoutes(sln, explore_reward)

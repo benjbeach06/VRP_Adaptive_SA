@@ -1,6 +1,6 @@
 """Condense a solver run log into the parts worth reading.
 
-    tools/digest_run_log.py tests/Robustness_Smoke_Test.txt
+    tools/digest_run_log.py experiment_logs/Robustness_Smoke_Test.txt
 
 A 10-minute run prints ~2000 lines, most of it a 20-operator weight vector once per second. Reading
 that by eye means skimming past the three things that actually carry information:

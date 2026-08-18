@@ -1,3 +1,6 @@
+# HOW RUN: Scratch isolation run: does segment_length alone explain the selection result? 4 configs x 12 seeds x 60s at n=500.
+# STATUS: VOID -- same defect.
+
 4 configs x 12 seeds x 60s at n=500 capacity 400
   defaults   segment_length  100  reaction_factor 0.010000  max_plateau   2000  explore_reward 1e-06
   L_only     segment_length   10  reaction_factor 0.001005  max_plateau  20000  explore_reward 1e-06

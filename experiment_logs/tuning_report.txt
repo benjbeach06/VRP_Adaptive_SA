@@ -1,3 +1,6 @@
+# HOW RUN: Report for the 704-trial schedule search.
+# STATUS: VALID
+
 SimAnnVRPSolver parameter tuning -- full report
 ===============================================
 Run date 2026-08-11.  Harness: tools/tune.py (Optuna 4.9.0, TPE).  Raw trials: tools/tune_results.json.

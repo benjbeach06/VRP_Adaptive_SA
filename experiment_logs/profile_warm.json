@@ -1,4 +1,6 @@
 {
+ "_how_run": "tools/profile_operators.py -- same, warm.",
+ "_status": "VALID",
  "started": "2026-08-15 16:58:52",
  "sizes": [
   10,

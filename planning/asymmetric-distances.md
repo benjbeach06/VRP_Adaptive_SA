@@ -55,6 +55,28 @@ attacks the mechanism that makes them valuable.
 possible the right answer is a different roster for directed instances rather than the same roster
 running slower.
 
+## Less-obvious dependencies: code that computes distance ITSELF
+
+A supplied oracle only takes effect where distance is actually asked for. Every site that computes
+distance inline keeps using euclidean geometry and silently ignores the oracle. Those sites are the
+real work of this plan, and they are easy to miss because none of them looks like a distance
+function.
+
+Known so far, NOT a complete audit:
+
+- **`farthest_insertion_order`** -- calls `math.dist` directly and squares coordinate differences by
+  hand. It reorders customers, so a directed oracle changes its answer completely. See
+  [design/furthest_distance/farthest_insertion_order.md](../design/furthest_distance/farthest_insertion_order.md).
+- **`nearest_indices` and the neighbour tables** -- numpy squared distances over a coordinate
+  array. Under direction, "nearest TO c" and "nearest FROM c" differ, so one table becomes two.
+- **`Route.closest_non_adjacent_customer`** -- used by the reversal selectors.
+- **`make_initial_solution`** -- construction walks the neighbour tables, so it inherits whatever
+  they assume.
+
+**Audit before starting.** Grep for `math.dist`, `hypot`, and hand-written squared differences. A
+missed site does not crash; it prices one part of the search with the wrong geometry, which is the
+hardest class of bug to see.
+
 ## Design notes
 
 - Keep the symmetric fast path. `is_directed = False` must cost exactly what it costs today, or the

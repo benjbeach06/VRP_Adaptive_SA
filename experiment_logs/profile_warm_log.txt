@@ -1,3 +1,6 @@
+# HOW RUN: stdout of the warm profiling run.
+# STATUS: VALID
+
 [1/12] size=10 seed=0 warm=180.0s (elapsed 0s)
     RandomRouteReassignment                propose     8.80us  apply     4.10us  actionable  66.8%
     RandomCustomerReassignment             propose    11.20us  apply     3.90us  actionable  88.5%

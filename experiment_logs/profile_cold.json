@@ -1,4 +1,6 @@
 {
+ "_how_run": "tools/profile_operators.py -- per-operator cost across instance sizes 10/100/1000/5000, cold.",
+ "_status": "VALID",
  "started": "2026-08-15 16:52:30",
  "sizes": [
   10,

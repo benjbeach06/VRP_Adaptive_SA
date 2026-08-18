@@ -1,3 +1,6 @@
+# HOW RUN: stdout of the void validation above.
+# STATUS: VOID
+
 re-measuring 6 configurations x 1 sizes x 10 runs x 60s
 seeds 200..209 (search used 0..2)
 fixed: {'initial_temp_factor': 0.0001, 'cooling_rate': 0.0001, 'plateau_reheat_exponent': 0.2}

@@ -1,4 +1,6 @@
 {
+ "_how_run": "tools/ablate_operators.py -- one-factor-at-a-time operator ablation, 10h budget, sizes 50/500/5000, capacity 400, 1641 runs over 21 seed-rounds, paired on seed, breadth-first over seeds. Commit 58ae053.",
+ "_status": "VALID",
  "variants": [
   "baseline",
   "drop:RandomRouteReassignment",

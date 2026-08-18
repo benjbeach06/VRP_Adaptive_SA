@@ -65,50 +65,10 @@ def build_vrp_model():
 
     sln.set_objectives(cost_per_depot = cost_per_depot, cost_per_vehicle = cost_per_vehicle, unit_travel_cost = unit_travel_cost)
 
-    solver = SimAnnVRPSolver(sln, max_time=30)
+    solver = SimAnnVRPSolver(sln, max_time=120)
 
-    """
-    route1 = Route([customers[cID] for cID in [1, 15, 18, 17, 5]], depots[2])
-    route2 = Route([customers[cID] for cID in [3, 9, 10, 11]], depots[1])
-    route3 = Route([customers[cID] for cID in [19, 2, 0]], depots[1])
-    route4 = Route([customers[cID] for cID in [4, 12, 6, 7]], depots[1])
-    route5 = Route([customers[cID] for cID in [13, 8, 16, 14]], depots[0])
-
-    vehicle = sln.vehicles[1]
-    sln.add_route_to_vehicle(route1, vehicle)
-    sln.add_route_to_vehicle(route2, vehicle)
-    sln.add_route_to_vehicle(route3, vehicle)
-    sln.add_route_to_vehicle(route4, vehicle)
-    sln.add_route_to_vehicle(route5, vehicle)
-
-    print(sln.solution_cost())
-
-    print('\n'.join(f"{customer.location}, {customer.demand}" for customer in customers))
-
-        (np.int32(51), np.int32(92)), 8
-        (np.int32(60), np.int32(20)), 7
-        (np.int32(82), np.int32(86)), 8
-        (np.int32(99), np.int32(23)), 3
-        (np.int32(21), np.int32(52)), 2
-        (np.int32(87), np.int32(29)), 6
-        (np.int32(1), np.int32(63)), 5
-        (np.int32(32), np.int32(75)), 10
-        (np.int32(21), np.int32(88)), 1
-        (np.int32(90), np.int32(58)), 10
-        (np.int32(91), np.int32(59)), 3
-        (np.int32(54), np.int32(63)), 9
-        (np.int32(2), np.int32(50)), 7
-        (np.int32(20), np.int32(72)), 7
-        (np.int32(17), np.int32(3)), 9
-        (np.int32(59), np.int32(13)), 2
-        (np.int32(8), np.int32(89)), 5
-        (np.int32(1), np.int32(83)), 7
-        (np.int32(43), np.int32(7)), 3
-        (np.int32(77), np.int32(80)), 4
-    """
-
-    solver.make_initial_solution()
-    #solver.make_dumb_initial_solution()
+    #solver.make_initial_solution()
+    solver.make_dumb_initial_solution()
     solver.solve()
 
     (obj, sln) = solver.get_best_snapshot()

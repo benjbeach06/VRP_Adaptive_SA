@@ -1,3 +1,6 @@
+# HOW RUN: stdout of the schedule search above.
+# STATUS: VALID
+
 tuning 5 parameters over sizes [60, 200]; 5 runs/size x 0.5s; budget 3600s
   reference (defaults) size=60: 1516.16
   reference (defaults) size=200: 3792.91

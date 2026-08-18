@@ -110,7 +110,7 @@ def main() -> int:
         proposals = op._proposal_count
         print(f"{args.operator}: {proposals} proposals, "
               f"{op.mean_propose_time * 1e6:.1f}us each under the sampler")
-        print("Compare that against the uninstrumented baseline in tools/profile_cold.json. "
+        print("Compare that against the uninstrumented baseline in experiment_logs/profile_cold.json. "
               "A sampling profiler should barely move it; a large gap means the profile is "
               "measuring itself.")
     print(f"\nhtml -> {stem}.html\ntext -> {stem}.txt")

@@ -35,7 +35,7 @@ type ReassignCustomerToNewRouteOps    = tuple[Route, int, Route | LastRoute, Dep
 # Trailing bools are the two reverse decisions, filled by evaluate() -- see _evaluates_in_batch.
 type SwapCustomerChainsOps            = tuple[Route, Chain, Route, Chain, bool, bool]
 type ReverseCustomerChainOps          = tuple[Route, Chain]
-type PermuteRouteOps                  = tuple[Route, Sequence[int]]
+type PermuteChainOps                  = tuple[Route, Chain, Sequence[int]]
 type ChangeEndDepotOps                = tuple[Route, Depot]
 type DisposeOfEmptyRoutesOps          = tuple[RouteSet]
 type SplitRouteOps                    = tuple[Route, int, Depot]
@@ -499,29 +499,45 @@ def invert_permutation(permutation: Sequence[int]) -> Sequence[int]:
     inv[idx] = np.arange(len(inv), dtype=inv.dtype)
     return cast(Sequence[int], inv)
 
-class PermuteRoute(OperatorBL[PermuteRouteOps]):
-    # Not yet given real delta math (planned for a later pass) - prices by applying the
-    # permutation and measuring the change. _evaluates_by_applying changes only how evaluate()
-    # FINISHES (already_applied, _applied, version bump); pricing still goes through
+class PermuteChain(OperatorBL[PermuteChainOps]):
+    """
+    Reorder one contiguous chain of a route. Subsumes whole-route permutation via a full-length
+    chain.
+
+    The chain is a Chain for naming consistency with the rest of the model, but only a range is
+    ever useful: an int, or a range of length <= 1, has no reordering to do and returns NOOP.
+
+    `permutation` is RELATIVE to the chain. That is the point of this operator -- an operator
+    reordering a 5-customer span of a 70-customer route passes 5 entries, not 70. The previous
+    whole-route form made every such proposal O(route length) before any work started.
+    """
+
+    # Not yet given real delta math - prices by applying the permutation and measuring the change.
+    # _evaluates_by_applying changes only how evaluate() FINISHES; pricing still goes through
     # _evaluate_impl, so this operator can still report INVALID or NOOP like any other.
     _evaluates_by_applying = True
 
-    def _evaluate_impl(self, operands: PermuteRouteOps):
+    def _evaluate_impl(self, operands: PermuteChainOps):
+        route, chain, permutation = operands
+        span = as_chain_range(chain)
+        if len(span) <= 1 or len(permutation) <= 1:
+            return None, MoveKind.NOOP
+
         # Route-local O(path length) measurement, not a full-solution objective_terms() diff.
-        route, _ = operands
         before = route.total_distance()
         self._revert_info = self._apply_impl(operands)
         after = route.total_distance()
         return ObjectiveTermDelta(travel_distance=after - before), MoveKind.VALID
 
-    def _apply_impl(self, operands: PermuteRouteOps) -> tuple[Route, Sequence[int]]:
-        route, permutation = operands
-        route.permute(permutation)
-        return route, invert_permutation(permutation)
+    def _apply_impl(self, operands: PermuteChainOps) -> tuple[Route, int, Sequence[int]]:
+        route, chain, permutation = operands
+        start = as_chain_range(chain).start
+        route.permute(permutation, start)
+        return route, start, invert_permutation(permutation)
 
     def _revert_impl(self, move, revert_info):
-        route, inv_permutation = revert_info
-        route.permute(inv_permutation)
+        route, start, inv_permutation = revert_info
+        route.permute(inv_permutation, start)
 
 
 class ChangeEndDepot(OperatorBL[ChangeEndDepotOps]):
@@ -805,7 +821,3 @@ class _SequentialCombineRoutes(OperatorBL[CombineRoutesOps]):
         # Step 1 undone: the customers go home.
         visits = route1.remove_customer_chain(range(dest_idx, dest_idx + len(chain)))
         route2.insert_customer_chain(visits, 0, False)
-
-
-# TODO(future-operator): SubPermuteRoute, using the existing (unused)
-# Route.cost_deltas_for_subpermutation -- not yet decided how best to leverage this one.

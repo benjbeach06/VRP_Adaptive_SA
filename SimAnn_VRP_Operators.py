@@ -1,3 +1,4 @@
+import bisect
 import time
 from SimAnn_VRP_BLOperators import *
 import random
@@ -1105,23 +1106,162 @@ class CustomerBestOfkNeighborSwapInRandomRoute(BestOfCandidates[SwapCustomerChai
         super().__init__(sln, explore_reward, SwapCustomerChains(sln), neighbor_intra_route_swap_pairs, k=5)
 
 
-class RandomRoutePermutation(Operator[PermuteRouteOps]):
+class RandomRoutePermutation(Operator[PermuteChainOps]):
     def __init__(self, sln: FullSolution, explore_reward: Num):
-        super().__init__(sln, explore_reward, PermuteRoute(sln))
+        super().__init__(sln, explore_reward, PermuteChain(sln))
 
     def _operand_selection_impl(self):
-        sln = self.sln
-
-        route = rand_choice(sln.all_routes)
-
-        permutation = list(range(len(route.path)))
-
-        if len(route.path) <= 1:
-            return route, permutation
-
+        route = rand_choice(self.sln.all_routes)
+        path_len = len(route.path)
+        permutation = list(range(path_len))
+        # PermuteChain returns NOOP for a chain of length <= 1, so no length guard is needed here.
         rand_shuffle(permutation)
+        return route, range(0, path_len), permutation
 
-        return route, permutation
+def farthest_insertion_order(points: Sequence[tuple], left: tuple, right: tuple) -> list[int]:
+    """
+    Order `points` between two fixed endpoints by farthest insertion. Returns indices into
+    `points`. The fixed-endpoint Hamiltonian path problem, solved approximately.
+
+    Why farthest insertion and not the alternatives, and the measured O(n^2):
+    design/furthest_distance/farthest_insertion_order.md
+    """
+    n = len(points)
+    if n == 0:
+        return []
+
+    def sq(p, q):
+        return (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2
+
+    # SELECTION uses squared distance; PLACEMENT below uses true distance. Not
+    # interchangeable -- a sum of squares does not order like a sum of lengths.
+    sq_dist_to_path = [min(sq(p, left), sq(p, right)) for p in points]
+    seq: list[tuple[int, tuple]] = [(-1, left), (-2, right)]
+    remaining = set(range(n))
+
+    while remaining:
+        # One linear scan, ties to the lowest index. Sorting here costs a log factor; see
+        # design/furthest_distance/farthest_insertion_order.md
+        chosen, best_dist = -1, -1.0
+        for index in remaining:
+            dist = sq_dist_to_path[index]
+            if dist > best_dist or (dist == best_dist and index < chosen):
+                chosen, best_dist = index, dist
+        remaining.discard(chosen)
+        here = points[chosen]
+
+        best_at, best_cost = 0, float("inf")
+        for pos in range(len(seq) - 1):
+            a, b = seq[pos][1], seq[pos + 1][1]
+            cost = math.dist(a, here) + math.dist(here, b) - math.dist(a, b)
+            if cost < best_cost:
+                best_at, best_cost = pos + 1, cost
+        seq.insert(best_at, (chosen, here))
+
+        for i in remaining:
+            d = sq(points[i], here)
+            if d < sq_dist_to_path[i]:
+                sq_dist_to_path[i] = d
+
+    return [index for index, _ in seq if index >= 0]
+
+
+class _FarthestInsertionReorderBase(Operator[PermuteChainOps]):
+    """
+    Rebuild a route span by farthest insertion. Subclasses choose the span only.
+
+    Design, cost, and the reasoning behind each variant: design/furthest_distance/reorder_operators.md
+    """
+
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward, PermuteChain(sln))
+
+    def _choose_span(self) -> tuple[Route, int, int] | None:
+        """Route and half-open span [start, stop) to rebuild. None when nothing is selectable."""
+        raise NotImplementedError
+
+    def _operand_selection_impl(self):
+        chosen = self._choose_span()
+        if chosen is None:
+            route = rand_choice(self.sln.all_routes)
+            return route, range(0, 0), []
+
+        route, start, stop = chosen
+        path = route.path
+        span = range(start, stop)
+        if stop - start < 3:
+            # Identity of the SPAN only. PermuteChain reports NOOP for length <= 1; a short span
+            # still prices as a zero-delta move, matching RandomRoutePermutation's behaviour.
+            return route, span, list(range(stop - start))
+
+        # Fixed endpoints are OUTSIDE the span -- whatever it attaches to on each side. Falling
+        # back to the depots is what makes a WHOLE-route rebuild well posed.
+        left = (path[start - 1].source_customer.location if start > 0
+                else route.start_depot.location)
+        right = (path[stop].source_customer.location if stop < len(path)
+                 else route.end_depot.location)
+
+        # The permutation is RELATIVE to the span, so a short span in a long route costs the span,
+        # not the route. No full-length identity array is built.
+        order = farthest_insertion_order(
+            [path[i].source_customer.location for i in span], left, right)
+        return route, span, order
+
+
+class ReorderSpanByFarthestInsertion(_FarthestInsertionReorderBase):
+    """A uniformly random span of a random route. Position and length both uniform."""
+
+    def _choose_span(self):
+        route = self.sln.choose_random_nonempty_route_ordered()
+        if route is None:
+            return None
+        path_len = len(route.path)
+        if path_len < 3:
+            return route, 0, path_len
+        length = rand_int_inclusive(3, path_len)
+        start = rand_int_inclusive(0, path_len - length)
+        return route, start, start + length
+
+
+class ReorderRandomRouteByFarthestInsertion(_FarthestInsertionReorderBase):
+    """The whole of a uniformly random route, depot to depot."""
+
+    def _choose_span(self):
+        route = self.sln.choose_random_nonempty_route_ordered()
+        if route is None:
+            return None
+        return route, 0, len(route.path)
+
+
+class ReorderLongRouteByFarthestInsertion(_FarthestInsertionReorderBase):
+    """
+    Whole route, chosen weighted by SQUARED travel distance.
+
+    Selection is O(total customers) per proposal -- no route caches its length. Accepted for
+    now; planning/route-distance-tracking.md makes it O(1).
+    """
+
+    def _choose_span(self):
+        routes = self.sln.all_routes
+        if len(routes) == 0:
+            return None
+
+        # Cumulative squared distance, one weighted draw. Read-only, so it cannot permute the
+        # RouteSet the way choose_random_nonempty_route does.
+        cumulative, running = [], 0.0
+        for route in routes:
+            distance = route.total_distance()
+            running += distance * distance
+            cumulative.append(running)
+        if running <= 0.0:
+            return None
+
+        index = bisect.bisect_left(cumulative, rand_unit() * running)
+        route = routes[min(index, len(routes) - 1)]
+        if route.is_empty:
+            return None
+        return route, 0, len(route.path)
+
 
 class ChangeRandomEndDepot(Operator[ChangeEndDepotOps]):
     # INVALID -- by far the worst in the roster -- and every one of those is this operator picking

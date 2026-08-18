@@ -1,3 +1,6 @@
+# HOW RUN: Single-operator profile, same driver.
+# STATUS: VALID
+
 
   _     ._   __/__   _ _  _  _ _/_   Recorded: 21:01:41  Samples:  117376
  /_//_/// /_\ / //_// / //_'/ //     Duration: 60.029    CPU time: 57.094
