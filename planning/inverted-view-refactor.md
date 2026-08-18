@@ -41,17 +41,26 @@ that operator alone was 57-67% of total solver wall time before the roster chang
 executing in the operator's own frames — `[self]` in a pyinstrument tree — is already 44% of it.
 Turning an attribute read into anything more expensive there is measurable.
 
-**The payoff is not yet proven.** Geometric guidance had never been tried when this was designed.
-It now has: see the acceptance figures in `../README.md`. That evidence is what the gate below is
-for.
+**The payoff is still not proven, and the evidence that exists points both ways.** Geometric
+guidance had never been tried when this was designed. It has now been measured
+([RESULTS.md](../RESULTS.md)): acceptance went 0.00% -> 0.30% on relocate and 0.01% -> 0.46% on
+cross-exchange, which is decisive. The **objective** effect is +15.56 +/- 7.42, about 2 sigma,
+under the bar.
+
+So guidance demonstrably works as a mechanism and is not demonstrably worth its cost. This refactor
+exists to make guidance cheaper, and nothing yet establishes that cheaper guidance buys objective.
 
 ## Gate
 
 Do not start until all three hold:
 
-1. Neighbor-guided operators show a clear acceptance advantage over their blind twins. (Met — the
-   guided relocate and cross-exchange both beat their random-destination counterparts by more than
-   an order of magnitude.)
+1. **Ablation** — not acceptance — shows the neighbor-guided operators carry objective value at
+   |sigma| >= 3. **NOT MET.** This condition originally read "a clear acceptance advantage over
+   their blind twins," which is met by more than an order of magnitude and is the wrong test: the
+   headline finding of this project is that acceptance rate cannot rank operators, since the
+   roster's most valuable one accepts 1.09% of proposals. Gating a large refactor on the metric
+   that was already shown to be blind would repeat the mistake the ablation study exists to
+   correct.
 2. A before/after benchmark on `CustomerBestOfkSwapInRandomRoute` propose time is set up FIRST, so
    the regression is measured rather than discovered. `tools/profile_one_operator.py` already does
    this; note it inflates absolute times ~2.65x, so compare proportions or run it uninstrumented.

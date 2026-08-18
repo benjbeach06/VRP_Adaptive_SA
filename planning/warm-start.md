@@ -35,7 +35,8 @@ will pass, and every objective will be meaningless.
 
 ## Verification
 
-`solutions/best_3473.64.json` was checked against a freshly built seed-42 instance with geometry
+`solutions/best_3461.10.json` — and every other file in `solutions/` — was checked against a
+freshly built seed-42 instance with geometry
 recomputed from scratch: 200/200 customers covered exactly once, zero overload, vehicle depot
 chaining intact, travel and objective agreeing to 5e-13. A loader should reproduce that objective
 exactly on load, before any solving happens. That is the test.
