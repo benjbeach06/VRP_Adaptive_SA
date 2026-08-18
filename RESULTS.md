@@ -197,5 +197,10 @@ wider search (`planning/joint-parameter-search.md`).
 **Operator selection is untuned, and the search says it does not need to be.** Shipped defaults are
 the hand-chosen originals.
 
-**Operator scoring is unfinished.** The `explore_reward` floor exists but its value is unproven —
-the only search that addressed it is the void one. See `planning/operator-scoring.md`.
+**The exploration-scoring rule is unproven, not unimplemented.** Accepted uphill moves used to score
+zero, so an operator that paid off through exploration could never earn weight. The `explore_reward`
+floor fixes that, and because it is divided by `mean_cost` it separates cheap explorers from
+expensive ones rather than merely rewarding exploration. Whether it *helps* is not established: the
+parameter spanned nine orders of magnitude in the search above and the landscape was flat. That is a
+statement about statistical power — the effect sits below the noise floor, and resolving it needs
+many more runs rather than a different experiment. See `planning/operator-scoring.md`.

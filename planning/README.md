@@ -11,7 +11,7 @@ carries the evidence for its own priority, so the ordering is arguable rather th
 | [inverted-view-refactor](inverted-view-refactor.md) | deferred, gate NOT met | O(1) "where is customer j"; needs ablation evidence for guidance, which currently sits at 2 sigma |
 | [kd-tree-neighbors](kd-tree-neighbors.md) | deferred, not needed yet | neighbor table build is O(n^2); only matters above ~50k customers |
 | [ruin-and-recreate](ruin-and-recreate.md) | ready to start | the real gap against modern VRP; primitives already landed |
-| [operator-scoring](operator-scoring.md) | partly done | the explore_reward floor landed; the SCORE/COST statistics split and a counter oracle remain |
+| [operator-scoring](operator-scoring.md) | implemented, unproven | the floor selects CHEAP explorers over expensive ones; effect is below the current noise floor |
 | [end-depot-index](end-depot-index.md) | measured, small | the only operator whose cost grows with instance size |
 | [warm-start](warm-start.md) | small, isolated | saved solutions cannot be loaded back |
 | [module-structure](module-structure.md) | deferred by timeboxing | 4,662-line core model; a mechanical `self` -> typed-parameter split into a static evaluator |

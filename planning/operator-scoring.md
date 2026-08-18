@@ -1,30 +1,54 @@
-# Operator scoring: uphill moves score zero
+# Operator scoring: uphill moves scored zero
 
-**Status: partly done, and what remains changed shape.** The floor this plan asked for has landed —
-`explore_reward` — so accepted uphill moves no longer score zero. Two things are still open, and
-both came out of landing it:
+**Status: implemented. Sound as a mechanism, unproven as a gain — and proving it needs more runs,
+not a different experiment.**
 
-1. **The floor's value is unproven and a search cannot set it.** `explore_reward` was one of three
-   parameters in the 149-trial search, which came back flat ([RESULTS.md](../RESULTS.md)). Either
-   the value does not matter or the experiment could not see it, and those have not been told apart.
-2. **The statistics still cannot express the SCORE/COST split** — the original `TODO(rescore)`,
-   untouched. See below.
-
-Plus one new item: the improvement counter needs an oracle, because landing the floor broke it.
+The statistics are now expressive enough to distinguish exploration from exploitation. What remains
+is the `TODO(rescore)` SCORE/COST split described below, an oracle for the improvement counter, and
+patience.
 
 ## The original problem, kept for the record
 
-`Operator.update_stats_for_accept` scores an accepted move as:
+`Operator.update_stats_for_accept` **scored** an accepted move as:
 
 ```python
 sign = -1 if move.improvement < 0 else 1
 score = max(0, sign * (abs(move.improvement) ** 1.5) / mean_cost)
 ```
 
-An accepted move that made the solution worse scores `max(0, negative)` = **exactly zero**.
+An accepted move that made the solution worse scored `max(0, negative)` = **exactly zero**.
 
 In simulated annealing, uphill acceptance is the escape mechanism. So an operator whose value is
-exploration rather than exploitation can never earn weight, no matter how well it performs.
+exploration rather than exploitation could never earn weight, no matter how well it performed.
+
+## What it scores now
+
+```python
+sign = -1 if improvement < 0 else 1
+improved = improvement > 1e-9
+score = max(self.explore_reward, sign * (abs(improvement) ** 1.5)) / max(mean_cost, 1e-9)
+```
+
+An accepted uphill move is now worth `explore_reward / mean_cost` instead of nothing.
+
+**The floor is not a reward for exploring. It is a selection mechanism between explorers.** Because
+the floor is divided by `mean_cost`, two operators whose accepted moves are all uphill are separated
+by *how expensive their exploration is*: a cheap explorer earns more weight per accepted move than
+an expensive one. Weight follows `score_sum / proposals`, so an operator that explores slowly but is
+accepted often lands near one that explores quickly but is accepted rarely — which is the intended
+equivalence. Frequency and cost trade off against each other, exactly as they already do on the
+exploitation side.
+
+The effect is to **gravitate toward cheap exploration**, not to decide whether exploration is worth
+having. The solver spends some of its budget escaping local optima regardless; this makes it spend
+that budget on the cheapest available source.
+
+**Not yet proven useful.** Establishing that would need many more runs than have been spent —
+`explore_reward` spanned nine orders of magnitude in the 149-trial search and the landscape was
+indistinguishable from noise ([RESULTS.md](../RESULTS.md)). That is a statement about statistical
+power, not about the mechanism. The honest position is that the rule is well-motivated and its
+effect is below the current noise floor, which is another reason iteration-count termination
+(`joint-parameter-search.md`) is the gating piece of work.
 
 ## The measurement
 
@@ -74,23 +98,6 @@ withdrawal and the rerun are in
 It is a direct instance of the warning above: a statistic was tuned against before it was fixed.
 Worse, the statistic was *made* wrong by one of the parameters being tuned. The order in the Gate
 below is not stylistic.
-
-**And the rerun could not set the floor either.** With the counter fixed, 149 trials over 10 hours
-came back flat — `explore_reward` spanned nine orders of magnitude in the search space and the
-landscape was indistinguishable from noise. So the floor's value remains unproven, and it will not
-be settled by searching harder. It needs either a mechanism argument or a measurement aimed at
-exploration specifically, which is what the ablation question below is really asking.
-
-## What would actually answer it
-
-The open question was never "what number should the floor be." It is **whether an operator's
-exploration value is real**, which is an ablation question and not a scoring one.
-`RandomRouteReassignment` accepted 267 moves, all uphill. Drop it from the roster and measure the
-objective. If the effect clears |sigma| >= 3, exploration value is real and the scoring should
-express it; if it does not, the floor is decoration and the honest move is to remove it.
-
-That experiment is cheap — one more arm in the existing ablation harness — and it is worth more
-than any further tuning of the formula.
 
 ## Gate
 
