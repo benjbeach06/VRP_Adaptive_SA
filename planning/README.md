@@ -15,6 +15,9 @@ carries the evidence for its own priority, so the ordering is arguable rather th
 | [end-depot-index](end-depot-index.md) | measured, small | the only operator whose cost grows with instance size |
 | [warm-start](warm-start.md) | small, isolated | saved solutions cannot be loaded back |
 | [module-structure](module-structure.md) | deferred by timeboxing | 4,662-line core model; a mechanical `self` -> typed-parameter split into a static evaluator |
+| [route-distance-tracking](route-distance-tracking.md) | small, self-verifying | no route knows its own length; maintain it like load, with an oracle twin |
+| [vehicle-time-limits](vehicle-time-limits.md) | blocked on the above | travel + service + loading time per vehicle; the largest step toward realistic dispatch |
+| [asymmetric-distances](asymmetric-distances.md) | gated on a real need | supplied distance oracle, directed by default; breaks O(1) chain reversal |
 
 ## New: re-tune operator selection
 

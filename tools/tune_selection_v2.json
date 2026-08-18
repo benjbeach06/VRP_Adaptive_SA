@@ -1,0 +1,1375 @@
+{
+  "config": {
+    "sizes": [
+      200
+    ],
+    "runs_per_size": 4,
+    "seconds_per_run": 60.0,
+    "budget_seconds": 36000.0
+  },
+  "reference": {
+    "200": 3467.081426897626
+  },
+  "defaults": {
+    "one_minus_K": 0.00010049830824165884,
+    "segment_length": 100,
+    "explore_reward": 1e-05
+  },
+  "fixed": {
+    "initial_temp_factor": 0.0001,
+    "cooling_rate": 0.0001,
+    "plateau_reheat_exponent": 0.2
+  },
+  "trials": [
+    {
+      "number": 0,
+      "params": {
+        "one_minus_K": 0.00010049830824165884,
+        "segment_length": 100,
+        "explore_reward": 1e-05
+      },
+      "value": 1.0068570818013578
+    },
+    {
+      "number": 1,
+      "params": {
+        "one_minus_K": 0.0017076067979915803,
+        "segment_length": 6,
+        "explore_reward": 1.2691497543974335e-08
+      },
+      "value": 1.005839279504902
+    },
+    {
+      "number": 2,
+      "params": {
+        "one_minus_K": 5.143762316175361e-06,
+        "segment_length": 37,
+        "explore_reward": 3.7434170826883273e-06
+      },
+      "value": 0.9995049813588917
+    },
+    {
+      "number": 3,
+      "params": {
+        "one_minus_K": 0.0022580519902117725,
+        "segment_length": 72,
+        "explore_reward": 3.1148692772938774e-05
+      },
+      "value": 1.0104187654413563
+    },
+    {
+      "number": 4,
+      "params": {
+        "one_minus_K": 0.00018730168715554954,
+        "segment_length": 147,
+        "explore_reward": 0.0005859228248372566
+      },
+      "value": 1.0123918969071095
+    },
+    {
+      "number": 5,
+      "params": {
+        "one_minus_K": 1.0694663615954823e-06,
+        "segment_length": 1,
+        "explore_reward": 6.197582014308458e-08
+      },
+      "value": 1.0090459376300573
+    },
+    {
+      "number": 6,
+      "params": {
+        "one_minus_K": 0.00019161137021398873,
+        "segment_length": 236,
+        "explore_reward": 0.00017102337883276647
+      },
+      "value": 1.0045626789628723
+    },
+    {
+      "number": 7,
+      "params": {
+        "one_minus_K": 0.002260459155565617,
+        "segment_length": 122,
+        "explore_reward": 7.1589934880360265e-06
+      },
+      "value": 1.0231051966178788
+    },
+    {
+      "number": 8,
+      "params": {
+        "one_minus_K": 0.00031237281707197285,
+        "segment_length": 17,
+        "explore_reward": 8.984792779781075e-08
+      },
+      "value": 1.0052758735647678
+    },
+    {
+      "number": 9,
+      "params": {
+        "one_minus_K": 3.378295258442781e-05,
+        "segment_length": 128,
+        "explore_reward": 0.000920635071759226
+      },
+      "value": 1.0036961122148287
+    },
+    {
+      "number": 10,
+      "params": {
+        "one_minus_K": 1.2379791035380785e-06,
+        "segment_length": 665,
+        "explore_reward": 1.2535332432137121e-09
+      },
+      "value": 1.0010722379082697
+    },
+    {
+      "number": 11,
+      "params": {
+        "one_minus_K": 1.5785529762836124e-06,
+        "segment_length": 651,
+        "explore_reward": 1.2070007936412624e-09
+      },
+      "value": 0.9954239759179756
+    },
+    {
+      "number": 12,
+      "params": {
+        "one_minus_K": 6.919852825673107e-06,
+        "segment_length": 18,
+        "explore_reward": 1.0438548190816978e-06
+      },
+      "value": 1.0065061121581036
+    },
+    {
+      "number": 13,
+      "params": {
+        "one_minus_K": 5.9634473758682545e-06,
+        "segment_length": 956,
+        "explore_reward": 1.094468938628664e-09
+      },
+      "value": 1.0161631754939582
+    },
+    {
+      "number": 14,
+      "params": {
+        "one_minus_K": 5.1377193761299306e-06,
+        "segment_length": 1,
+        "explore_reward": 7.559111125831883e-07
+      },
+      "value": 1.0069723781700697
+    },
+    {
+      "number": 15,
+      "params": {
+        "one_minus_K": 1.5915541069362792e-05,
+        "segment_length": 31,
+        "explore_reward": 1.4556900309334259e-08
+      },
+      "value": 1.0053449374258607
+    },
+    {
+      "number": 16,
+      "params": {
+        "one_minus_K": 2.3330906386791123e-06,
+        "segment_length": 5,
+        "explore_reward": 5.00210519679787e-07
+      },
+      "value": 1.017564130626826
+    },
+    {
+      "number": 17,
+      "params": {
+        "one_minus_K": 2.1130201177323355e-05,
+        "segment_length": 398,
+        "explore_reward": 6.689581600454684e-09
+      },
+      "value": 1.0055174574918013
+    },
+    {
+      "number": 18,
+      "params": {
+        "one_minus_K": 2.684422795142021e-06,
+        "segment_length": 5,
+        "explore_reward": 4.491203395530756e-05
+      },
+      "value": 1.005541374679543
+    },
+    {
+      "number": 19,
+      "params": {
+        "one_minus_K": 1.1896448324999088e-05,
+        "segment_length": 37,
+        "explore_reward": 2.0605631243382584e-07
+      },
+      "value": 0.9952992717210379
+    },
+    {
+      "number": 20,
+      "params": {
+        "one_minus_K": 3.385645271501886e-05,
+        "segment_length": 368,
+        "explore_reward": 1.3967245357253896e-07
+      },
+      "value": 1.0083133471017527
+    },
+    {
+      "number": 21,
+      "params": {
+        "one_minus_K": 1.0740076928994047e-05,
+        "segment_length": 45,
+        "explore_reward": 3.140269777506165e-06
+      },
+      "value": 0.9943704492400578
+    },
+    {
+      "number": 22,
+      "params": {
+        "one_minus_K": 1.2694777046339417e-05,
+        "segment_length": 42,
+        "explore_reward": 1.8676860132284212e-06
+      },
+      "value": 0.9966317509636825
+    },
+    {
+      "number": 23,
+      "params": {
+        "one_minus_K": 6.124151547876856e-05,
+        "segment_length": 12,
+        "explore_reward": 2.5648259502176845e-07
+      },
+      "value": 0.9974603886796548
+    },
+    {
+      "number": 24,
+      "params": {
+        "one_minus_K": 2.6831387231956834e-06,
+        "segment_length": 2,
+        "explore_reward": 3.2254123241554997e-09
+      },
+      "value": 1.0136416341227232
+    },
+    {
+      "number": 25,
+      "params": {
+        "one_minus_K": 9.560963330600802e-06,
+        "segment_length": 55,
+        "explore_reward": 6.13309054202651e-08
+      },
+      "value": 0.995481838365232
+    },
+    {
+      "number": 26,
+      "params": {
+        "one_minus_K": 2.8590139192172327e-05,
+        "segment_length": 9,
+        "explore_reward": 1.594212525831785e-05
+      },
+      "value": 1.00551396266202
+    },
+    {
+      "number": 27,
+      "params": {
+        "one_minus_K": 2.29465588628045e-06,
+        "segment_length": 238,
+        "explore_reward": 1.9610647158256396e-08
+      },
+      "value": 1.007665349966647
+    },
+    {
+      "number": 28,
+      "params": {
+        "one_minus_K": 6.7025771335215e-05,
+        "segment_length": 24,
+        "explore_reward": 3.1198294995949364e-07
+      },
+      "value": 1.0101498511847966
+    },
+    {
+      "number": 29,
+      "params": {
+        "one_minus_K": 0.0007955201882153161,
+        "segment_length": 75,
+        "explore_reward": 3.6376101967083947e-06
+      },
+      "value": 1.0092455421336333
+    },
+    {
+      "number": 30,
+      "params": {
+        "one_minus_K": 3.4400080593909326e-06,
+        "segment_length": 3,
+        "explore_reward": 0.00012609514383463637
+      },
+      "value": 1.0188168206814971
+    },
+    {
+      "number": 31,
+      "params": {
+        "one_minus_K": 1.0025761251606932e-05,
+        "segment_length": 55,
+        "explore_reward": 4.252000714111802e-08
+      },
+      "value": 1.0026746356619227
+    },
+    {
+      "number": 32,
+      "params": {
+        "one_minus_K": 7.610022154951938e-06,
+        "segment_length": 79,
+        "explore_reward": 3.491813516202452e-09
+      },
+      "value": 0.9907802913398495
+    },
+    {
+      "number": 33,
+      "params": {
+        "one_minus_K": 1.6172976250104862e-06,
+        "segment_length": 208,
+        "explore_reward": 4.0115825349467884e-09
+      },
+      "value": 0.9992072212295444
+    },
+    {
+      "number": 34,
+      "params": {
+        "one_minus_K": 4.254176640676446e-06,
+        "segment_length": 82,
+        "explore_reward": 2.7668331646543076e-09
+      },
+      "value": 0.9986335028298672
+    },
+    {
+      "number": 35,
+      "params": {
+        "one_minus_K": 8.5939256949999e-06,
+        "segment_length": 29,
+        "explore_reward": 2.5071991836766966e-08
+      },
+      "value": 1.0025753325725848
+    },
+    {
+      "number": 36,
+      "params": {
+        "one_minus_K": 1.9325356975857686e-05,
+        "segment_length": 510,
+        "explore_reward": 8.14748856210539e-09
+      },
+      "value": 0.9991592453621009
+    },
+    {
+      "number": 37,
+      "params": {
+        "one_minus_K": 5.077061924225251e-05,
+        "segment_length": 45,
+        "explore_reward": 1.5262432991346366e-09
+      },
+      "value": 0.999788457120814
+    },
+    {
+      "number": 38,
+      "params": {
+        "one_minus_K": 1.4818582936205683e-06,
+        "segment_length": 9,
+        "explore_reward": 2.3860719502755877e-06
+      },
+      "value": 1.0092117129865203
+    },
+    {
+      "number": 39,
+      "params": {
+        "one_minus_K": 1.2771317989511095e-05,
+        "segment_length": 174,
+        "explore_reward": 7.101887985222166e-06
+      },
+      "value": 1.0056869052006896
+    },
+    {
+      "number": 40,
+      "params": {
+        "one_minus_K": 0.00012255242799626996,
+        "segment_length": 104,
+        "explore_reward": 7.321566918367337e-09
+      },
+      "value": 1.006070547398955
+    },
+    {
+      "number": 41,
+      "params": {
+        "one_minus_K": 8.186749694357616e-06,
+        "segment_length": 59,
+        "explore_reward": 3.763647085853528e-08
+      },
+      "value": 0.9977193560014463
+    },
+    {
+      "number": 42,
+      "params": {
+        "one_minus_K": 2.3999515646716083e-05,
+        "segment_length": 24,
+        "explore_reward": 1.341414260953405e-07
+      },
+      "value": 0.9967568106918808
+    },
+    {
+      "number": 43,
+      "params": {
+        "one_minus_K": 1.293476524820421e-05,
+        "segment_length": 17,
+        "explore_reward": 2.3444517335620794e-09
+      },
+      "value": 0.9988115867020672
+    },
+    {
+      "number": 44,
+      "params": {
+        "one_minus_K": 3.5425918363104607e-06,
+        "segment_length": 90,
+        "explore_reward": 9.072727727478907e-08
+      },
+      "value": 0.9987018802502382
+    },
+    {
+      "number": 45,
+      "params": {
+        "one_minus_K": 6.12249201339707e-06,
+        "segment_length": 53,
+        "explore_reward": 5.120447067741887e-09
+      },
+      "value": 1.0022848303978602
+    },
+    {
+      "number": 46,
+      "params": {
+        "one_minus_K": 4.416760677506425e-05,
+        "segment_length": 139,
+        "explore_reward": 1.4314130501991191e-06
+      },
+      "value": 1.0025862741102296
+    },
+    {
+      "number": 47,
+      "params": {
+        "one_minus_K": 4.64313263975793e-06,
+        "segment_length": 921,
+        "explore_reward": 2.538859712464913e-07
+      },
+      "value": 1.0109547708194848
+    },
+    {
+      "number": 48,
+      "params": {
+        "one_minus_K": 1.0222206355265117e-05,
+        "segment_length": 316,
+        "explore_reward": 1.1529390377446337e-08
+      },
+      "value": 1.0015989572499873
+    },
+    {
+      "number": 49,
+      "params": {
+        "one_minus_K": 1.7333977697760815e-06,
+        "segment_length": 33,
+        "explore_reward": 1.896788629221763e-09
+      },
+      "value": 0.9975879222224009
+    },
+    {
+      "number": 50,
+      "params": {
+        "one_minus_K": 1.8320201221682414e-05,
+        "segment_length": 15,
+        "explore_reward": 8.530770152156821e-07
+      },
+      "value": 1.0113461518085485
+    },
+    {
+      "number": 51,
+      "params": {
+        "one_minus_K": 1.1937813792694813e-05,
+        "segment_length": 43,
+        "explore_reward": 1.7572432516715175e-06
+      },
+      "value": 0.9977287110950355
+    },
+    {
+      "number": 52,
+      "params": {
+        "one_minus_K": 7.598298348513894e-06,
+        "segment_length": 23,
+        "explore_reward": 9.440952565408342e-06
+      },
+      "value": 1.0029429462361723
+    },
+    {
+      "number": 53,
+      "params": {
+        "one_minus_K": 1.592326070664078e-05,
+        "segment_length": 39,
+        "explore_reward": 4.877234379238792e-07
+      },
+      "value": 0.9952958603838495
+    },
+    {
+      "number": 54,
+      "params": {
+        "one_minus_K": 1.625851316227763e-05,
+        "segment_length": 60,
+        "explore_reward": 4.5534618685453866e-07
+      },
+      "value": 1.0025028602092012
+    },
+    {
+      "number": 55,
+      "params": {
+        "one_minus_K": 3.424983896768468e-05,
+        "segment_length": 101,
+        "explore_reward": 1.641534060134818e-07
+      },
+      "value": 1.0037594808067887
+    },
+    {
+      "number": 56,
+      "params": {
+        "one_minus_K": 5.6169400409005704e-06,
+        "segment_length": 36,
+        "explore_reward": 6.544967889831602e-08
+      },
+      "value": 0.9934144076205023
+    },
+    {
+      "number": 57,
+      "params": {
+        "one_minus_K": 1.0335465238561413e-06,
+        "segment_length": 31,
+        "explore_reward": 4.318565721642852e-06
+      },
+      "value": 1.0027149133681654
+    },
+    {
+      "number": 58,
+      "params": {
+        "one_minus_K": 5.15953026915879e-06,
+        "segment_length": 12,
+        "explore_reward": 5.335508281842058e-07
+      },
+      "value": 1.007276643542871
+    },
+    {
+      "number": 59,
+      "params": {
+        "one_minus_K": 3.7404092383205732e-06,
+        "segment_length": 41,
+        "explore_reward": 4.9885009777856836e-05
+      },
+      "value": 0.9968761681076466
+    },
+    {
+      "number": 60,
+      "params": {
+        "one_minus_K": 6.345076628961155e-06,
+        "segment_length": 21,
+        "explore_reward": 1.1237945715691686e-09
+      },
+      "value": 1.0083542815815392
+    },
+    {
+      "number": 61,
+      "params": {
+        "one_minus_K": 2.4134067021878288e-05,
+        "segment_length": 72,
+        "explore_reward": 3.519768394581452e-08
+      },
+      "value": 0.9968008619767629
+    },
+    {
+      "number": 62,
+      "params": {
+        "one_minus_K": 1.4763552468626417e-05,
+        "segment_length": 31,
+        "explore_reward": 7.465593734806004e-08
+      },
+      "value": 0.9977828324971278
+    },
+    {
+      "number": 63,
+      "params": {
+        "one_minus_K": 9.432027428495146e-06,
+        "segment_length": 65,
+        "explore_reward": 5.48110890338501e-08
+      },
+      "value": 0.996112130313742
+    },
+    {
+      "number": 64,
+      "params": {
+        "one_minus_K": 3.0291216618437495e-06,
+        "segment_length": 109,
+        "explore_reward": 1.5242291975400052e-07
+      },
+      "value": 0.9965151957495292
+    },
+    {
+      "number": 65,
+      "params": {
+        "one_minus_K": 1.903059517280492e-06,
+        "segment_length": 171,
+        "explore_reward": 3.2639144880747043e-07
+      },
+      "value": 0.9995637260836963
+    },
+    {
+      "number": 66,
+      "params": {
+        "one_minus_K": 6.500282876592447e-06,
+        "segment_length": 40,
+        "explore_reward": 1.7275040337731194e-08
+      },
+      "value": 0.9916533258921063
+    },
+    {
+      "number": 67,
+      "params": {
+        "one_minus_K": 6.560856486647005e-06,
+        "segment_length": 8,
+        "explore_reward": 1.5164395189307605e-08
+      },
+      "value": 1.015588374750119
+    },
+    {
+      "number": 68,
+      "params": {
+        "one_minus_K": 2.197172720704129e-06,
+        "segment_length": 14,
+        "explore_reward": 2.3464950470469706e-08
+      },
+      "value": 1.0048555918912847
+    },
+    {
+      "number": 69,
+      "params": {
+        "one_minus_K": 4.734387037549477e-06,
+        "segment_length": 48,
+        "explore_reward": 3.718235046828589e-09
+      },
+      "value": 0.9927423780161014
+    },
+    {
+      "number": 70,
+      "params": {
+        "one_minus_K": 0.0029235507150190154,
+        "segment_length": 37,
+        "explore_reward": 9.029906750222655e-09
+      },
+      "value": 1.0027785209004798
+    },
+    {
+      "number": 71,
+      "params": {
+        "one_minus_K": 4.718328312513914e-06,
+        "segment_length": 47,
+        "explore_reward": 4.444773634672795e-09
+      },
+      "value": 0.9967526545130463
+    },
+    {
+      "number": 72,
+      "params": {
+        "one_minus_K": 7.142267593845836e-06,
+        "segment_length": 28,
+        "explore_reward": 2.4977800399114187e-09
+      },
+      "value": 0.9976376139713637
+    },
+    {
+      "number": 73,
+      "params": {
+        "one_minus_K": 1.3424078235818383e-06,
+        "segment_length": 21,
+        "explore_reward": 5.418691501067414e-09
+      },
+      "value": 1.007799378800993
+    },
+    {
+      "number": 74,
+      "params": {
+        "one_minus_K": 2.9057185350624233e-06,
+        "segment_length": 36,
+        "explore_reward": 1.5864521779063153e-09
+      },
+      "value": 0.9959737348240633
+    },
+    {
+      "number": 75,
+      "params": {
+        "one_minus_K": 1.0725578089430822e-05,
+        "segment_length": 78,
+        "explore_reward": 1.1331545816558497e-08
+      },
+      "value": 0.999100182091968
+    },
+    {
+      "number": 76,
+      "params": {
+        "one_minus_K": 0.0007319762887054419,
+        "segment_length": 1,
+        "explore_reward": 2.0790118320909266e-05
+      },
+      "value": 1.0088562876800016
+    },
+    {
+      "number": 77,
+      "params": {
+        "one_minus_K": 5.301141055286947e-06,
+        "segment_length": 26,
+        "explore_reward": 3.535048670818783e-09
+      },
+      "value": 0.9960352242728168
+    },
+    {
+      "number": 78,
+      "params": {
+        "one_minus_K": 1.626898888319684e-05,
+        "segment_length": 128,
+        "explore_reward": 9.6649963169366e-08
+      },
+      "value": 1.0115107756839585
+    },
+    {
+      "number": 79,
+      "params": {
+        "one_minus_K": 3.8125017016800913e-06,
+        "segment_length": 568,
+        "explore_reward": 1.0696666272855814e-09
+      },
+      "value": 1.0099301119300548
+    },
+    {
+      "number": 80,
+      "params": {
+        "one_minus_K": 8.11356467898591e-06,
+        "segment_length": 50,
+        "explore_reward": 1.568128490008332e-08
+      },
+      "value": 1.0007943293618755
+    },
+    {
+      "number": 81,
+      "params": {
+        "one_minus_K": 9.262763626391672e-06,
+        "segment_length": 60,
+        "explore_reward": 4.2798259115566095e-08
+      },
+      "value": 1.0017876118170315
+    },
+    {
+      "number": 82,
+      "params": {
+        "one_minus_K": 2.259290787805484e-05,
+        "segment_length": 37,
+        "explore_reward": 1.8123843050236613e-07
+      },
+      "value": 0.9946517078088535
+    },
+    {
+      "number": 83,
+      "params": {
+        "one_minus_K": 2.287348511745187e-05,
+        "segment_length": 44,
+        "explore_reward": 1.9539757531476282e-07
+      },
+      "value": 0.9937436622285036
+    },
+    {
+      "number": 84,
+      "params": {
+        "one_minus_K": 2.9889052445653585e-05,
+        "segment_length": 40,
+        "explore_reward": 2.0682454455880192e-07
+      },
+      "value": 0.9944607581975661
+    },
+    {
+      "number": 85,
+      "params": {
+        "one_minus_K": 3.890235542743377e-05,
+        "segment_length": 88,
+        "explore_reward": 3.9898731178053127e-07
+      },
+      "value": 1.0074248326983468
+    },
+    {
+      "number": 86,
+      "params": {
+        "one_minus_K": 2.785754552204789e-05,
+        "segment_length": 41,
+        "explore_reward": 1.1077661012251123e-07
+      },
+      "value": 0.9993085134463471
+    },
+    {
+      "number": 87,
+      "params": {
+        "one_minus_K": 2.3497346958155608e-05,
+        "segment_length": 18,
+        "explore_reward": 6.4233393035583e-07
+      },
+      "value": 1.0008718748352905
+    },
+    {
+      "number": 88,
+      "params": {
+        "one_minus_K": 5.959485467082388e-05,
+        "segment_length": 50,
+        "explore_reward": 2.401050128602159e-07
+      },
+      "value": 0.9977296547550363
+    },
+    {
+      "number": 89,
+      "params": {
+        "one_minus_K": 0.00010116071273880354,
+        "segment_length": 68,
+        "explore_reward": 9.518490063585843e-07
+      },
+      "value": 1.0097775530994313
+    },
+    {
+      "number": 90,
+      "params": {
+        "one_minus_K": 1.9505777419873587e-05,
+        "segment_length": 35,
+        "explore_reward": 1.8370772408683824e-07
+      },
+      "value": 0.9938869069068251
+    },
+    {
+      "number": 91,
+      "params": {
+        "one_minus_K": 2.0016601836420817e-05,
+        "segment_length": 40,
+        "explore_reward": 2.2873697884578073e-07
+      },
+      "value": 0.9964625226808927
+    },
+    {
+      "number": 92,
+      "params": {
+        "one_minus_K": 2.8968901816168025e-05,
+        "segment_length": 34,
+        "explore_reward": 1.7551276813790212e-07
+      },
+      "value": 0.9939597322204637
+    },
+    {
+      "number": 93,
+      "params": {
+        "one_minus_K": 4.270250025675978e-05,
+        "segment_length": 27,
+        "explore_reward": 6.175517088949163e-08
+      },
+      "value": 1.0034107365143472
+    },
+    {
+      "number": 94,
+      "params": {
+        "one_minus_K": 3.1299522873823286e-05,
+        "segment_length": 20,
+        "explore_reward": 1.6198730235745737e-07
+      },
+      "value": 1.0008811094406291
+    },
+    {
+      "number": 95,
+      "params": {
+        "one_minus_K": 7.796879534584143e-05,
+        "segment_length": 34,
+        "explore_reward": 3.0948028444682235e-08
+      },
+      "value": 1.0023038574516006
+    },
+    {
+      "number": 96,
+      "params": {
+        "one_minus_K": 1.3996112168477316e-05,
+        "segment_length": 52,
+        "explore_reward": 0.00029859945653158075
+      },
+      "value": 1.001245209158027
+    },
+    {
+      "number": 97,
+      "params": {
+        "one_minus_K": 2.5132251722761395e-05,
+        "segment_length": 67,
+        "explore_reward": 8.001014715265355e-08
+      },
+      "value": 1.0011029174085218
+    },
+    {
+      "number": 98,
+      "params": {
+        "one_minus_K": 1.839665122590613e-05,
+        "segment_length": 32,
+        "explore_reward": 3.126749472667423e-07
+      },
+      "value": 0.9992408994589357
+    },
+    {
+      "number": 99,
+      "params": {
+        "one_minus_K": 3.2670089735764464e-05,
+        "segment_length": 25,
+        "explore_reward": 1.9298975731348427e-07
+      },
+      "value": 0.9985215249557591
+    },
+    {
+      "number": 100,
+      "params": {
+        "one_minus_K": 1.1366347164240893e-05,
+        "segment_length": 88,
+        "explore_reward": 1.2796793187373316e-07
+      },
+      "value": 0.9984859101810571
+    },
+    {
+      "number": 101,
+      "params": {
+        "one_minus_K": 2.1481617772279916e-05,
+        "segment_length": 45,
+        "explore_reward": 1.142741234951292e-06
+      },
+      "value": 0.9888594672788189
+    },
+    {
+      "number": 102,
+      "params": {
+        "one_minus_K": 3.8264275124930845e-05,
+        "segment_length": 45,
+        "explore_reward": 6.447995405322114e-06
+      },
+      "value": 1.01054701419172
+    },
+    {
+      "number": 103,
+      "params": {
+        "one_minus_K": 4.985018790356009e-05,
+        "segment_length": 57,
+        "explore_reward": 6.549743541926022e-07
+      },
+      "value": 1.0041164809634655
+    },
+    {
+      "number": 104,
+      "params": {
+        "one_minus_K": 2.736393474620363e-05,
+        "segment_length": 34,
+        "explore_reward": 2.7007933157227775e-06
+      },
+      "value": 0.9932341693479185
+    },
+    {
+      "number": 105,
+      "params": {
+        "one_minus_K": 5.5060825735574755e-06,
+        "segment_length": 30,
+        "explore_reward": 2.725954167093992e-06
+      },
+      "value": 1.0001461090615953
+    },
+    {
+      "number": 106,
+      "params": {
+        "one_minus_K": 2.897727846016049e-05,
+        "segment_length": 15,
+        "explore_reward": 1.4556546244144346e-06
+      },
+      "value": 0.9963977214468099
+    },
+    {
+      "number": 107,
+      "params": {
+        "one_minus_K": 2.076229035335138e-05,
+        "segment_length": 112,
+        "explore_reward": 3.857543057988489e-06
+      },
+      "value": 0.9982626454599725
+    },
+    {
+      "number": 108,
+      "params": {
+        "one_minus_K": 1.377599548809916e-05,
+        "segment_length": 45,
+        "explore_reward": 4.819202075110936e-08
+      },
+      "value": 0.9941090890604498
+    },
+    {
+      "number": 109,
+      "params": {
+        "one_minus_K": 1.4376521258943779e-05,
+        "segment_length": 47,
+        "explore_reward": 5.0710812625996076e-08
+      },
+      "value": 1.0009362240131299
+    },
+    {
+      "number": 110,
+      "params": {
+        "one_minus_K": 7.5414478170445984e-06,
+        "segment_length": 79,
+        "explore_reward": 1.1256927716035309e-06
+      },
+      "value": 0.9953648920428507
+    },
+    {
+      "number": 111,
+      "params": {
+        "one_minus_K": 1.785379973846325e-05,
+        "segment_length": 59,
+        "explore_reward": 2.4527436461648115e-08
+      },
+      "value": 0.9939924802863743
+    },
+    {
+      "number": 112,
+      "params": {
+        "one_minus_K": 1.8433068360053683e-05,
+        "segment_length": 63,
+        "explore_reward": 2.7282538213164085e-08
+      },
+      "value": 0.9958046796665185
+    },
+    {
+      "number": 113,
+      "params": {
+        "one_minus_K": 1.220124387235049e-05,
+        "segment_length": 53,
+        "explore_reward": 5.096802911280416e-06
+      },
+      "value": 0.992540491041879
+    },
+    {
+      "number": 114,
+      "params": {
+        "one_minus_K": 1.7319127670580903e-05,
+        "segment_length": 56,
+        "explore_reward": 6.05381659272303e-06
+      },
+      "value": 1.0018933471199307
+    },
+    {
+      "number": 115,
+      "params": {
+        "one_minus_K": 1.1850213679474053e-05,
+        "segment_length": 73,
+        "explore_reward": 1.9827311032758357e-08
+      },
+      "value": 1.0030815836921365
+    },
+    {
+      "number": 116,
+      "params": {
+        "one_minus_K": 4.225163368219568e-06,
+        "segment_length": 34,
+        "explore_reward": 5.006153519507315e-06
+      },
+      "value": 0.9982414600502058
+    },
+    {
+      "number": 117,
+      "params": {
+        "one_minus_K": 8.430741078524358e-06,
+        "segment_length": 24,
+        "explore_reward": 6.09271155160049e-09
+      },
+      "value": 1.0036021134332707
+    },
+    {
+      "number": 118,
+      "params": {
+        "one_minus_K": 1.3181760420513234e-05,
+        "segment_length": 28,
+        "explore_reward": 1.3117450625153369e-05
+      },
+      "value": 0.9988901810635531
+    },
+    {
+      "number": 119,
+      "params": {
+        "one_minus_K": 5.831020701687107e-06,
+        "segment_length": 91,
+        "explore_reward": 2.1354362205970058e-06
+      },
+      "value": 1.0061617077750025
+    },
+    {
+      "number": 120,
+      "params": {
+        "one_minus_K": 2.7231216356353603e-05,
+        "segment_length": 46,
+        "explore_reward": 7.290794307476389e-08
+      },
+      "value": 1.004734655528526
+    },
+    {
+      "number": 121,
+      "params": {
+        "one_minus_K": 1.0282004587819954e-05,
+        "segment_length": 53,
+        "explore_reward": 1.0003421438780805e-08
+      },
+      "value": 0.9982111716373517
+    },
+    {
+      "number": 122,
+      "params": {
+        "one_minus_K": 2.1519034200578325e-05,
+        "segment_length": 35,
+        "explore_reward": 2.76195555831416e-06
+      },
+      "value": 0.9963068657750913
+    },
+    {
+      "number": 123,
+      "params": {
+        "one_minus_K": 1.394029706566426e-05,
+        "segment_length": 42,
+        "explore_reward": 1.0286435559158722e-05
+      },
+      "value": 0.9995630674734564
+    },
+    {
+      "number": 124,
+      "params": {
+        "one_minus_K": 6.764241269526179e-06,
+        "segment_length": 65,
+        "explore_reward": 3.041033275227529e-06
+      },
+      "value": 0.9983655884932598
+    },
+    {
+      "number": 125,
+      "params": {
+        "one_minus_K": 1.660925301312919e-05,
+        "segment_length": 45,
+        "explore_reward": 1.2961781180700452e-06
+      },
+      "value": 0.9954424779860879
+    },
+    {
+      "number": 126,
+      "params": {
+        "one_minus_K": 9.340177007265924e-06,
+        "segment_length": 31,
+        "explore_reward": 1.907085603765997e-08
+      },
+      "value": 0.9937390120378232
+    },
+    {
+      "number": 127,
+      "params": {
+        "one_minus_K": 8.164988729746876e-06,
+        "segment_length": 20,
+        "explore_reward": 4.093478827788729e-08
+      },
+      "value": 1.0073250515739063
+    },
+    {
+      "number": 128,
+      "params": {
+        "one_minus_K": 9.8256537562011e-06,
+        "segment_length": 30,
+        "explore_reward": 1.4892201157988893e-08
+      },
+      "value": 0.9967765291234754
+    },
+    {
+      "number": 129,
+      "params": {
+        "one_minus_K": 4.2761968090420116e-06,
+        "segment_length": 25,
+        "explore_reward": 1.9641584007743785e-08
+      },
+      "value": 1.0057820736858138
+    },
+    {
+      "number": 130,
+      "params": {
+        "one_minus_K": 3.717334623437995e-05,
+        "segment_length": 53,
+        "explore_reward": 1.1527628707079284e-07
+      },
+      "value": 1.006770290730364
+    },
+    {
+      "number": 131,
+      "params": {
+        "one_minus_K": 1.191506094999065e-05,
+        "segment_length": 36,
+        "explore_reward": 7.558220749170893e-09
+      },
+      "value": 1.0010074412927294
+    },
+    {
+      "number": 132,
+      "params": {
+        "one_minus_K": 6.93682082265494e-06,
+        "segment_length": 39,
+        "explore_reward": 5.667843666212768e-08
+      },
+      "value": 0.9945261718377344
+    },
+    {
+      "number": 133,
+      "params": {
+        "one_minus_K": 1.5291756470561142e-05,
+        "segment_length": 58,
+        "explore_reward": 3.3108818160509445e-09
+      },
+      "value": 0.9990227683670201
+    },
+    {
+      "number": 134,
+      "params": {
+        "one_minus_K": 2.0852081914876273e-05,
+        "segment_length": 47,
+        "explore_reward": 1.7263318681686666e-06
+      },
+      "value": 0.9997085374669563
+    },
+    {
+      "number": 135,
+      "params": {
+        "one_minus_K": 9.414159906632576e-06,
+        "segment_length": 22,
+        "explore_reward": 2.954375448941262e-08
+      },
+      "value": 1.0016309867617361
+    },
+    {
+      "number": 136,
+      "params": {
+        "one_minus_K": 1.080974801004659e-05,
+        "segment_length": 76,
+        "explore_reward": 2.0105084429614753e-09
+      },
+      "value": 0.9948507752360958
+    },
+    {
+      "number": 137,
+      "params": {
+        "one_minus_K": 5.788897859813707e-06,
+        "segment_length": 32,
+        "explore_reward": 2.3063926917151092e-08
+      },
+      "value": 0.995932560511069
+    },
+    {
+      "number": 138,
+      "params": {
+        "one_minus_K": 2.5603118455283626e-05,
+        "segment_length": 27,
+        "explore_reward": 8.570666339298615e-06
+      },
+      "value": 0.9970501135054576
+    },
+    {
+      "number": 139,
+      "params": {
+        "one_minus_K": 1.2918995500940007e-05,
+        "segment_length": 41,
+        "explore_reward": 9.436443563692893e-08
+      },
+      "value": 0.9954883843491805
+    },
+    {
+      "number": 140,
+      "params": {
+        "one_minus_K": 1.5403259449299625e-05,
+        "segment_length": 97,
+        "explore_reward": 1.3495514008056618e-08
+      },
+      "value": 1.006152842020411
+    },
+    {
+      "number": 141,
+      "params": {
+        "one_minus_K": 3.271424992846642e-05,
+        "segment_length": 40,
+        "explore_reward": 4.487715191010714e-06
+      },
+      "value": 0.9899783377681538
+    },
+    {
+      "number": 142,
+      "params": {
+        "one_minus_K": 4.951441646030807e-05,
+        "segment_length": 50,
+        "explore_reward": 2.153034127313191e-06
+      },
+      "value": 0.9973894873841429
+    },
+    {
+      "number": 143,
+      "params": {
+        "one_minus_K": 2.5154713651932498e-05,
+        "segment_length": 64,
+        "explore_reward": 4.989485151677687e-06
+      },
+      "value": 0.9938347209146868
+    },
+    {
+      "number": 144,
+      "params": {
+        "one_minus_K": 3.446825898021208e-05,
+        "segment_length": 67,
+        "explore_reward": 4.639960576513746e-06
+      },
+      "value": 0.9957947423756223
+    },
+    {
+      "number": 145,
+      "params": {
+        "one_minus_K": 2.3093259049389836e-05,
+        "segment_length": 36,
+        "explore_reward": 5.6686552462004835e-06
+      },
+      "value": 0.9977505182117412
+    },
+    {
+      "number": 146,
+      "params": {
+        "one_minus_K": 2.9382400773146736e-05,
+        "segment_length": 55,
+        "explore_reward": 1.515477260839555e-05
+      },
+      "value": 1.0033164005925779
+    },
+    {
+      "number": 147,
+      "params": {
+        "one_minus_K": 4.227346685828349e-05,
+        "segment_length": 18,
+        "explore_reward": 4.5581596153595576e-08
+      },
+      "value": 0.9907330416209665
+    },
+    {
+      "number": 148,
+      "params": {
+        "one_minus_K": 4.1762506028698854e-05,
+        "segment_length": 16,
+        "explore_reward": 3.6329246328663547e-08
+      },
+      "value": 0.9995976321742409
+    }
+  ],
+  "best": {
+    "params": {
+      "one_minus_K": 2.1481617772279916e-05,
+      "segment_length": 45,
+      "explore_reward": 1.142741234951292e-06
+    },
+    "value": 0.9888594672788189
+  },
+  "failures": {}
+}
