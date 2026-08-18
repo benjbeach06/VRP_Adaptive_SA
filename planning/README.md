@@ -18,15 +18,19 @@ carries the evidence for its own priority, so the ordering is arguable rather th
 | [route-distance-tracking](route-distance-tracking.md) | small, self-verifying | no route knows its own length; maintain it like load, with an oracle twin |
 | [vehicle-time-limits](vehicle-time-limits.md) | blocked on the above | travel + service + loading time per vehicle; the largest step toward realistic dispatch |
 | [asymmetric-distances](asymmetric-distances.md) | gated on a real need | supplied distance oracle, directed by default; breaks O(1) chain reversal |
+| [joint-parameter-search](joint-parameter-search.md) | gated on the noise floor | two flat searches held each other's knobs fixed; fix iteration-count termination first |
 
-## New: re-tune operator selection
+## Done: the re-tune, and its answer
 
-`explore_reward` floored an accepted move's score at a positive value, which removed the sign that
-`OperatorStats.record_accept` was using to decide whether a move improved. The whole
-operator-selection search ran after that and is void. This is now the highest-priority item and has
-no planning file yet, because the work is simply to rerun the pipeline against the fixed counter.
+The void search was rerun against the fixed counter — 149 trials, 10 hours, on the reference
+instance. **It found nothing.** The best of 149 was less extreme than pure noise predicts for that
+many draws, and 51% of trials beat defaults, which is a coin flip. Defaults stand, unchanged, as
+the hand-chosen originals.
 
-The defaults meanwhile are the hand-chosen originals, which is where they started.
+Numbers and reasoning in [METHODOLOGY.md](../METHODOLOGY.md). The follow-up question — whether
+several parameters *together* do what none does alone — is
+[joint-parameter-search](joint-parameter-search.md), and it is gated on fixing the noise floor
+first.
 
 ## Evidence
 

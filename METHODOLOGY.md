@@ -166,6 +166,40 @@ The lesson is not "test more". The suite was clean throughout, because nothing i
 anything about the improvement counter. The counter was a reporting field that quietly became a
 control input, and no oracle covered it.
 
+### The rerun found nothing, which is the actual answer
+
+With the counter fixed, the search ran again — 149 trials over 10 hours, this time on the reference
+instance (200 customers, capacity 25) rather than the sanity-check shape whose results had failed to
+transfer. `tools/preflight.py` gated the launch by confirming the counter was neither dead nor
+saturated and that reheating fired.
+
+| | |
+|---|---|
+| mean trial score | **1.0012** (1.0 = defaults) |
+| median | 0.9997 |
+| trials beating defaults | 76 of 149 — **51%** |
+| best | 0.9889, i.e. 1.11% under defaults |
+| best, in trial standard deviations | **1.8σ** |
+| expected minimum of 149 pure-noise draws | **≈ 0.9833** |
+
+**The best trial is less extreme than noise alone would produce.** Drawing 149 samples from a
+distribution centered on the defaults should yield a minimum near 0.9833; the observed best was
+0.9889. The apparent 1.11% gain is selection, not signal — precisely the failure the "bucket means,
+never the argmax" rule exists to prevent, caught this time before anything was adopted.
+
+A 51% win rate says the same thing more simply. Optuna concentrates sampling where it has already
+seen good values, so a real gradient should push that number well above half.
+
+This replicates an earlier result: a 704-trial search over the annealing schedule was also flat, and
+hand defaults also won. **Two independent searches over different parameter sets have now failed to
+beat hand-chosen values.** The honest conclusion is not that tuning was done badly — it is that this
+solver is insensitive to these parameters at this instance shape, and the remaining variance is the
+wall-clock noise floor rather than anything a search can reach.
+
+The one unresolved trace: `segment_length` in the 15 best trials ran 18–79, all below the default of
+100. Suggestive, but confounded — the sampler concentrates, so a cluster among the winners is partly
+the sampler agreeing with itself. Untested, and recorded as untested.
+
 ---
 
 ## Other results
@@ -198,9 +232,9 @@ know. `Hexaly_VRP.py` builds the same instance for Hexaly and predates the rest 
 comparison is blocked on a license renewal, not on the code. It is the next planned step and the
 only measurement that would settle the question.
 
-**Operator selection is currently untuned.** The search that would have tuned it is void, per above.
-The shipped defaults are the hand-chosen originals, which beat all 47 search trials on the reference
-instance and won a paired 240 s validation.
+**Operator selection is untuned, and the search says it does not need to be.** The void search was
+rerun against the fixed counter — 149 trials, 10 hours, on the reference instance rather than the
+sanity-check one. It found nothing (see below). The shipped defaults are the hand-chosen originals.
 
 **One instance family.** Almost every measurement comes from one generated family at two capacities.
 The withdrawn result above is what that costs: a finding can be real, reproduced, and still local to
