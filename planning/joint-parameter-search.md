@@ -35,7 +35,7 @@ per configuration; adding dimensions multiplies the configurations needed. Spend
 more trials at the current noise level buys very little.
 
 **Iteration-count termination is the prerequisite.** It is already listed under Known Limitations in
-[METHODOLOGY.md](../METHODOLOGY.md). Making runs terminate on iterations rather than seconds removes
+[RESULTS.md](../RESULTS.md). Making runs terminate on iterations rather than seconds removes
 the dominant variance source, which makes every trial cheaper in the only currency that matters here.
 That is a smaller job than a wide search and it makes the wide search worth running.
 

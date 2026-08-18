@@ -74,7 +74,7 @@ All keyword-only, on `SimAnnVRPSolver.__init__`.
 | `plateau_reheat_exponent` | `0.2` | how hard to reheat, as a fractional exponent of the objective at plateau start |
 | `segment_length` | `100` | iterations per segment. Operator weights update once per segment |
 | `reaction_factor` | `0.01` | how fast operator weights follow recent scores. 0 freezes them |
-| `explore_reward` | `1e-6` | score floor for an accepted uphill move, so operators that pay off through exploration can still earn weight |
+| `explore_reward` | `1e-5` | score floor for an accepted uphill move, so operators that pay off through exploration can still earn weight |
 | `empty_route_cleanup_interval` | `100` | segments between empty-route sweeps |
 
 Reheating is **anchored to the current objective**, not to a fixed temperature. The schedule
@@ -117,9 +117,12 @@ proposals with a randomly chosen destination and 0.46% with a geometrically chos
 
 ## Further reading
 
-- **[METHODOLOGY.md](METHODOLOGY.md)** — how results here are measured and accepted, the findings
-  that changed the design, and the known limitations. Read this one first if you are evaluating the
-  engineering rather than the routing.
+- **[RESULTS.md](RESULTS.md)** — every measurement, including the ones that did not survive
+  checking: best-known solutions, operator ablation, the 39x construction speedup, and two parameter
+  searches that both found nothing. Start here if you want to know what the solver does.
+- **[METHODOLOGY.md](METHODOLOGY.md)** — how those measurements get accepted or rejected, the
+  pre-launch routine for long runs, and the provenance of the code. Start here if you are evaluating
+  the engineering rather than the routing.
 - **[planning/](planning/README.md)** — the roadmap. One file per item, each stating the problem,
   the measurement motivating it, and the gate that would justify starting. Most are deliberately not
   started, and each records why.

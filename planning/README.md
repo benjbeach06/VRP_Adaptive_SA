@@ -27,7 +27,7 @@ instance. **It found nothing.** The best of 149 was less extreme than pure noise
 many draws, and 51% of trials beat defaults, which is a coin flip. Defaults stand, unchanged, as
 the hand-chosen originals.
 
-Numbers and reasoning in [METHODOLOGY.md](../METHODOLOGY.md). The follow-up question — whether
+Numbers and reasoning in [RESULTS.md](../RESULTS.md). The follow-up question — whether
 several parameters *together* do what none does alone — is
 [joint-parameter-search](joint-parameter-search.md), and it is gated on fixing the noise floor
 first.
@@ -35,7 +35,7 @@ first.
 ## Evidence
 
 The measurements these plans are gated on -- geometric guidance, operator ablation, and the
-withdrawn tuning result -- are in [METHODOLOGY.md](../METHODOLOGY.md), together with the rules used
+withdrawn tuning result -- are in [RESULTS.md](../RESULTS.md), with the rules used
 to accept them. They are kept there rather than here so that a reader meets the evidence before the
 roadmap that cites it.
 

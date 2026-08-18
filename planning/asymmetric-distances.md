@@ -48,7 +48,7 @@ That lands on:
 
 So enabling directed mode does not merely add a branch. It changes the complexity class of the two
 operators the roster most depends on, and those two are cheap-and-high-volume — which is precisely
-*why* they matter (see [METHODOLOGY.md](../METHODOLOGY.md)). Making them more expensive per call
+*why* they matter (see [RESULTS.md](../RESULTS.md)). Making them more expensive per call
 attacks the mechanism that makes them valuable.
 
 **This must be measured, not assumed away.** Run the ablation again in directed mode. It is entirely

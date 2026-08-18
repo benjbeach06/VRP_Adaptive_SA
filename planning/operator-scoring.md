@@ -57,7 +57,7 @@ plan called for. It also broke the improvement counter, because `OperatorStats.r
 on. Every accepted move counted as an improvement until `improvement > 1e-9` replaced it.
 
 That invalidated the operator-selection tuning run outright. See
-[METHODOLOGY.md](../METHODOLOGY.md#the-result-that-was-accepted-and-then-withdrawn).
+[RESULTS.md](../RESULTS.md#parameter-tuning-a-withdrawal-and-a-null).
 
 It is a direct instance of the warning above: a statistic was tuned against before it was fixed.
 Worse, the statistic was *made* wrong by one of the parameters being tuned. The order in the Gate
