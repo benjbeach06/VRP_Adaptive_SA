@@ -38,6 +38,7 @@ import tune                                          # noqa: E402
 import SimAnn_VRP_Core_Model as CM                    # noqa: E402
 from SimAnn_VRP_Operators import OperatorStats        # noqa: E402
 from SimAnn_VRP_Solver import SimAnnVRPSolver         # noqa: E402
+from run_stamp import solver_stamp, stamp_header      # noqa: E402
 
 
 def main() -> int:
@@ -46,7 +47,21 @@ def main() -> int:
     ap.add_argument("--capacity", type=int, default=25, help="vehicle capacity; 25 is the reference instance")
     ap.add_argument("--seconds", type=float, default=60.0)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--allow-dirty", action="store_true",
+                    help="run even though solver modules are uncommitted (the result is unciteable)")
     args = ap.parse_args()
+
+    # A result is only citeable if its solver version is. An uncommitted solver module means the
+    # recorded SHA does not describe the code that ran, and no later reader can recover what did.
+    stamp = solver_stamp()
+    print(stamp_header(stamp))
+    if stamp["solver_dirty"] and not args.allow_dirty:
+        print("\n  FAIL: solver modules are uncommitted --")
+        for f in stamp["solver_dirty_files"]:
+            print(f"    {f}")
+        print("  Commit them, or pass --allow-dirty and treat the result as throwaway.")
+        print("\nPREFLIGHT FAILED")
+        return 1
 
     tune.CAPACITY = args.capacity
 
@@ -81,22 +96,42 @@ def main() -> int:
     print(f"  improved         {improved}   (ratio {ratio:.3f})")
     print(f"  plateau reheats  {reheats}")
 
-    failures = []
+    # Both signals need a run long enough to produce them. The starting temperature is
+    # initial_temp_factor = 1e-4 of the objective, so EARLY acceptances are nearly all downhill and
+    # improved == accepts is the correct reading, not saturation. Reheats need a plateau to exist at
+    # all. Judging either on a short run reports a defect that is not there, which costs more trust
+    # than the check is worth.
+    MIN_ACCEPTS = 1000
+    MIN_SECONDS_FOR_REHEAT = 30.0
+
+    failures, skipped = [], []
     if accepts == 0:
         failures.append("no accepts at all -- the solver is not running")
-    if improved == 0:
+    elif improved == 0:
         failures.append("improved never fired -- the improvement counter is dead")
-    if improved == accepts:
+    elif accepts < MIN_ACCEPTS:
+        skipped.append(f"saturation check needs >= {MIN_ACCEPTS} accepts, saw {accepts} "
+                       f"-- run longer to judge it")
+    elif improved == accepts:
         failures.append("improved == accepts -- the counter is SATURATED (this is the 2026-08-16 bug)")
-    if reheats == 0:
+
+    if args.seconds < MIN_SECONDS_FOR_REHEAT:
+        skipped.append(f"reheat check needs >= {MIN_SECONDS_FOR_REHEAT:g}s, ran {args.seconds:g}s")
+    elif reheats == 0:
         failures.append(
             "zero plateau reheats -- reheating never fires, so anything that tunes "
             "segment_length or max_plateau_size is measuring a disabled mechanism"
         )
 
+    for s in skipped:
+        print(f"  SKIPPED: {s}")
+
     for failure in failures:
         print(f"  FAIL: {failure}")
-    print("\nPREFLIGHT " + ("FAILED" if failures else "PASSED"))
+    # A skipped check is not a passed check. Saying so keeps a short smoke run from reading like a
+    # full verification.
+    verdict = "FAILED" if failures else ("PASSED, but checks were SKIPPED" if skipped else "PASSED")
+    print("\nPREFLIGHT " + verdict)
     return 1 if failures else 0
 
 

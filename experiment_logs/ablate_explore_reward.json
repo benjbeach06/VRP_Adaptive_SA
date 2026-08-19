@@ -1,0 +1,626 @@
+{
+ "config": {
+  "param": "explore_reward",
+  "values": [
+   0.0,
+   0.01,
+   1e-05,
+   1e-08
+  ],
+  "runs": 30,
+  "seconds": 300.0,
+  "size": 500,
+  "capacity": 400,
+  "start": "dumb",
+  "out": "experiment_logs/ablate_explore_reward.json"
+ },
+ "results": {
+  "0.0": [
+   {
+    "objective": Infinity,
+    "error": "ValueError: Target successor is not assigned to a vehicle!"
+   },
+   {
+    "objective": 2187.7329348053386,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2184.1653435383455,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2172.683422112467,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2239.074966562853,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2242.947952256532,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2193.0995672689082,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2344.4677777890633,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2137.6231060544205,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2073.701485324341,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2097.7897590607913,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2253.1562091207884,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2207.721971611822,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2260.9674524626107,
+    "final_overload": 0,
+    "plateau_reheats": 10
+   },
+   {
+    "objective": 2238.2191759374614,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2258.0212675246485,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2209.2945366837253,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2160.0794241783037,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2254.696479099871,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2123.2326198472574,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2300.2077004922767,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2166.2149326035524,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2297.5668616567423,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 2457.8783558421533,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 2106.2768842912883,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2220.1430484184566,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2238.006955294836,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 2227.982239014669,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2328.43661619782,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2117.9783164133933,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   }
+  ],
+  "0.01": [
+   {
+    "objective": 2515.299323312692,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2338.218758017739,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2451.991364429571,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2221.206496820627,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2100.4750088238056,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2381.5005909019346,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2322.776822249321,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2355.4844078792494,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2094.9408951791397,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2318.166033945514,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2314.4891824091255,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2283.416848640906,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2316.9666563406013,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2332.050913514679,
+    "final_overload": 0,
+    "plateau_reheats": 11
+   },
+   {
+    "objective": 2349.9393330201246,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2139.9296962250023,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2220.850380656356,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2138.177023656011,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2377.345967420811,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2265.6338614213764,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2243.9694349750825,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2251.261268587681,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2316.647804618606,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2162.4349783193725,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2336.739491724529,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2346.280683055208,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2278.038494891881,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2240.6563069229264,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2342.197696432522,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2240.7080769725035,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   }
+  ],
+  "1e-05": [
+   {
+    "objective": 2117.8508477297364,
+    "final_overload": 0,
+    "plateau_reheats": 10
+   },
+   {
+    "objective": 2129.035278215356,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2114.762847834378,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 2197.6838061443505,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 2254.0717244008038,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2267.3341201967964,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2220.067929930462,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2207.6502972724356,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2114.440468528759,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2180.187122231344,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2304.6545562121955,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2089.6432675923083,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2352.1448851683517,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2160.0513035952276,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 2222.7755504768816,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2436.903946837732,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2143.671311225635,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 2120.738942078278,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2168.4212496313125,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2121.0746288703585,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2237.854428695861,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2209.536379628963,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2173.97005447283,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2087.4082711382666,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2183.5137420946908,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2241.5059765709825,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2321.387509962663,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2311.495655895165,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2193.1092196577993,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2302.096961124196,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   }
+  ],
+  "1e-08": [
+   {
+    "objective": 2221.28817994885,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 2118.5191729939534,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2260.3759272310963,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2210.45189487189,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2227.6759943786674,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2332.566717710264,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2134.545251676894,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 2167.935658452929,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 1990.1384308404545,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2213.652818430015,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2011.2499984850297,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2203.26035698262,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2240.599823193676,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 2222.7807457105996,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2407.2775423691173,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2258.452481136981,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2232.213609424065,
+    "final_overload": 0,
+    "plateau_reheats": 10
+   },
+   {
+    "objective": 2191.7502497902315,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2031.6314759150657,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2112.214683654799,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2096.2352163430614,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2177.145276949913,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2275.093314761329,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 2242.983679742693,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2076.042586714623,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2230.6334441152394,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2207.735732530774,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2334.0693697089996,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 2036.284506381218,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 2110.4620342133753,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   }
+  ]
+ }
+}

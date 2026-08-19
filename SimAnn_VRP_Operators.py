@@ -105,6 +105,9 @@ class Operator[Ops: tuple](ABC):
 
         self.num_neutral_calls = 0
 
+        self.exploit_only = False # For operators that determine moves by optimizing instead of through random choice
+        self.exploit_selection_penalty_factor = 1.0
+
     # All three guard a zero denominator, because report_stats() reads every one at the end of
     # solve() and a proposal count really can be zero.
     #
@@ -1118,7 +1121,7 @@ class RandomRoutePermutation(Operator[PermuteChainOps]):
         rand_shuffle(permutation)
         return route, range(0, path_len), permutation
 
-def farthest_insertion_order(points: Sequence[tuple], left: tuple, right: tuple) -> list[int]:
+def farthest_insertion_order(points: Sequence[tuple[Num, Num]], left: tuple[Num, Num], right: tuple[Num, Num]) -> list[int]:
     """
     Order `points` between two fixed endpoints by farthest insertion. Returns indices into
     `points`. The fixed-endpoint Hamiltonian path problem, solved approximately.
@@ -1130,12 +1133,12 @@ def farthest_insertion_order(points: Sequence[tuple], left: tuple, right: tuple)
     if n == 0:
         return []
 
-    def sq(p, q):
+    def sq(p: tuple[Num, Num], q: tuple[Num, Num]):
         return (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2
 
     # SELECTION uses squared distance; PLACEMENT below uses true distance. Not
     # interchangeable -- a sum of squares does not order like a sum of lengths.
-    sq_dist_to_path = [min(sq(p, left), sq(p, right)) for p in points]
+    sq_dist_to_path: list[Num] = [min(sq(p, left), sq(p, right)) for p in points]
     seq: list[tuple[int, tuple]] = [(-1, left), (-2, right)]
     remaining = set(range(n))
 
@@ -1144,9 +1147,9 @@ def farthest_insertion_order(points: Sequence[tuple], left: tuple, right: tuple)
         # design/furthest_distance/farthest_insertion_order.md
         chosen, best_dist = -1, -1.0
         for index in remaining:
-            dist = sq_dist_to_path[index]
-            if dist > best_dist or (dist == best_dist and index < chosen):
-                chosen, best_dist = index, dist
+            dst = sq_dist_to_path[index]
+            if dst > best_dist or (dst == best_dist and index < chosen):
+                chosen, best_dist = index, dst
         remaining.discard(chosen)
         here = points[chosen]
 
@@ -1163,7 +1166,11 @@ def farthest_insertion_order(points: Sequence[tuple], left: tuple, right: tuple)
             if d < sq_dist_to_path[i]:
                 sq_dist_to_path[i] = d
 
-    return [index for index, _ in seq if index >= 0]
+    result = [index for index, _ in seq if index >= 0]
+    if result == list(range(n)):
+        return []
+    else:
+        return result
 
 
 class _FarthestInsertionReorderBase(Operator[PermuteChainOps]):
@@ -1175,6 +1182,16 @@ class _FarthestInsertionReorderBase(Operator[PermuteChainOps]):
 
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, PermuteChain(sln))
+
+        # This operator is nearly pure-exploitation, especially if used on a full route.
+        # Using it for exploration can make the solution get stuck.
+        self.exploit_only = True
+
+        conservative_customer_capacity = sln.mean_customer_capacity/2
+        max_vehicle_capacity = sln.max_vehicle_capacity
+        conservative_vehicle_customers = 0 if abs(conservative_customer_capacity) < 1e-9 else min(len(sln.customers), max_vehicle_capacity/conservative_customer_capacity)
+
+        self.exploit_selection_penalty_factor = 1 if abs(sln.mean_vehicle_capacity) < 1e-9 else 1.0/conservative_vehicle_customers # O(k^2) operation. Amortize cost down to ~O(k)
 
     def _choose_span(self) -> tuple[Route, int, int] | None:
         """Route and half-open span [start, stop) to rebuild. None when nothing is selectable."""
@@ -1205,11 +1222,16 @@ class _FarthestInsertionReorderBase(Operator[PermuteChainOps]):
         # not the route. No full-length identity array is built.
         order = farthest_insertion_order(
             [path[i].source_customer.location for i in span], left, right)
+        if not order:
+            return route, 0, order
         return route, span, order
 
 
 class ReorderSpanByFarthestInsertion(_FarthestInsertionReorderBase):
     """A uniformly random span of a random route. Position and length both uniform."""
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward)
+        self.exploit_selection_penalty_factor *= 4 # Average span is half a route, so average cost is half
 
     def _choose_span(self):
         route = self.sln.choose_random_nonempty_route_ordered()
@@ -1240,6 +1262,9 @@ class ReorderLongRouteByFarthestInsertion(_FarthestInsertionReorderBase):
     Selection is O(total customers) per proposal -- no route caches its length. Accepted for
     now; planning/route-distance-tracking.md makes it O(1).
     """
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward)
+        self.exploit_selection_penalty_factor /= 4 # Bias towards long routes increases cost.
 
     def _choose_span(self):
         routes = self.sln.all_routes

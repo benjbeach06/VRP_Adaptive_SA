@@ -1,8 +1,9 @@
 # Farthest-insertion reorder operators
 
 **Code:** `SimAnn_VRP_Operators.py`
-**BL operator:** `PermuteRoute`
+**BL operator:** `PermuteChain`
 **Helper:** [farthest_insertion_order.md](farthest_insertion_order.md)
+**Governed by:** [../operator_selection/exploitation_governance.md](../operator_selection/exploitation_governance.md)
 
 Three operators sharing `_FarthestInsertionReorderBase`.
 
@@ -56,6 +57,12 @@ length) scan per proposal.
 helps most where the ordering has the most slack, and that is superlinear in route length. One
 weighted draw: cumulative squared distance, scale a [0,1) sample by the total, `bisect_left`.
 
+**An identity reordering reports NOOP, not a zero-delta move.** When farthest insertion returns the
+span unchanged, `farthest_insertion_order` returns an empty list rather than the identity
+permutation. `PermuteChain` then reports NOOP. Otherwise a proposal that changes nothing would price
+as a legitimate VALID move worth zero, which hides degeneracy from the counters that exist to show
+it.
+
 **They are deliberately expensive.** O(k^2) against O(1) or O(k) elsewhere.
 
 That is the point, and it is not a compromise. Construction quality and construction cost **both**
@@ -65,6 +72,12 @@ divides by `mean_cost`, so the solver can prefer cheap operators on large instan
 ones on small instances without anybody choosing in advance.
 
 These three exist to occupy the expensive-and-effective end, which the roster previously lacked.
+
+Two properties on `Operator` do that pricing, and both apply to all three: `exploit_only` restricts
+them to improving moves, and `exploit_selection_penalty_factor` discounts their selection rate to
+amortize O(k^2) toward O(k). The span variant carries a x4 correction, since half a span costs a
+quarter. Full reasoning in
+[../operator_selection/exploitation_governance.md](../operator_selection/exploitation_governance.md).
 
 **This is incomplete.** Weighting balances cost only after an operator has run. On a large instance
 with a small budget, one of these can consume the budget in a single proposal. Gating selection on

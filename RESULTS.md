@@ -179,28 +179,55 @@ the winners is partly the sampler agreeing with itself.
 
 Stated because a portfolio project that lists only its strengths is not evidence of judgment.
 
-**No external benchmark.** Every number here is the solver measured against itself. Whether it is 2%
-or 20% off a commercial solver is unknown, and it is the thing a reader should most want to know.
-`Hexaly_VRP.py` builds the same instance for Hexaly and predates the rest of this work, so the
-comparison is blocked on a license renewal rather than on code. It is the next planned step and the
-only measurement that would settle the question.
+**The external benchmark now exists, and the gap is ~3%.** Against Hexaly on the same instance,
+objective and seed: Hexaly reaches 1861.41 in 60s, this solver reaches 1915.97 in 180s. Hexaly runs
+**47x more iterations per second**, so the gap is throughput rather than search quality per
+iteration. Hexaly is also CONVERGED -- tripling its budget to 180s gained 0.1 -- while this solver
+was still descending, buying 1.33% in its second half. So the honest reading is "3% behind a
+converged commercial solver", with this solver's own convergence not yet measured. How close 1861
+is to optimal remains unknown; Hexaly's own lower bound is too loose to say.
 
 **One instance family.** Almost every measurement comes from one generated family at two capacities.
 The withdrawn result above is what that costs: a finding can be real, reproduced, and still local to
 its shape.
 
-**Wall-clock termination makes runs non-reproducible.** A fixed seed does not fix the iteration
-count. That sets a noise floor near 0.5% on a single run — 0.62% per trial in the search above — and
-puts smaller effects out of reach. Iteration-count termination would fix it, and is the gate on any
-wider search (`planning/joint-parameter-search.md`).
+**Runs are not reproducible, and the fix is not simply a fixed iteration count.** A seed does not
+fix the trajectory, for two independent reasons:
 
-**Operator selection is untuned, and the search says it does not need to be.** Shipped defaults are
-the hand-chosen originals.
+1. **Wall-clock termination.** Run length varies with machine speed and load.
+2. **Operator weighting is TIMING-BASED.** `mean_call_time` divides into every score, so CPU load
+   changes which operators get selected. This one alters the trajectory even at a fixed iteration
+   count.
 
-**The exploration-scoring rule is unproven, not unimplemented.** Accepted uphill moves used to score
+Iteration-count termination removes only the first, and **it must not be used to tune this
+solver.** Under a fixed iteration budget an expensive operator is free, so a configuration that
+shifts weight toward expensive operators wins the test and loses in production. That is bias, not
+noise, and it lands on exactly the parameters that control operator cost.
+
+Removing the second source means `set_deterministic_weighting`, which forces mean cost to 1 -- and
+then the run is reproducible but is no longer the solver anybody ships.
+
+**So reproducibility and production fidelity are in tension, and validity wins.** A test has to
+measure what a user gets: solution quality at a fixed TIME limit. That is why the searches average
+many short runs instead of quieting the objective, and it leaves exactly one way to lower the noise
+floor -- more runs. The floor is near 0.5% on a single run, 0.62% per trial in the search above.
+See `planning/joint-parameter-search.md`.
+
+**The defaults are partly tuned, and no later work has beaten them.** The first schedule search did
+change them: `max_plateau_size` 10k -> 2k, a re-evaluated initial temperature, a slower anneal, and
+the impetus for the objective-anchored reheat redesign. Nothing since -- later searches, added
+operators, or bugfixes -- has decisively beaten that set.
+
+Proving one does is a **power** problem, not a design problem. Separating configurations that differ
+by ~1% needs many more runs per configuration, and mean-sigma falls as sqrt(n), so the budget goes
+from hours to days. Out of scope at this stage.
+
+**The exploration floor is bounded above, not shown to help.** Accepted uphill moves used to score
 zero, so an operator that paid off through exploration could never earn weight. The `explore_reward`
-floor fixes that, and because it is divided by `mean_cost` it separates cheap explorers from
-expensive ones rather than merely rewarding exploration. Whether it *helps* is not established: the
-parameter spanned nine orders of magnitude in the search above and the landscape was flat. That is a
-statement about statistical power — the effect sits below the noise floor, and resolving it needs
-many more runs rather than a different experiment. See `planning/operator-scoring.md`.
+floor fixes that, and dividing by `mean_cost` separates cheap explorers from expensive ones rather
+than merely rewarding exploration.
+
+A 120-run paired ablation found `1e-2` **costs 2.77%**, while `1e-5` and `1e-8` are indistinguishable
+from no floor at all. So too large a value demonstrably hurts, and no value demonstrably helps. That
+experiment could only resolve effects above ~3%, so it does not rule out a smaller benefit. See
+`planning/operator-scoring.md`.

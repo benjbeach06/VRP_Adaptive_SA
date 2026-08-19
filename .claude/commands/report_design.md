@@ -26,9 +26,29 @@ The target structure is one folder per **BL operator**, and inside it a folder p
 that uses it, when there is more than one. Migrate toward that as more of the code is covered. Do
 not restructure existing folders without asking.
 
+## A bugfix is NOT a design doc
+
+**Design docs record established design and future direction. They do not track past defects.**
+
+A bug that was found and fixed belongs in the commit message, or in bug tracking.
+
+A defect earns a mention only if it passes all three:
+
+- **It is a DESIGN defect, not a code bug.** The design was wrong, not its implementation.
+- **It reached a commit.** Anything fixed before the first commit never existed in the repo.
+- **It blocked effective use.** A tuned constant does not qualify. A mechanism that could not work
+  does.
+
+Then write the DECISION it forced, not the incident.
+
+Corollary: never open a design folder for a feature area just because a bug was found there. A
+design doc for an operator covers **the whole operator**. If there is no appetite for that scope
+right now, write nothing and say so.
+
 ## Migrate finished planning docs into design
 
-**When a planning item is DONE, it stops being a plan and becomes a design.** Move it.
+**When a planning item is DONE, it stops being a plan and becomes a design.** Move it -- unless it
+was a defect, in which case see above: it just goes away.
 
 For each `planning/` item completed since the last report, decide:
 
@@ -46,7 +66,7 @@ Ask before moving anything whose placement is not obvious.
 - **Why it is built this way**, including alternatives that were rejected and the reason.
 - **Decisions and their evidence.** A measured number beats an argument.
 - **Known costs accepted on purpose**, and what would fix them later.
-- **Defects found and what they taught**, when the design changed because of one.
+- **A design defect, only if it forced a decision that still stands.** See the bar below.
 
 Do NOT restate the code. If a reader could get it from the source in ten seconds, leave it out.
 

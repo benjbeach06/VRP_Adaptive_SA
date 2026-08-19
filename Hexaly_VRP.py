@@ -120,7 +120,7 @@ def build_model():
         #
         # Parametrize the optimizer
         #
-        optimizer.param.time_limit = 10
+        optimizer.param.time_limit = 180
 
         optimizer.solve()
 

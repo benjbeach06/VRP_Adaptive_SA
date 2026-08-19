@@ -59,6 +59,7 @@ import numpy as np
 import SimAnn_VRP_Core_Model as CM
 from SimAnn_VRP_Core_Model import Customer, Depot, FullSolution, Vehicle
 from SimAnn_VRP_Solver import SimAnnVRPSolver
+from run_stamp import solver_stamp          # noqa: E402
 
 RESERVOIR = 4000
 
@@ -310,6 +311,7 @@ def main() -> int:
 
     started = time.time()
     results = {
+        "_solver": solver_stamp(),
         "started": time.strftime("%Y-%m-%d %H:%M:%S"),
         "sizes": sizes, "seeds": args.seeds, "proposals": args.proposals,
         "warm_seconds": warms, "inject_cost": args.inject_cost,

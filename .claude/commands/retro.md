@@ -65,13 +65,28 @@ Say plainly which memories you wrote and what changed.
 
 ## 6. Commit
 
-Write a **brief, descriptive** commit message from the summary in step 1.
+Write a **brief** commit message from the summary in step 1.
 
-Brief means brief. His own commit messages are one line plus a short parenthetical. Mine run far too
-long. Match his, not mine.
+**ENUMERATE what landed.** One line each, grouped by area. A commit message is a manifest, not an
+argument for it.
 
-Cover what changed and why. Include one line of attribution. Leave the reasoning that belongs in a
-planning file or in `RESULTS.md` out of the commit.
+**SEPARATE ADDS FROM FIXES.** A reader needs to know whether a line is new capability or repaired
+behavior; without the distinction the message gives no context. Group them, or mark each line.
+
+**LINK TO FILES, NOT FOLDERS.** `design/x/y.md`, never `design/x/`. A folder link makes the reader
+search.
+
+**GROUP FEATURES UNDER THE DESIGN DOC, not the reference under each feature.** When two or more
+lines share a doc, name the doc once as a heading and list them beneath it. Repeating the same path
+three times is noise. A single item keeps its reference inline.
+
+**IMPETUS BELONGS IN DESIGN DOCS.** Do not explain why a mechanism exists or what it measured. Link
+the design doc and let it carry the reasoning.
+
+Include one short line of attribution.
+
+Brief means brief. His own messages are one line plus a short parenthetical. Mine run far too long.
+Match his.
 
 Show him the message before you commit.
 

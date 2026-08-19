@@ -9,10 +9,10 @@ Part of this repository was written with AI assistance (Claude), and the split i
 measure. The `Pre_AI` branch marks the last commit before any was used.
 
 | | `Pre_AI`, 2026-08-07 | today |
-|---|---|---|
-| solver proper — model, operators, lifecycle, annealing | **4,902 lines** | 7,513 |
-| `tools/` — profiling, stress, ablation, tuning | 0 | 1,770 |
-| tests | 47 | 1,116 |
+|---|----------------------|---|
+| solver proper — model, operators, lifecycle, annealing | **4,902 lines**      | 7,513 |
+| `tools/` — profiling, stress, ablation, tuning | 0                    | 1,770 |
+| tests | 0                    | 1,116 |
 
 The solver is mine. Its architecture — the delta arithmetic, the operator lifecycle, the
 oracle-twin convention, the annealing schedule — was designed and built before an assistant touched
@@ -95,6 +95,10 @@ become a default.
 what it says." It is **"what reads the value I changed, and what does it assume about it?"** The
 defect that voided the tuning run was a correct edit whose consumer, one call away, assumed a
 property the edit removed.
+
+**The solver modules are committed.** A measurement is only citeable if its solver version is. An
+uncommitted solver module means the recorded commit does not describe the code that ran, and no
+later reader can recover what did. Docs and tooling may be dirty; the four solver modules may not.
 
 **`tools/preflight.py` runs.** It performs one short solve at the target shape and asserts that the
 statistics the job steers by are neither dead nor saturated. Two minutes against a ten-hour job is

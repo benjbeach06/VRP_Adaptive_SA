@@ -594,9 +594,10 @@ class DisposeOfEmptyRoutesBL(OperatorBL[DisposeOfEmptyRoutesOps]):
         # Each item in revert stack is a tuple of [item removed, item's predecessor].
         # Thus, to revert: in reverse order, we add in the route after its predecessor.
         # NOTE: early predecessors may be removed routes later in the list!
-        revert_stack: list[tuple[Route, Route|FirstRoute|None]] = [(r, r.prev_route) for r in routes]
+        revert_stack: list[tuple[Route, Route|FirstRoute|None]] = []
 
         for route in routes:
+            revert_stack.append((route, route.prev_route))
             route.dispose()
 
         # Keep difference_update's record rather than using pop_all: it says where each removal

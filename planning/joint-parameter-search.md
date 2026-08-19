@@ -20,7 +20,7 @@ thing the other was varying.
 
 So the open question is whether several tweaks *together* beat any of them alone.
 
-## The measurement problem comes first
+## The measurement problem comes first, and the obvious fix is a trap
 
 **Do not run a wider search before fixing the noise floor.** Widening the space makes the existing
 problem worse, and the existing problem is variance, not trial count.
@@ -34,13 +34,62 @@ The arithmetic is unforgiving. Detecting a 1% effect against 0.62% per-trial noi
 per configuration; adding dimensions multiplies the configurations needed. Spending the budget on
 more trials at the current noise level buys very little.
 
-**Iteration-count termination is the prerequisite.** It is already listed under Known Limitations in
-[RESULTS.md](../RESULTS.md). Making runs terminate on iterations rather than seconds removes
-the dominant variance source, which makes every trial cheaper in the only currency that matters here.
-That is a smaller job than a wide search and it makes the wide search worth running.
+**Do NOT reach for iteration-count termination here.** It looks like the fix and it is worse than
+the problem.
 
-Order: fix termination, re-measure the noise floor, *then* decide how many dimensions the budget can
-actually support.
+Under a fixed iteration budget, **an expensive operator is free**. A parameter set that shifts
+weight toward expensive operators does more work per iteration, so it wins the test -- and loses in
+production, where those iterations cost wall clock. The selection parameters are exactly the ones
+that control operator cost, so the bias lands squarely on the thing being tuned.
+
+That is BIAS, not noise. A quieter objective measuring the wrong quantity is worse than a noisy one
+measuring the right quantity: it returns a confident wrong answer instead of an uncertain right one.
+
+**The test must measure what a user gets: solution quality at a fixed TIME limit.** That fixes the
+termination rule and leaves only one way to lower the noise floor -- more runs per configuration.
+
+(Iteration-count termination would also not deliver reproducibility on its own. Operator weighting
+is timing-based, so CPU load changes which operators are selected even at a fixed iteration count.
+Removing that too means `set_deterministic_weighting`, which forces mean cost to 1 and stops
+measuring the shipped solver. See Known Limitations in [RESULTS.md](../RESULTS.md).)
+
+So the order is: decide how many runs per configuration the noise floor demands, price that against
+the number of dimensions, and only then decide whether the search is affordable. There is no
+cleverer termination rule waiting to make it cheap.
+
+## Three ways to make it affordable
+
+The budget is runs-per-configuration, and it is bounded by wall clock. Three levers move that bound
+without waiting longer. They are independent and they multiply.
+
+**1. Raise throughput.** Faster iterations mean shorter runs measure the same amount of search.
+Profiling found few easy wins: the time is spread across `[self]` attribute lookups in the operators'
+own frames rather than concentrated anywhere. That points at structural work --
+[module-structure](module-structure.md) turns `self` into a typed parameter, and
+[inverted-view-refactor](inverted-view-refactor.md) removes the lookup chain that feeds the hottest
+delta path.
+
+**2. Parallelize -- primarily on remote HPC or cloud, not locally.** Runs are independent: different
+seeds, different configurations, no shared state. That is the standard vector for this shape of
+workload, and it is where "more compute in the same wall clock" actually scales. A local machine
+buys a small constant factor; a cluster buys the order of magnitude the power calculation needs.
+
+**Local parallelism only via MPI-style independent processes, never threads.** The solve is CPU-bound
+Python, so the GIL makes thread parallelism worthless -- threads would serialize the work and, worse,
+serialize the timings that operator weighting reads. Independent processes, one per core, are the
+only local form that works.
+
+**Either way, one measurement risk, and it is the same one that rules out iteration-gating.**
+Operator weighting is timing-based. Solves that contend for a core inflate `mean_call_time`, which
+changes which operators get selected, so a contended run measures a slightly different solver.
+Pin one solve per physical core, and check that a parallel trial reproduces a solo trial's operator
+mix before trusting a parallel search.
+
+**3. Make the solver converge faster.** Better operators, and ablate the ones that earn nothing.
+Steeper descent means plateaus arrive sooner, so a shorter run still exercises the reheat behavior
+that the schedule parameters exist to control. This one is different in kind: it does not just buy
+more runs, it makes each run need less time to measure the same thing.
+[heuristic-survey](heuristic-survey.md) is the cheap first step.
 
 ## If it does get run
 
@@ -57,8 +106,8 @@ actually support.
 
 ## Gate
 
-Iteration-count termination, and a re-measured noise floor. Without those this is a more expensive
-way to reach the same flat answer twice.
+A noise floor low enough to resolve the effect being looked for, which means budget for many runs
+per configuration. Without that this is a more expensive way to reach the same flat answer twice.
 
 Worth saying plainly: the prior is that this finds nothing. Two searches over different parameter
 sets both landed on the hand-chosen values, which is evidence the solver is genuinely insensitive

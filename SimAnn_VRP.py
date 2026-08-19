@@ -65,11 +65,11 @@ def build_vrp_model():
 
     sln.set_objectives(cost_per_depot = cost_per_depot, cost_per_vehicle = cost_per_vehicle, unit_travel_cost = unit_travel_cost)
 
-    solver = SimAnnVRPSolver(sln, max_time=120)
+    solver = SimAnnVRPSolver(sln, max_time=180)
 
-    #solver.make_initial_solution()
-    solver.make_dumb_initial_solution()
-    solver.solve()
+    solver.make_initial_solution()
+    #solver.make_dumb_initial_solution()
+    solver.solve(debug_level=0)
 
     (obj, sln) = solver.get_best_snapshot()
 

@@ -1,10 +1,10 @@
 # Planning
 
-What comes next for this solver, and why. Each entry states the problem, the measurement that
-motivates it, and the gate that would justify starting it.
+Planned features for this solver. Each entry states the problem, the measurement that motivates it,
+and **the gate that would justify starting it**.
 
-The point of writing these down is that most of them are **not** started, deliberately. Every entry
-carries the evidence for its own priority, so the ordering is arguable rather than asserted.
+Most are not started yet. The gate is the useful part: it says what has to be true before the work
+is worth doing, so the ordering is arguable from evidence rather than asserted.
 
 | plan | status | one-line reason |
 |---|---|---|
@@ -23,7 +23,7 @@ carries the evidence for its own priority, so the ordering is arguable rather th
 | [plan-metrics](plan-metrics.md) | deferred on purpose | rule agreed, scale not designed; bad estimates are worse than none |
 | [heuristic-survey](heuristic-survey.md) | cheap, gates new operators | the algorithm shortlist was four; DIMACS lists many more, with fixed-endpoint variants unexamined |
 | [budget-gated-selection](budget-gated-selection.md) | necessary, not started | expensive operators can eat a small budget in one call; weighting only learns AFTER they run |
-| [joint-parameter-search](joint-parameter-search.md) | gated on the noise floor | two flat searches held each other's knobs fixed; fix iteration-count termination first |
+| [joint-parameter-search](joint-parameter-search.md) | gated on the noise floor | two flat searches held each other's knobs fixed; needs many more runs per config, and iteration-gating is a trap |
 
 ## Done: the re-tune, and its answer
 

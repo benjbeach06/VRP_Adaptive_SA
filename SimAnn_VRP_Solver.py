@@ -85,7 +85,7 @@ class SimAnnVRPSolver:
                  reaction_factor: float = 0.01,
                  cooling_factor: float = 1 - 1e-4,
                  initial_temp_factor: float = 1e-4, # exploit first
-                 max_plateau_size: int = 2000,
+                 max_plateau_size: int = 1000,
                  plateau_reheat_exponent: float = 0.2,
                  empty_route_cleanup_interval: int = 100,
                  explore_reward: Num = 1e-5):
@@ -144,6 +144,10 @@ class SimAnnVRPSolver:
             SplitRandomRoute(sln, explore_reward),
             CombineRandomRoutes(sln, explore_reward)
         ))
+
+        operators = self.operators
+        self.adj_weights: dict[Operator, Num] = {op: op.exploit_selection_penalty_factor for op in operators}
+
         # DisposeOfEmptyRoutes / DisposeOfTrivialRoutes are deliberately NOT in the weighted
         # roster: disposal already happens unconditionally every empty_route_cleanup_interval
         # iterations and again before every snapshot (see _cleanup_empty_routes and
@@ -200,15 +204,19 @@ class SimAnnVRPSolver:
         total_accepts = 0
         improving_moves = 0
 
+        adj_weights = self.adj_weights
         for op in self.operators:
             weight = op.weight
             (num_proposals, num_accepts, num_improvements, score_sum) = op.get_stats()
             p = self.reaction_factor
             if num_proposals > 0:
                 average_score = score_sum / num_proposals if score_sum > 0 else 0
-                op.weight = reheat*((1 - p) * weight + p * average_score)
+                weight = reheat*((1 - p) * weight + p * average_score)
             else:
-                op.weight = reheat*max(weight, (weight / geom_mean_weight) ** 0.997 * geom_mean_weight)
+                weight = reheat*max(weight, (weight / geom_mean_weight) ** 0.997 * geom_mean_weight)
+
+            op.weight = weight
+            adj_weights[op] = weight * op.exploit_selection_penalty_factor
 
             total_proposals += num_proposals
             total_accepts += num_accepts
@@ -226,13 +234,15 @@ class SimAnnVRPSolver:
                 # Simpler reheat factor: Given root from max, in log-space: we multiply range (obj-temp) by p. So: temp += (1-p)(obj-temp)
                 self.log_temperature += (1-self.plateau_reheat_exponent)*(math.log2(self.curr_objective)-self.log_temperature)
                 self.num_plateau_reheats += 1
+        else:
+            self.curr_plateau_size = 0
 
-        #self.temperature = 2**self.log_temperature
 
 
     def choose_operator(self):
         operators = self.operators
-        cum_weights = list(itertools.accumulate(op.weight for op in operators))
+        adj_weights = self.adj_weights
+        cum_weights = list(itertools.accumulate(adj_weights[op] for op in operators))
         total = cum_weights[-1]
 
         r = rand_unit()*total
@@ -515,7 +525,7 @@ class SimAnnVRPSolver:
 
             improvement = move.improvement
             loglog_acceptance_threshold = -float('inf') if improvement >= 0 else math.log(-improvement, 2) - self.log_temperature
-            accept = improvement > 0 or math.log(-math.log(rand_unit()), 2) >= loglog_acceptance_threshold
+            accept = improvement > 0 or (not op.exploit_only and math.log(-math.log(rand_unit()), 2) >= loglog_acceptance_threshold)
 
             if isinstance(op, CombineRandomRoutes):
                 pass

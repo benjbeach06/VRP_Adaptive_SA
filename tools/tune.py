@@ -76,6 +76,7 @@ import optuna
 import SimAnn_VRP_Core_Model as CM
 from SimAnn_VRP_Core_Model import Customer, Depot, FullSolution, Vehicle
 from SimAnn_VRP_Solver import SimAnnVRPSolver
+from run_stamp import solver_stamp          # noqa: E402
 
 
 # Each entry: name -> (optuna suggest kind, low, high, log?). Extend this to widen the search;
@@ -257,6 +258,7 @@ def main() -> None:
     study.enqueue_trial(DEFAULTS)          # evaluate the status quo as trial 0
 
     state = {
+        "_solver": solver_stamp(),
         "config": {"sizes": args.sizes, "runs_per_size": args.runs_per_size,
                    "seconds_per_run": args.seconds_per_run,
                    "budget_seconds": args.budget_seconds},

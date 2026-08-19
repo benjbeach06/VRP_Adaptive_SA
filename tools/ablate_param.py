@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import tune                                        # noqa: E402
 import SimAnn_VRP_Core_Model as CM                  # noqa: E402
 from SimAnn_VRP_Solver import SimAnnVRPSolver       # noqa: E402
+from run_stamp import solver_stamp
 
 
 def run_once(param: str, value: float, size: int, seed: int, seconds: float, start: str) -> dict:
@@ -93,7 +94,8 @@ def main() -> int:
         print(f"  seed {seed:>3}  " + "  ".join(row) +
               f"   [{done}/{total}, {(time.time()-started)/3600:.2f}h]", flush=True)
         Path(args.out).write_text(json.dumps(
-            {"config": vars(args), "results": {str(k): v for k, v in results.items()}}, indent=1))
+            {"_solver": solver_stamp(), "config": vars(args),
+             "results": {str(k): v for k, v in results.items()}}, indent=1))
 
     print("\n--- per arm ---")
     finite = {v: [r["objective"] for r in results[v] if r["objective"] != float("inf")] for v in arms}

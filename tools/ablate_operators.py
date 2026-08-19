@@ -52,6 +52,7 @@ import SimAnn_VRP_Core_Model as CM
 import SimAnn_VRP_Operators as OPS
 from SimAnn_VRP_Core_Model import Customer, Depot, FullSolution, Vehicle
 from SimAnn_VRP_Solver import SimAnnVRPSolver
+from run_stamp import solver_stamp          # noqa: E402
 
 # Excluded from ablation -- see module docstring.
 REPAIR_OPERATORS = {"SplitRandomRoute", "CombineRandomRoutes", "ChangeRandomEndDepot"}
@@ -235,7 +236,8 @@ def main() -> int:
                     failures[key] = failures.get(key, 0) + 1
                 # Written every run: an overnight job that dies at hour 7 keeps its first 7 hours.
                 with open(args.out, "w") as handle:
-                    json.dump({"variants": [v["name"] for v in variants], "sizes": sizes,
+                    json.dump({"_solver": solver_stamp(),
+                               "variants": [v["name"] for v in variants], "sizes": sizes,
                                "capacity": args.capacity, "seconds_for_size": SECONDS_FOR_SIZE,
                                "roster": roster, "not_ablated": sorted(REPAIR_OPERATORS),
                                "seeds_completed": seed, "failures": failures,

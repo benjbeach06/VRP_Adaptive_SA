@@ -40,6 +40,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 # Reusing tune.py's instance builder, solver_kwargs and run_once is deliberate: a local copy
 # would silently drift from the thing being validated.
 import tune
+from run_stamp import solver_stamp          # noqa: E402
 
 
 def measure(params: dict, size: int, seeds: list[int], seconds: float) -> list[float]:
@@ -113,6 +114,7 @@ def main() -> None:
     print(f"estimated wall time: {total/60:.0f} min\n", flush=True)
 
     state = {
+        "_solver": solver_stamp(),
         "source": os.path.basename(args.results),
         "config": {"runs": args.runs, "seconds": args.seconds, "sizes": args.sizes,
                    "seeds": seeds, "fixed": tune.FIXED},

@@ -47,8 +47,9 @@ that budget on the cheapest available source.
 `explore_reward` spanned nine orders of magnitude in the 149-trial search and the landscape was
 indistinguishable from noise ([RESULTS.md](../RESULTS.md)). That is a statement about statistical
 power, not about the mechanism. The honest position is that the rule is well-motivated and its
-effect is below the current noise floor, which is another reason iteration-count termination
-(`joint-parameter-search.md`) is the gating piece of work.
+effect is below the current noise floor. Lowering that floor is the gating work -- and it is harder
+than it looks, because timing-based operator weighting keeps a run non-reproducible even at a fixed
+iteration count. See `joint-parameter-search.md`.
 
 ## The measurement
 
