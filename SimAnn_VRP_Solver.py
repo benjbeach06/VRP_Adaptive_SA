@@ -140,6 +140,7 @@ class SimAnnVRPSolver:
             ReorderSpanByFarthestInsertion(sln, explore_reward),
             ReorderRandomRouteByFarthestInsertion(sln, explore_reward),
             ReorderLongRouteByFarthestInsertion(sln, explore_reward),
+            ReorderShortSpanExactly(sln, explore_reward),
             ChangeRandomEndDepot(sln, explore_reward),
             SplitRandomRoute(sln, explore_reward),
             CombineRandomRoutes(sln, explore_reward)

@@ -30,7 +30,7 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 
 from _harness import (
     FULL_MATRIX, DirectOperator, SeededTestCase, all_problems, debug_findings, fingerprint,
-    random_instance, run_solver,
+    random_instance, run_solver, catch_mis_reported_noops,
 )
 
 # Wall-clock budget per solve. Kept small so the suite stays usable; the solver runs tens of
@@ -234,3 +234,81 @@ class SolverDeterminism(SeededTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoOpDetection(SeededTestCase):
+    """
+    A move worth nothing that also DOES nothing must not report VALID.
+
+    Zero-delta moves are legitimate -- reversing a symmetric run costs nothing and still changes
+    the solution. The defect is the other case: a move priced at zero that leaves the vehicles
+    exactly as they were. That hands its operator weight it did not earn.
+
+    The cost of getting this wrong is about to rise. Under family-level selection, one operator's
+    undeserved weight lifts its whole family's geometric mean, so a silent no-op stops being local.
+    See planning/family-level-selection.md.
+
+    Deterministic weighting and a fixed iteration budget, so a finding is reproducible rather than
+    a trajectory that happened once.
+    """
+
+    ITERATIONS = 4000
+
+    def test_no_zero_delta_move_leaves_the_solution_unchanged(self):
+        for seed, n_customers, n_vehicles in [(1, 20, 3), (5, 40, 5), (17, 30, 4)]:
+            with self.subTest(seed=seed):
+                sln = random_instance(seed, n_customers, n_vehicles)
+                with catch_mis_reported_noops(sln) as findings:
+                    run_solver(sln, max_time=SOLVE_SECONDS, debug_level=0,
+                               iterations=self.ITERATIONS, deterministic_weighting=True)
+                counts: dict[str, int] = {}
+                for name, kind in findings:
+                    counts[f"{name} ({kind})"] = counts.get(f"{name} ({kind})", 0) + 1
+                self.assertEqual(
+                    counts, {},
+                    "operators reported an actionable zero-delta move that changed nothing")
+
+    def test_the_no_op_detector_actually_fires(self):
+        """
+        A clean run means nothing until the detector is shown to fire.
+
+        Inject the defect by RE-OPENING the hole the fix closed: force one operator to return the
+        identity order, and make PermuteChain price an identity as VALID again. That is the exact
+        shape of the bug this suite found, so passing here means the detector would catch its
+        return.
+
+        Crafting some other zero-delta case would test a different thing. The question is whether
+        THIS defect stays caught.
+        """
+        import SimAnn_VRP_BLOperators as BL
+        from SimAnn_VRP_Operators import ReorderShortSpanExactly
+
+        original_reorder = ReorderShortSpanExactly._reorder
+        original_evaluate = BL.PermuteChain._evaluate_impl
+
+        def leaky_evaluate(self, operands):
+            result = original_evaluate(self, operands)
+            _, _, permutation = operands
+            is_identity = (len(permutation) > 1
+                           and all(source == position
+                                   for position, source in enumerate(permutation)))
+            if result[1] == BL.MoveKind.NOOP and is_identity:
+                # Pre-fix behaviour: price a no-op as a real move worth nothing.
+                self._revert_info = self._apply_impl(operands)
+                return BL.ObjectiveTermDelta(travel_distance=0.0), BL.MoveKind.VALID
+            return result
+
+        ReorderShortSpanExactly._reorder = lambda self, points, left, right: list(range(len(points)))
+        BL.PermuteChain._evaluate_impl = leaky_evaluate
+        try:
+            sln = random_instance(1, 20, 3)
+            with catch_mis_reported_noops(sln) as findings:
+                run_solver(sln, max_time=SOLVE_SECONDS, debug_level=0,
+                           iterations=self.ITERATIONS, deterministic_weighting=True)
+        finally:
+            ReorderShortSpanExactly._reorder = original_reorder
+            BL.PermuteChain._evaluate_impl = original_evaluate
+
+        self.assertTrue(
+            findings,
+            "detector missed a DELIBERATE no-op -- its clean runs prove nothing")

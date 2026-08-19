@@ -322,3 +322,62 @@ def run_solver(sln: FullSolution, max_time: float, debug_level: int = 3, iterati
 def debug_findings(output: str) -> list[str]:
     return [line for line in output.splitlines() if "[debug]" in line]
 #endregion
+
+
+def vehicle_state(sln: FullSolution) -> str:
+    """
+    Every vehicle's route chain, ordered by vID. The state a move is supposed to change.
+
+    Deliberately NOT fingerprint(): this carries no cost term. Comparing cost would be circular
+    here, since the question being asked is whether a ZERO-COST move changed anything at all.
+    """
+    parts = []
+    for vehicle in sorted(sln.vehicles, key=lambda v: v.vID):
+        sequence, current = [], vehicle.first_route.next_route
+        while isinstance(current, Route):
+            sequence.append(str(current))
+            current = current.next_route
+        parts.append(f"v{vehicle.vID}: " + " , ".join(sequence))
+    return " || ".join(parts)
+
+
+@contextlib.contextmanager
+def catch_mis_reported_noops(sln: FullSolution, tolerance: float = 1e-9):
+    """
+    Collect operators whose ZERO-DELTA moves leave the solution unchanged.
+
+    A move worth nothing that also DOES nothing should have reported NOOP or INVALID. Reporting it
+    VALID hands the operator undeserved weight, and under family-level selection that error would
+    spread to every sibling (planning/family-level-selection.md).
+
+    Snapshots before propose() and compares after apply, which covers both operator kinds: an
+    _evaluates_by_applying operator mutates during propose, a predictive one during apply. The
+    span brackets whichever it is.
+
+    Yields the findings list; it fills as the solve runs.
+    """
+    from SimAnn_VRP_Operators import Operator
+
+    findings: list[tuple[str, str]] = []
+    before: dict[int, str] = {}
+    original_propose = Operator.propose
+    original_apply = Operator.apply_for_acceptance
+
+    def propose(self):
+        before[id(self)] = vehicle_state(sln)
+        return original_propose(self)
+
+    def apply_for_acceptance(self, move):
+        result = original_apply(self, move)
+        if move.is_actionable and abs(move.improvement) < tolerance:
+            if vehicle_state(sln) == before.get(id(self)):
+                findings.append((type(self).__name__, str(move.kind)))
+        return result
+
+    Operator.propose = propose
+    Operator.apply_for_acceptance = apply_for_acceptance
+    try:
+        yield findings
+    finally:
+        Operator.propose = original_propose
+        Operator.apply_for_acceptance = original_apply

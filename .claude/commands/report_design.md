@@ -88,7 +88,7 @@ until a report covers it. A sweeping comment migration is a separate job and nee
 approval.
 
 ```python
-# Farthest insertion, not nearest neighbour. See design/furthest_distance/.
+# Farthest insertion, not nearest neighbour. See design/span_reorder/.
 ```
 
 Keep short comments that explain a non-obvious line. Remove the paragraphs that argue a design.

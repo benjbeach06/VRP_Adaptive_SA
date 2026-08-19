@@ -523,6 +523,14 @@ class PermuteChain(OperatorBL[PermuteChainOps]):
         if len(span) <= 1 or len(permutation) <= 1:
             return None, MoveKind.NOOP
 
+        # An IDENTITY permutation changes nothing, whatever its length. Caught here rather than at
+        # each selection site: every caller can produce one, by a shuffle that lands on the
+        # identity, by a degenerate span, or by a reorder algorithm that finds the incumbent
+        # already optimal. Reporting VALID for it prices a no-op as a real move and hands the
+        # operator weight it did not earn.
+        if all(source == position for position, source in enumerate(permutation)):
+            return None, MoveKind.NOOP
+
         # Route-local O(path length) measurement, not a full-solution objective_terms() diff.
         before = route.total_distance()
         self._revert_info = self._apply_impl(operands)

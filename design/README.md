@@ -28,8 +28,9 @@ The other three homes do not overlap with this one:
 
 | area | doc | covers |
 |---|---|---|
-| farthest distance | [farthest_insertion_order](furthest_distance/farthest_insertion_order.md) | the fixed-endpoint path helper, why farthest insertion, the measured O(n^2) |
-| | [reorder_operators](furthest_distance/reorder_operators.md) | the three span-rebuild operators over `PermuteChain` |
+| span reorder | [reorder_operators](span_reorder/reorder_operators.md) | the `_SpanReorderBase` seam, the family tree, and the exact short-span optimizer |
+| | [farthest_insertion_ops](span_reorder/farthest_insertion_ops.md) | the three heuristic variants and how they differ |
+| | [farthest_insertion_order](span_reorder/farthest_insertion_order.md) | the fixed-endpoint path helper, why farthest insertion, the measured O(n^2) |
 | operator selection | [exploitation_governance](operator_selection/exploitation_governance.md) | `exploit_only`, the cost-amortizing penalty factor, the `adj_weights` mirror |
 
 ## Target structure

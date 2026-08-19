@@ -50,4 +50,4 @@ to instance size.
 Related: [module-structure](module-structure.md) for where the estimate would live, and
 [route-distance-tracking](route-distance-tracking.md), which removes one of the current
 per-proposal costs. Design context in
-[design/furthest_distance/reorder_operators.md](../design/furthest_distance/reorder_operators.md).
+[design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md).

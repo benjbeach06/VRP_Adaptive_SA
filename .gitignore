@@ -3,3 +3,6 @@ __pycache__/
 
 # Generated profiler HTML; the .txt call trees are the committed record.
 tools/profile_*.html
+
+# Session scratch, reviewed then deleted
+design/_TODO_REVIEW.md

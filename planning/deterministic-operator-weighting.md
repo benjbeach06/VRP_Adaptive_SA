@@ -84,4 +84,4 @@ any ablation of the deterministic operators, since their measured value is curre
 repeat proposals they should never have made.
 
 Related: [operator-scoring](operator-scoring.md), [budget-gated-selection](budget-gated-selection.md).
-Design context: [design/furthest_distance/reorder_operators.md](../design/furthest_distance/reorder_operators.md).
+Design context: [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md).

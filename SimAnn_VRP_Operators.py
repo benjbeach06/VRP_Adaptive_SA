@@ -1127,7 +1127,7 @@ def farthest_insertion_order(points: Sequence[tuple[Num, Num]], left: tuple[Num,
     `points`. The fixed-endpoint Hamiltonian path problem, solved approximately.
 
     Why farthest insertion and not the alternatives, and the measured O(n^2):
-    design/furthest_distance/farthest_insertion_order.md
+    design/span_reorder/farthest_insertion_order.md
     """
     n = len(points)
     if n == 0:
@@ -1144,7 +1144,7 @@ def farthest_insertion_order(points: Sequence[tuple[Num, Num]], left: tuple[Num,
 
     while remaining:
         # One linear scan, ties to the lowest index. Sorting here costs a log factor; see
-        # design/furthest_distance/farthest_insertion_order.md
+        # design/span_reorder/farthest_insertion_order.md
         chosen, best_dist = -1, -1.0
         for index in remaining:
             dst = sq_dist_to_path[index]
@@ -1173,28 +1173,98 @@ def farthest_insertion_order(points: Sequence[tuple[Num, Num]], left: tuple[Num,
         return result
 
 
-class _FarthestInsertionReorderBase(Operator[PermuteChainOps]):
-    """
-    Rebuild a route span by farthest insertion. Subclasses choose the span only.
+# Longest span the exact reorderer will attempt. Cost is K! in the worst case and INDEPENDENT of
+# problem size, so the lever is this ceiling, not a selection discount. To be ablated.
+EXACT_REORDER_MAX_SPAN = 8
 
-    Design, cost, and the reasoning behind each variant: design/furthest_distance/reorder_operators.md
+
+def _span_cost(order, dist, n):
+    """Cost of visiting `order` between the anchors. dist is (n+2)x(n+2); n=left, n+1=right."""
+    total = dist[n][order[0]]
+    for a, b in zip(order, order[1:]):
+        total += dist[a][b]
+    return total + dist[order[-1]][n + 1]
+
+
+def exact_span_order(points: Sequence[tuple[Num, Num]], left: tuple[Num, Num],
+                     right: tuple[Num, Num]) -> list[int]:
+    """
+    OPTIMAL order of `points` between two fixed endpoints, by branch and bound.
+
+    Returns [] when the current order is already optimal.
+
+    Why exact rather than heuristic, why K! is not the real cost, and why the ceiling is
+    EXACT_REORDER_MAX_SPAN rather than a selection penalty:
+    design/span_reorder/reorder_operators.md
+    """
+    n = len(points)
+    if n < 3:
+        return []
+
+    # (n+2)^2 <= 100 entries, computed once. The search below is then integer lookups, not
+    # math.dist calls, which is what makes thousands of branches affordable.
+    nodes = list(points) + [left, right]
+    dist = [[math.dist(a, b) for b in nodes] for a in nodes]
+
+    identity = list(range(n))
+    best_order = identity
+    best = _span_cost(identity, dist, n)
+
+    # Seed from farthest insertion too: tighter bound when the incumbent is poorly ordered.
+    # It INVERTS when pruning is already good or the span is small -- see the design doc.
+    seeded = farthest_insertion_order(points, left, right)
+    if seeded:
+        seeded_cost = _span_cost(seeded, dist, n)
+        if seeded_cost < best:
+            best_order, best = seeded, seeded_cost
+
+    order = [0] * n
+    used = [False] * n
+
+    def search(depth: int, prev: int, cost: float):
+        """Pick BACK-TO-FRONT: prev starts at the right anchor and walks left."""
+        nonlocal best, best_order
+        if depth == n:
+            total = cost + dist[prev][n]          # close against the left anchor
+            if total < best:
+                best, best_order = total, order[::-1]
+            return
+        for i in range(n):
+            if used[i]:
+                continue
+            step = cost + dist[prev][i]
+            if step >= best:                      # cannot beat the incumbent down this branch
+                continue
+            used[i] = True
+            order[depth] = i
+            search(depth + 1, i, step)
+            used[i] = False
+
+    search(0, n + 1, 0.0)
+    return [] if best_order == identity else best_order
+
+
+class _SpanReorderBase(Operator[PermuteChainOps]):
+    """
+    Rebuild a contiguous span of one route.
+
+        _choose_span()                -> (route, start, stop)      WHERE
+        _reorder(points, left, right) -> span-relative order, []   HOW
+
+    The inheritance below marks family boundaries for ablation, not only code reuse.
+    design/span_reorder/reorder_operators.md
     """
 
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, PermuteChain(sln))
 
-        # This operator is nearly pure-exploitation, especially if used on a full route.
-        # Using it for exploration can make the solution get stuck.
-        self.exploit_only = True
-
-        conservative_customer_capacity = sln.mean_customer_capacity/2
-        max_vehicle_capacity = sln.max_vehicle_capacity
-        conservative_vehicle_customers = 0 if abs(conservative_customer_capacity) < 1e-9 else min(len(sln.customers), max_vehicle_capacity/conservative_customer_capacity)
-
-        self.exploit_selection_penalty_factor = 1 if abs(sln.mean_vehicle_capacity) < 1e-9 else 1.0/conservative_vehicle_customers # O(k^2) operation. Amortize cost down to ~O(k)
-
     def _choose_span(self) -> tuple[Route, int, int] | None:
         """Route and half-open span [start, stop) to rebuild. None when nothing is selectable."""
+        raise NotImplementedError
+
+    def _reorder(self, points: Sequence[tuple[Num, Num]],
+                 left: tuple[Num, Num], right: tuple[Num, Num]) -> list[int]:
+        """Order `points` between the fixed endpoints. Empty list means leave it alone."""
         raise NotImplementedError
 
     def _operand_selection_impl(self):
@@ -1220,11 +1290,34 @@ class _FarthestInsertionReorderBase(Operator[PermuteChainOps]):
 
         # The permutation is RELATIVE to the span, so a short span in a long route costs the span,
         # not the route. No full-length identity array is built.
-        order = farthest_insertion_order(
-            [path[i].source_customer.location for i in span], left, right)
+        order = self._reorder([path[i].source_customer.location for i in span], left, right)
         if not order:
             return route, 0, order
         return route, span, order
+
+
+class _FarthestInsertionReorderBase(_SpanReorderBase):
+    """
+    Span rebuild by farthest insertion. Subclasses choose the span only.
+
+    Design, cost, and the reasoning behind each variant: design/span_reorder/reorder_operators.md
+    """
+
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward)
+
+        # This operator is nearly pure-exploitation, especially if used on a full route.
+        # Using it for exploration can make the solution get stuck.
+        self.exploit_only = True
+
+        conservative_customer_capacity = sln.mean_customer_capacity/2
+        max_vehicle_capacity = sln.max_vehicle_capacity
+        conservative_vehicle_customers = 0 if abs(conservative_customer_capacity) < 1e-9 else min(len(sln.customers), max_vehicle_capacity/conservative_customer_capacity)
+
+        self.exploit_selection_penalty_factor = 1 if abs(sln.mean_vehicle_capacity) < 1e-9 else 1.0/conservative_vehicle_customers # O(k^2) operation. Amortize cost down to ~O(k)
+
+    def _reorder(self, points, left, right):
+        return farthest_insertion_order(points, left, right)
 
 
 class ReorderSpanByFarthestInsertion(_FarthestInsertionReorderBase):
@@ -1286,6 +1379,29 @@ class ReorderLongRouteByFarthestInsertion(_FarthestInsertionReorderBase):
         if route.is_empty:
             return None
         return route, 0, len(route.path)
+
+
+class ReorderShortSpanExactly(_SpanReorderBase):
+    """
+    A random span of at most EXACT_REORDER_MAX_SPAN customers, reordered OPTIMALLY.
+
+    Carries neither exploit_only nor a selection penalty, both deliberately.
+    design/span_reorder/reorder_operators.md
+    """
+
+    def _reorder(self, points, left, right):
+        return exact_span_order(points, left, right)
+
+    def _choose_span(self):
+        route = self.sln.choose_random_nonempty_route_ordered()
+        if route is None:
+            return None
+        path_len = len(route.path)
+        if path_len < 3:
+            return route, 0, path_len
+        length = rand_int_inclusive(3, min(path_len, EXACT_REORDER_MAX_SPAN))
+        start = rand_int_inclusive(0, path_len - length)
+        return route, start, start + length
 
 
 class ChangeRandomEndDepot(Operator[ChangeEndDepotOps]):

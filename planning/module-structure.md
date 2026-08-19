@@ -63,6 +63,15 @@ That property is what makes the refactor safe to do late:
 - **Independent testability and import.** An evaluator that takes plain types can be exercised
   without constructing a solver.
 
+## It also blocks design docs for the core model
+
+A design doc covers a coherent unit. `SimAnn_VRP_Core_Model.py` is 4,662 lines holding four
+separable concerns, so there is no unit to write about -- a doc would either cover everything or
+carve an arbitrary slice.
+
+So core-model design docs wait on this split. Anything that would need one right now gets recorded
+where its CALLER is documented instead.
+
 ## Gate
 
 After publication, and **not interleaved with functional work.** It is a large diff touching nearly

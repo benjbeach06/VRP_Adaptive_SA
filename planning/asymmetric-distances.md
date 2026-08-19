@@ -66,7 +66,7 @@ Known so far, NOT a complete audit:
 
 - **`farthest_insertion_order`** -- calls `math.dist` directly and squares coordinate differences by
   hand. It reorders customers, so a directed oracle changes its answer completely. See
-  [design/furthest_distance/farthest_insertion_order.md](../design/furthest_distance/farthest_insertion_order.md).
+  [design/span_reorder/farthest_insertion_order.md](../design/span_reorder/farthest_insertion_order.md).
 - **`nearest_indices` and the neighbour tables** -- numpy squared distances over a coordinate
   array. Under direction, "nearest TO c" and "nearest FROM c" differ, so one table becomes two.
 - **`Route.closest_non_adjacent_customer`** -- used by the reversal selectors.

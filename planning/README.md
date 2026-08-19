@@ -22,6 +22,8 @@ is worth doing, so the ordering is arguable from evidence rather than asserted.
 | [determinism-import-branch](determinism-import-branch.md) | small, isolated | per-call attribute read on a hot path for a determinism-only decision |
 | [plan-metrics](plan-metrics.md) | deferred on purpose | rule agreed, scale not designed; bad estimates are worse than none |
 | [heuristic-survey](heuristic-survey.md) | cheap, gates new operators | the algorithm shortlist was four; DIMACS lists many more, with fixed-endpoint variants unexamined |
+| [family-level-selection](family-level-selection.md) | design first, not started | intra-route operators take ~55% of wall clock; roster composition is acting as allocation policy |
+| [solver-progress-metric](solver-progress-metric.md) | gate met, not started | three plans each need "how converged is this run" and none can ask |
 | [budget-gated-selection](budget-gated-selection.md) | necessary, not started | expensive operators can eat a small budget in one call; weighting only learns AFTER they run |
 | [joint-parameter-search](joint-parameter-search.md) | gated on the noise floor | two flat searches held each other's knobs fixed; needs many more runs per config, and iteration-gating is a trap |
 

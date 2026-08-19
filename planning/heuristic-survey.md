@@ -32,4 +32,4 @@ DIMACS grouping contradicts. The primary tables settle it.
 
 None. Do it before writing another construction or reorder operator, not after.
 
-Design context: [design/furthest_distance/farthest_insertion_order.md](../design/furthest_distance/farthest_insertion_order.md).
+Design context: [design/span_reorder/farthest_insertion_order.md](../design/span_reorder/farthest_insertion_order.md).
