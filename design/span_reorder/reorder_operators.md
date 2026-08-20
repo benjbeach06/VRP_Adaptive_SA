@@ -41,7 +41,7 @@ _SpanReorderBase
 
 **The inheritance is not only code reuse. It marks family boundaries for ablation and, later, for
 selection.** Reasoning in
-[planning/family-level-selection.md](../../planning/family-level-selection.md).
+[design/operator_selection/family_selection.md](../operator_selection/family_selection.md).
 
 ## `ReorderShortSpanExactly`
 
@@ -114,7 +114,7 @@ pruning is absorbing its cost. That agrees with the section above: the practical
 
 - **Operator pricing is about to change.** The right K depends on what a call costs relative to other
   operators. Tuning K against the current scoring would measure a rule that is being replaced.
-- **[planning/family-level-selection.md](../../planning/family-level-selection.md) comes first.** K
+- **Family-level selection is now built.** K
   is a within-family parameter. Its value depends on how often the family is selected at all.
 
 Both instance shapes belong in that ablation. K=8 covers a whole route at capacity 25 and about an

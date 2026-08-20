@@ -230,4 +230,4 @@ than merely rewarding exploration.
 A 120-run paired ablation found `1e-2` **costs 2.77%**, while `1e-5` and `1e-8` are indistinguishable
 from no floor at all. So too large a value demonstrably hurts, and no value demonstrably helps. That
 experiment could only resolve effects above ~3%, so it does not rule out a smaller benefit. See
-`planning/operator-scoring.md`.
+`planning/ablations.md`.

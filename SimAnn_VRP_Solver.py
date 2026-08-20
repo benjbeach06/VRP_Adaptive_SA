@@ -12,6 +12,50 @@ def argmin(values):
     return min(range(len(values)), key=values.__getitem__)
 
 
+# Minimum share of selections each ROOT family is guaranteed, whatever its measured weight says.
+# Floors apply at level 0 only -- below that, weight decides alone. Intra-route and inter-route work
+# carry the solve, so most of a run belongs to them; the rest exist to stay reachable, not to
+# compete. FULL_ROUTE sits above the other two because whole-route reassignment is already earning
+# more than this on merit, and it becomes far more valuable once vehicle distances are gated.
+# Reasoning in design/operator_selection/share_floors.md.
+FAMILY_FLOOR: dict[Family, float] = {
+    Family.INTRA_ROUTE:       0.25,
+    Family.INTER_ROUTE:       0.25,
+    Family.FULL_ROUTE:        0.02,
+    Family.CHANGE_NUM_ROUTES: 0.01,
+    Family.CHANGE_END_DEPOT:  0.01,
+}
+assert math.fsum(FAMILY_FLOOR.values()) < 1.0, "family floors must leave share for weighting"
+
+
+def apply_share_floors(weights: Sequence[Num], floors: Sequence[Num]) -> list[Num]:
+    """
+    Selection shares that sum to 1, at or above each family's floor, proportional to weight where
+    the floor does not bind. See design/operator_selection/share_floors.md.
+
+    Requires sum(floors) < 1 and one positive weight. Together those guarantee a family stays
+    unclamped, so the pool is never empty at the end.
+    """
+    n = len(weights)
+    clamped = [False] * n
+    free_share = 1.0                      # share left for unclamped families
+    pool = math.fsum(weights)             # weight left among unclamped families
+
+    changed = True
+    while changed:
+        changed = False
+        for i in range(n):
+            # Cross-multiplied form of  free_share * weights[i] / pool < floors[i]
+            if not clamped[i] and free_share * weights[i] < floors[i] * pool:
+                clamped[i] = True
+                free_share -= floors[i]
+                pool -= weights[i]
+                changed = True
+
+    scale = free_share / pool
+    return [floors[i] if clamped[i] else weights[i] * scale for i in range(n)]
+
+
 # NOTE(tuning): results of a 704-trial Optuna/TPE search over the annealing constants
 # (2026-08-11). Full report in experiment_logs/tuning_report.txt; harness in tools/tune.py; raw
 # trials in experiment_logs/tune_results.json. Defaults below are UNCHANGED -- this is a record, not an application.
@@ -148,6 +192,8 @@ class SimAnnVRPSolver:
 
         operators = self.operators
         self.adj_weights: dict[Operator, Num] = {op: op.exploit_selection_penalty_factor for op in operators}
+        self._full_roster = list(operators)
+        self._build_family_tree()
 
         # DisposeOfEmptyRoutes / DisposeOfTrivialRoutes are deliberately NOT in the weighted
         # roster: disposal already happens unconditionally every empty_route_cleanup_interval
@@ -196,6 +242,117 @@ class SimAnnVRPSolver:
         for op in self.operators:
             op.weight_by_time = not deterministic
 
+    # Ablation arms. Driven by tools/ablate_param.py --param ablation_arm, which sets one float
+    # attribute per run. Inert unless set. "Greedy" is the OPTIMIZED subtree: the three
+    # farthest-insertion reorderers plus the exact one.
+    ABLATION_ARMS = {
+        0: ("control",        None,   None),
+        1: ("no-greedy",      set(),  None),
+        2: ("exact-K7",       {"EXACT"}, 7),
+        3: ("exact-K8",       {"EXACT"}, 8),
+        4: ("exact-K9",       {"EXACT"}, 9),
+        5: ("exact-K10",      {"EXACT"}, 10),
+        6: ("farthest-only",  {"FARTHEST_INSERTION"}, None),
+        7: ("no-weight-memory", None, None),
+    }
+
+    @property
+    def ablation_arm(self):
+        return getattr(self, "_ablation_arm", 0)
+
+    @ablation_arm.setter
+    def ablation_arm(self, value):
+        arm = int(value)
+        self._ablation_arm = arm
+        name, keep_greedy, max_span = self.ABLATION_ARMS[arm]
+
+        if arm == 7:
+            self.reaction_factor = 1.0          # weight = last segment's average, no memory
+
+        operators = list(self._full_roster)
+        if keep_greedy is not None:
+            operators = [op for op in operators
+                         if Family.OPTIMIZED not in op.family
+                         or op.family[-1].name in keep_greedy]
+        if max_span is not None:
+            for op in operators:
+                if hasattr(op, "max_span"):
+                    op.max_span = max_span
+
+        self.operators = operators
+        self.adj_weights = {op: op.exploit_selection_penalty_factor for op in operators}
+        self._build_family_tree()
+
+    def _build_family_tree(self):
+        """
+        Flatten each operator's family path into a tree of integer node ids.
+        See design/operator_selection/family_selection.md.
+
+        Ids below n_internal index node_children; ids at or above it index leaf_operator. Parents
+        are always created before their children, so a reverse scan is a valid bottom-up order.
+        """
+        ids: dict[tuple, int] = {(): 0}
+        children: list[list[int]] = [[]]
+
+        def node_for(prefix: tuple) -> int:
+            if prefix not in ids:
+                parent = node_for(prefix[:-1])
+                ids[prefix] = len(children)
+                children.append([])
+                children[parent].append(ids[prefix])
+            return ids[prefix]
+
+        # Every internal node first, so no leaf id can fall below one.
+        for op in self.operators:
+            path = getattr(type(op), "family", None)
+            assert isinstance(path, tuple) and path, f"{type(op).__name__} is in the roster with no family path"
+            node_for(path)
+
+        n_internal = len(children)
+        leaf_operator: list[Operator] = []
+        for op in self.operators:
+            children[ids[type(op).family]].append(n_internal + len(leaf_operator))
+            leaf_operator.append(op)
+
+        self.n_internal = n_internal
+        self.node_children = children
+        self.leaf_operator = leaf_operator
+        self.node_weight: list[Num] = [0.0] * (n_internal + len(leaf_operator))
+        self.node_cum: list[list[Num]] = [[] for _ in range(n_internal)]
+
+        # A missing floor would read as "no guarantee" when it means the table was not updated.
+        prefix_of = {nid: prefix for prefix, nid in ids.items()}
+        missing = sorted({prefix_of[nid][0].name for nid in children[0]
+                          if prefix_of[nid][0] not in FAMILY_FLOOR})
+        assert not missing, f"root families with no floor: {missing}"
+        self.root_floor = [FAMILY_FLOOR[prefix_of[nid][0]] for nid in children[0]]
+
+        # Selection starts before the first update_weights, so the cumulative arrays have to be
+        # populated here rather than only per segment.
+        self.refresh_family_tree()
+
+    def refresh_family_tree(self):
+        """
+        Recompute node weights and the cumulative arrays selection descends. Once per segment.
+        A node's weight is the MAX over its children -- design/operator_selection/family_selection.md.
+        """
+        adj_weights = self.adj_weights
+        node_children = self.node_children
+        node_weight = self.node_weight
+        n_internal = self.n_internal
+
+        for i, op in enumerate(self.leaf_operator):
+            node_weight[n_internal + i] = adj_weights[op]
+        # No internal node is childless, so max() never sees an empty sequence.
+        for nid in range(n_internal - 1, -1, -1):
+            node_weight[nid] = max([node_weight[k] for k in node_children[nid]])
+
+        node_cum = self.node_cum
+        node_cum[0] = list(itertools.accumulate(
+            apply_share_floors([node_weight[k] for k in node_children[0]], self.root_floor)))
+        for nid in range(1, n_internal):
+            node_cum[nid] = list(itertools.accumulate(node_weight[k] for k in node_children[nid]))
+
     def update_weights(self):
         weights = [op.weight for op in self.operators]
         reheat = 1e5 if max(weights) <= 1e-10 else 1
@@ -225,6 +382,8 @@ class SimAnnVRPSolver:
 
             op.reset_stats()
 
+        self.refresh_family_tree()
+
         if improving_moves == 0:
             self.curr_plateau_size += 1
             if self.curr_plateau_size >= self.max_plateau_size:
@@ -241,15 +400,21 @@ class SimAnnVRPSolver:
 
 
     def choose_operator(self):
-        operators = self.operators
-        adj_weights = self.adj_weights
-        cum_weights = list(itertools.accumulate(adj_weights[op] for op in operators))
-        total = cum_weights[-1]
+        """
+        Descend the family tree, sampling among siblings in proportion to weight at each level.
+        Identical in distribution to a flat draw over the product of conditionals, and it touches
+        only one root-to-leaf path. See design/operator_selection/family_selection.md.
+        """
+        node_children = self.node_children
+        node_cum = self.node_cum
+        n_internal = self.n_internal
 
-        r = rand_unit()*total
+        node = 0
+        while node < n_internal:
+            cum = node_cum[node]
+            node = node_children[node][bisect.bisect_left(cum, rand_unit() * cum[-1])]
 
-        index = bisect.bisect_left(cum_weights, r)
-        return operators[index]
+        return self.leaf_operator[node - n_internal]
 
     # TODO(warm-start): add a third constructor that loads a saved solution instead of building
     # one, so a run can resume from a recorded best rather than from the greedy sweep.
@@ -310,17 +475,19 @@ class SimAnnVRPSolver:
         def get_closest_remaining_customer_to_customer(customer: Customer) -> Customer:
             hit = _first_remaining_from(customer, sln.neighbors[customer.cID], customers)
             if hit is not None:
+                assert isinstance(hit, Customer)
                 return hit
             # Row exhausted, or the only hit was tied with the cut. Fall back to the original scan.
             return min((other for other in customers if other in remaining),
                        key=customer.distance)
 
-        def get_closest_remaining_customer_to_depot(vehicle: Vehicle):
+        def get_closest_remaining_customer_to_depot(vehicle: Vehicle) -> tuple[Customer, Num]:
             depot = vehicle.final_depot
             row = sln.depot_neighbors[depot.dID]
             while True:
                 hit = _first_remaining_from(depot, row, customers)
                 if hit is not None:
+                    assert isinstance(hit, Customer)
                     return hit, depot.distance(hit)
                 # Widen this depot's row rather than dropping to a scan: depots are few, so the
                 # rebuild is cheap and every later route start stays O(1).
@@ -333,7 +500,7 @@ class SimAnnVRPSolver:
             return best, depot.distance(best)
 
         def get_closest_remaining_service():
-            closest_customers = [(v,)+get_closest_remaining_customer_to_depot(v) for (i,v) in enumerate(vehicles)]
+            closest_customers = [(v,)+get_closest_remaining_customer_to_depot(v) for v in vehicles]
             # Tuples at this point have values (vehicle, customer, distance)
             return min(closest_customers, key = lambda kvp: kvp[2])
 

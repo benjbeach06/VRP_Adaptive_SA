@@ -1,6 +1,6 @@
 # A solver progress metric
 
-**Status: not started. Wanted by at least three other plans, and none of them can proceed cleanly
+**Status: not started. Wanted by at least four other plans, and none of them can proceed cleanly
 without it.**
 
 ## The problem
@@ -27,9 +27,13 @@ there is nothing to gate on.
 **[budget-gated-selection](budget-gated-selection.md)** needs to know how much budget remains
 relative to what an operator costs, to admit expensive operators only when they are affordable.
 
-**[deterministic-operator-weighting](deterministic-operator-weighting.md)** notes that repeat
+**[operator-selection](operator-selection.md)** notes that repeat
 proposals concentrate in a converged, quiet solution. A progress metric is how an operator would
 know it is in that regime.
+
+- **[operator-selection](operator-selection.md)** -- to trigger a low-temperature penalty on
+  fully-random operators. Raw temperature is instance-scaled, so the trigger needs a normalized
+  progress signal, not a constant.
 
 ## What it has to be
 

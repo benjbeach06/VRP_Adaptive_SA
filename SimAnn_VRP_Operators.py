@@ -1,5 +1,6 @@
 import bisect
 import time
+from enum import Enum, auto
 from SimAnn_VRP_BLOperators import *
 import random
 import math
@@ -17,6 +18,35 @@ CHAIN_LEN_CONTINUE_P = 0.75
 # Sampled by inverse CDF: one RNG draw and one log, rather than an expected 1/(1-base) Bernoulli
 # trials. Reciprocal is precomputed because this runs on every proposal.
 _INV_LOG_CHAIN_CONTINUE_P = 1.0 / math.log(CHAIN_LEN_CONTINUE_P)
+
+class Family(Enum):
+    """
+    Nodes of the operator family tree. An operator carries a PATH of these, root first.
+
+    An operator takes its WIDEST family: anything that can change customer-to-route assignment is
+    INTER_ROUTE, even if a draw happens to stay inside one route. A name may repeat under different
+    parents, because the prefix disambiguates. See design/operator_selection/family_selection.md.
+    """
+    # Level 0. Budget floors apply here and nowhere else.
+    INTRA_ROUTE        = auto()   # confined to one route on every draw
+    INTER_ROUTE        = auto()   # can change which route a customer belongs to
+    FULL_ROUTE         = auto()   # moves whole routes; no customer changes route
+    CHANGE_NUM_ROUTES  = auto()   # splits and combines
+    CHANGE_END_DEPOT   = auto()   # end-depot reassignment only
+    # Level 1.
+    REVERSAL           = auto()
+    SWAP               = auto()
+    REORDER            = auto()
+    REASSIGN           = auto()
+    # Level 2.
+    RANDOM             = auto()   # reorders without trying to improve the order
+    OPTIMIZED          = auto()   # reorders by an algorithm that aims at a better order
+    CHAIN              = auto()
+    DEPOT_END          = auto()
+    # Level 3.
+    FARTHEST_INSERTION = auto()
+    EXACT              = auto()
+
 
 class OperatorStats:
     def __init__(self):
@@ -55,6 +85,10 @@ class Operator[Ops: tuple](ABC):
     the Moves passing between them one type-checked chain, so an operand tuple of the wrong shape
     is a static error rather than a runtime surprise inside a delta function.
     """
+    # Path through the family tree, root first. NO default: an untagged operator in the roster
+    # must fail loudly rather than land in some arbitrary family.
+    family: ClassVar[tuple[Family, ...]]
+
 
     def __init__(self, sln: FullSolution, explore_reward: Num, base_operator: OperatorBL[Ops]):
         self.sln = sln
@@ -305,10 +339,12 @@ class Operator[Ops: tuple](ABC):
         # pure function of improvements, and therefore reproducible (see set_deterministic_weighting).
         mean_cost = (self.mean_call_time if self.weight_by_time else 1.0)
 
+        improvement_exponent = 1.5 #1.5
+
         improvement = move.improvement
         sign = -1 if improvement < 0 else 1
         improved = improvement>1e-9
-        score = max(self.explore_reward, sign * (abs(improvement) ** 1.5) )/ max(mean_cost, 1e-9)
+        score = max(self.explore_reward, sign * (abs(improvement) ** improvement_exponent) )/ max(mean_cost, 1e-9)
         self.stats.record_accept(score, improved)
 
     def get_stats(self):
@@ -441,6 +477,8 @@ def random_route_pairs(sln: FullSolution, k: int = 10) -> Iterator[CombineRoutes
             yield r1, r2
 
 class RandomRouteReassignment(Operator[ReassignRouteBeforeOps]):
+    family = (Family.FULL_ROUTE,)
+
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, ReassignRouteBefore(sln))
 
@@ -571,6 +609,7 @@ class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
     the measured evidence is that it matters more. Random destinations accept 0.00-0.04% of
     proposals at 500 customers; the one operator with no destination to choose accepts 18.51%.
     """
+    family = (Family.INTER_ROUTE, Family.REASSIGN)
 
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, ReassignCustomerChain(sln))
@@ -741,6 +780,7 @@ def closest_pair_reversals(sln: FullSolution) -> Iterator[ReverseCustomerChainOp
 class ReverseClosestPairTogether(BestOfCandidates[ReverseCustomerChainOps]):
     """Neighbour-driven 2-opt. Random reversal mostly proposes reversals that fix nothing; this
     anchors on a pair that is spatially close but sequence-distant, which is where the crossing is."""
+    family = (Family.INTRA_ROUTE, Family.REVERSAL)
 
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, ReverseCustomerChain(sln), closest_pair_reversals, k=2)
@@ -850,6 +890,7 @@ class _ChainSwapBase(Operator[SwapCustomerChainsOps], ABC):
     Separate roster entries let the weighting price each selection strategy on its own, which is
     the split that beat a fixed mix for reassignment.
     """
+    family = (Family.INTER_ROUTE, Family.SWAP, Family.CHAIN)
 
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, SwapCustomerChains(sln))
@@ -1003,6 +1044,10 @@ class _SharedDepotEndSwapBase(_ChainSwapBase):
     travel. The shared-depot restriction is about which pairs are worth proposing -- two routes
     that meet at a depot are spatially related, so their ends are more likely to recombine well.
     """
+    # TODO(family-tree): these are really chain swaps with a fixed anchor. Kept as their own
+    # node for now; consider folding them under CHAIN. See planning/ablations.md.
+    family = (Family.INTER_ROUTE, Family.SWAP, Family.DEPOT_END)
+
     _at_end: ClassVar[bool]
 
     # Draws to find a partner that is not route1 before giving up. With k routes at the depot the
@@ -1069,6 +1114,8 @@ class SwapRouteTailsAtSharedDepot(_SharedDepotEndSwapBase):
 
 
 class RandomCustomerChainReversal(Operator[ReverseCustomerChainOps]):
+    family = (Family.INTRA_ROUTE, Family.REVERSAL)
+
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, ReverseCustomerChain(sln))
 
@@ -1088,6 +1135,8 @@ class RandomCustomerChainReversal(Operator[ReverseCustomerChainOps]):
         return route, range(start, end + 1)
 
 class CustomerBestOfkSwapInRandomRoute(BestOfCandidates[SwapCustomerChainsOps]):
+    family = (Family.INTRA_ROUTE, Family.SWAP)
+
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, SwapCustomerChains(sln), random_intra_route_swap_pairs, k=20)
 
@@ -1104,12 +1153,15 @@ class CustomerBestOfkNeighborSwapInRandomRoute(BestOfCandidates[SwapCustomerChai
     Cost is linear in k, and the random version is 44% of all solver time, so k=20 -> 5 is a large
     saving if the aiming holds up.
     """
+    family = (Family.INTRA_ROUTE, Family.SWAP)
 
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, SwapCustomerChains(sln), neighbor_intra_route_swap_pairs, k=5)
 
 
 class RandomRoutePermutation(Operator[PermuteChainOps]):
+    family = (Family.INTRA_ROUTE, Family.REORDER, Family.RANDOM)
+
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, PermuteChain(sln))
 
@@ -1302,6 +1354,7 @@ class _FarthestInsertionReorderBase(_SpanReorderBase):
 
     Design, cost, and the reasoning behind each variant: design/span_reorder/reorder_operators.md
     """
+    family = (Family.INTRA_ROUTE, Family.REORDER, Family.OPTIMIZED, Family.FARTHEST_INSERTION)
 
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward)
@@ -1388,6 +1441,12 @@ class ReorderShortSpanExactly(_SpanReorderBase):
     Carries neither exploit_only nor a selection penalty, both deliberately.
     design/span_reorder/reorder_operators.md
     """
+    family = (Family.INTRA_ROUTE, Family.REORDER, Family.OPTIMIZED, Family.EXACT)
+
+    def __init__(self, sln: FullSolution, explore_reward: Num):
+        super().__init__(sln, explore_reward)
+        # Per-instance so an ablation can vary it. Cost and power are both factorial in this.
+        self.max_span = EXACT_REORDER_MAX_SPAN
 
     def _reorder(self, points, left, right):
         return exact_span_order(points, left, right)
@@ -1399,12 +1458,14 @@ class ReorderShortSpanExactly(_SpanReorderBase):
         path_len = len(route.path)
         if path_len < 3:
             return route, 0, path_len
-        length = rand_int_inclusive(3, min(path_len, EXACT_REORDER_MAX_SPAN))
+        length = rand_int_inclusive(3, min(path_len, self.max_span))
         start = rand_int_inclusive(0, path_len - length)
         return route, start, start + length
 
 
 class ChangeRandomEndDepot(Operator[ChangeEndDepotOps]):
+    family = (Family.CHANGE_END_DEPOT,)
+
     # INVALID -- by far the worst in the roster -- and every one of those is this operator picking
     # the depot the route already has, which ChangeEndDepot rejects as a no-op. The weighting then
     # prices the operator on the surviving two thirds.
@@ -1462,6 +1523,8 @@ class DisposeOfEmptyRoutes(Operator[DisposeOfEmptyRoutesOps]):
         return self.evaluate(self._operand_selection_impl())
 
 class SplitRandomRoute(Operator[SplitRouteOps]):
+    family = (Family.CHANGE_NUM_ROUTES,)
+
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, SplitRoute(sln))
 
@@ -1481,5 +1544,7 @@ class SplitRandomRoute(Operator[SplitRouteOps]):
 
 
 class CombineRandomRoutes(BestOfCandidates[CombineRoutesOps]):
+    family = (Family.CHANGE_NUM_ROUTES,)
+
     def __init__(self, sln: FullSolution, explore_reward: Num, k: int = 10):
         super().__init__(sln, explore_reward, CombineRoutes(sln), random_route_pairs, k=k)

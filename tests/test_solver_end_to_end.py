@@ -246,7 +246,7 @@ class NoOpDetection(SeededTestCase):
 
     The cost of getting this wrong is about to rise. Under family-level selection, one operator's
     undeserved weight lifts its whole family's geometric mean, so a silent no-op stops being local.
-    See planning/family-level-selection.md.
+    See design/operator_selection/family_selection.md.
 
     Deterministic weighting and a fixed iteration budget, so a finding is reproducible rather than
     a trajectory that happened once.

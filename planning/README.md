@@ -11,18 +11,19 @@ is worth doing, so the ordering is arguable from evidence rather than asserted.
 | [inverted-view-refactor](inverted-view-refactor.md) | deferred, gate NOT met | O(1) "where is customer j"; needs ablation evidence for guidance, which currently sits at 2 sigma |
 | [kd-tree-neighbors](kd-tree-neighbors.md) | deferred, not needed yet | neighbor table build is O(n^2); only matters above ~50k customers |
 | [ruin-and-recreate](ruin-and-recreate.md) | ready to start | the real gap against modern VRP; primitives already landed |
-| [operator-scoring](operator-scoring.md) | implemented, unproven | the floor selects CHEAP explorers over expensive ones; effect is below the current noise floor |
 | [end-depot-index](end-depot-index.md) | measured, small | the only operator whose cost grows with instance size |
 | [warm-start](warm-start.md) | small, isolated | saved solutions cannot be loaded back |
 | [module-structure](module-structure.md) | deferred by timeboxing | 4,662-line core model; a mechanical `self` -> typed-parameter split into a static evaluator |
 | [route-distance-tracking](route-distance-tracking.md) | small, self-verifying | no route knows its own length; maintain it like load, with an oracle twin |
 | [vehicle-time-limits](vehicle-time-limits.md) | blocked on the above | travel + service + loading time per vehicle; the largest step toward realistic dispatch |
 | [asymmetric-distances](asymmetric-distances.md) | gated on a real need | supplied distance oracle, directed by default; breaks O(1) chain reversal |
-| [deterministic-operator-weighting](deterministic-operator-weighting.md) | not started | deterministic operators re-propose identical rejected moves; weighting cannot see it |
+| [operator-selection](operator-selection.md) | HUB | which operator gets chosen and how often; three coupled concerns and the mechanisms that attack them |
+| [forget-benefit-not-cost](forget-benefit-not-cost.md) | idea | decay an operator's remembered payoff but keep its remembered cost, so expensive operators run less even at plateau |
+| [family-generation](family-generation.md) | not started | one operator per parameter value, competing inside a family; online parameter learning |
+| [ablations](ablations.md) | not started | measurements that would settle questions already asked; currently scattered |
 | [determinism-import-branch](determinism-import-branch.md) | small, isolated | per-call attribute read on a hot path for a determinism-only decision |
 | [plan-metrics](plan-metrics.md) | deferred on purpose | rule agreed, scale not designed; bad estimates are worse than none |
 | [heuristic-survey](heuristic-survey.md) | cheap, gates new operators | the algorithm shortlist was four; DIMACS lists many more, with fixed-endpoint variants unexamined |
-| [family-level-selection](family-level-selection.md) | design first, not started | intra-route operators take ~55% of wall clock; roster composition is acting as allocation policy |
 | [solver-progress-metric](solver-progress-metric.md) | gate met, not started | three plans each need "how converged is this run" and none can ask |
 | [budget-gated-selection](budget-gated-selection.md) | necessary, not started | expensive operators can eat a small budget in one call; weighting only learns AFTER they run |
 | [joint-parameter-search](joint-parameter-search.md) | gated on the noise floor | two flat searches held each other's knobs fixed; needs many more runs per config, and iteration-gating is a trap |

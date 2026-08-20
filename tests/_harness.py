@@ -348,7 +348,7 @@ def catch_mis_reported_noops(sln: FullSolution, tolerance: float = 1e-9):
 
     A move worth nothing that also DOES nothing should have reported NOOP or INVALID. Reporting it
     VALID hands the operator undeserved weight, and under family-level selection that error would
-    spread to every sibling (planning/family-level-selection.md).
+    spread to every sibling (design/operator_selection/family_selection.md).
 
     Snapshots before propose() and compares after apply, which covers both operator kinds: an
     _evaluates_by_applying operator mutates during propose, a predictive one during apply. The
