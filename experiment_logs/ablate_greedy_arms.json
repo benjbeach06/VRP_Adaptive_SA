@@ -1,0 +1,1034 @@
+{
+ "_solver": {
+  "when": "2026-08-20T02:06:02",
+  "git_sha": "f14b82b",
+  "git_subject": "Add family-level operator selection",
+  "solver_dirty": false,
+  "solver_dirty_files": [],
+  "roster_size": 24,
+  "roster": [
+   "RandomRouteReassignment",
+   "RandomCustomerReassignment",
+   "RandomCustomerChainReassignment",
+   "ReassignClosestChainWithRandomCustomer",
+   "ReassignClosestChainNextToNeighbor",
+   "ReassignChainNextToNeighbor",
+   "SwapChainsWithNeighbor",
+   "ReverseClosestPairTogether",
+   "RandomCustomerChainReversal",
+   "RandomCustomerSwap",
+   "RandomSameLengthChainSwap",
+   "RandomChainSwap",
+   "SwapRouteHeadsAtSharedDepot",
+   "SwapRouteTailsAtSharedDepot",
+   "CustomerBestOfkSwapInRandomRoute",
+   "CustomerBestOfkNeighborSwapInRandomRoute",
+   "RandomRoutePermutation",
+   "ReorderSpanByFarthestInsertion",
+   "ReorderRandomRouteByFarthestInsertion",
+   "ReorderLongRouteByFarthestInsertion",
+   "ReorderShortSpanExactly",
+   "ChangeRandomEndDepot",
+   "SplitRandomRoute",
+   "CombineRandomRoutes"
+  ],
+  "python": "3.14.6"
+ },
+ "config": {
+  "param": "ablation_arm",
+  "values": [
+   0.0,
+   1.0,
+   2.0,
+   3.0,
+   4.0,
+   5.0,
+   6.0,
+   7.0
+  ],
+  "runs": 30,
+  "seconds": 180.0,
+  "size": 200,
+  "capacity": 25,
+  "start": "nn",
+  "out": "experiment_logs/ablate_greedy_arms.json"
+ },
+ "results": {
+  "0.0": [
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   }
+  ],
+  "1.0": [
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   }
+  ],
+  "2.0": [
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   }
+  ],
+  "3.0": [
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   }
+  ],
+  "4.0": [
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   }
+  ],
+  "5.0": [
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   }
+  ],
+  "6.0": [
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   }
+  ],
+  "7.0": [
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   },
+   {
+    "objective": Infinity,
+    "error": "TypeError: SimAnnVRPSolver.__init__() got an unexpected keyword argument 'ablation_arm'"
+   }
+  ]
+ }
+}

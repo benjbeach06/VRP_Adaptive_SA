@@ -1,0 +1,55 @@
+ablation_arm: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
+8 arms x 30 paired seeds x 180s, n=200 capacity=25, start=nn
+240 runs, estimated 12.0 h
+
+  seed   0       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [8/240, 0.00h]
+  seed   1       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [16/240, 0.00h]
+  seed   2       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [24/240, 0.00h]
+  seed   3       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [32/240, 0.00h]
+  seed   4       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [40/240, 0.00h]
+  seed   5       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [48/240, 0.00h]
+  seed   6       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [56/240, 0.00h]
+  seed   7       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [64/240, 0.00h]
+  seed   8       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [72/240, 0.00h]
+  seed   9       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [80/240, 0.00h]
+  seed  10       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [88/240, 0.00h]
+  seed  11       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [96/240, 0.00h]
+  seed  12       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [104/240, 0.00h]
+  seed  13       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [112/240, 0.00h]
+  seed  14       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [120/240, 0.00h]
+  seed  15       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [128/240, 0.00h]
+  seed  16       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [136/240, 0.00h]
+  seed  17       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [144/240, 0.00h]
+  seed  18       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [152/240, 0.00h]
+  seed  19       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [160/240, 0.00h]
+  seed  20       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [168/240, 0.00h]
+  seed  21       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [176/240, 0.00h]
+  seed  22       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [184/240, 0.00h]
+  seed  23       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [192/240, 0.00h]
+  seed  24       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [200/240, 0.00h]
+  seed  25       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [208/240, 0.00h]
+  seed  26       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [216/240, 0.00h]
+  seed  27       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [224/240, 0.00h]
+  seed  28       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [232/240, 0.00h]
+  seed  29       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL       FAIL   [240/240, 0.00h]
+
+--- per arm ---
+  0          ALL FAILED
+  1          ALL FAILED
+  2          ALL FAILED
+  3          ALL FAILED
+  4          ALL FAILED
+  5          ALL FAILED
+  6          ALL FAILED
+  7          ALL FAILED
+
+--- paired vs control (ablation_arm=0), negative = better ---
+  1          too few paired runs
+  2          too few paired runs
+  3          too few paired runs
+  4          too few paired runs
+  5          too few paired runs
+  6          too few paired runs
+  7          too few paired runs
+
+written to experiment_logs/ablate_greedy_arms.json

@@ -299,7 +299,7 @@ class Operator[Ops: tuple](ABC):
     def report_stats(self):
         total_calls = self.num_invalid_calls + self.num_noop_calls + self.num_useful_calls
         print(f"\nStats for operator {type(self).__name__}: \n"
-              f"LogWeight: {math.log(self.weight, 10)}, Total calls: {total_calls}, Total proposals: {self._proposal_count}, Total applies: {self._apply_count}\n"
+              f"LogWeight: {math.log(max(self.weight, 1e-300), 10)}, Total calls: {total_calls}, Total proposals: {self._proposal_count}, Total applies: {self._apply_count}\n"
               f"Invalid: {self.num_invalid_calls}, Noop: {self.num_noop_calls}, Useful: {self.num_useful_calls}\n"
               f"Num improving calls: {self.num_improving_calls}, Mean improvement: {self.mean_improving_improvement}\n"
               f"Num degrading calls: {self.num_degrading_calls}, Mean degradation: {self.mean_degrading_degradation}\n"

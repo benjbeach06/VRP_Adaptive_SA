@@ -132,7 +132,8 @@ class SimAnnVRPSolver:
                  max_plateau_size: int = 1000,
                  plateau_reheat_exponent: float = 0.2,
                  empty_route_cleanup_interval: int = 100,
-                 explore_reward: Num = 1e-5):
+                 explore_reward: Num = 1e-5,
+                 ablation_arm: float = 0):   # see ABLATION_ARMS; 0 is the unmodified solver
         self.sln = sln
         self.operators: list[Operator] = []
 
@@ -194,6 +195,7 @@ class SimAnnVRPSolver:
         self.adj_weights: dict[Operator, Num] = {op: op.exploit_selection_penalty_factor for op in operators}
         self._full_roster = list(operators)
         self._build_family_tree()
+        self.ablation_arm = ablation_arm
 
         # DisposeOfEmptyRoutes / DisposeOfTrivialRoutes are deliberately NOT in the weighted
         # roster: disposal already happens unconditionally every empty_route_cleanup_interval
@@ -357,7 +359,10 @@ class SimAnnVRPSolver:
         weights = [op.weight for op in self.operators]
         reheat = 1e5 if max(weights) <= 1e-10 else 1
 
-        geom_mean_weight = math.exp(math.fsum([math.log(w) for w in weights]) / len(weights))
+        # Floor before the log: a weight can reach exactly 0 when reaction_factor is 1, which
+        # leaves no carry-over from the previous segment. Inert for any normal weight.
+        geom_mean_weight = math.exp(
+            math.fsum([math.log(max(w, 1e-300)) for w in weights]) / len(weights))
         total_proposals = 0
         total_accepts = 0
         improving_moves = 0
@@ -791,7 +796,10 @@ class SimAnnVRPSolver:
                 print(f"Elapsed time: {elapsed_time:.2f} seconds, Best objective: {self.best_objective:.2f}, Current objective: {self.curr_objective:.2f}")
                 print(f"Log2 Temperature: {self.log_temperature:.2f}, Complete reheats: {self.num_complete_reheats}, Plateau reheats: {self.num_plateau_reheats}, Iterations: {iterations}")
 
-                print("op weights:" + str([(type(op).__name__, math.log(op.weight, 10)) for op in self.operators]))
+                # Floored: a weight reaches exactly 0 when reaction_factor is 1, and a report
+                # line must never be able to kill a run.
+                print("op weights:" + str([(type(op).__name__, math.log(max(op.weight, 1e-300), 10))
+                                           for op in self.operators]))
 
         self.num_reports_so_far += 1
         print(f"Elapsed time: {elapsed_time:.2f} seconds, Best objective: {self.best_objective:.2f}, Current objective: {self.curr_objective:.2f}")
