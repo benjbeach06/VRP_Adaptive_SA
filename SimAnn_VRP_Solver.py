@@ -8,6 +8,13 @@ import itertools
 import heapq
 
 
+# The lowest weight an operator is allowed to hold, and the point at which it is snapped back
+# there. Hard-coded for now. WEIGHT_FLOOR matches the reheat trigger, which is the global version
+# of the same idea -- when every weight has collapsed, multiply the roster by 1e5.
+WEIGHT_FLOOR = 1e-10
+WEIGHT_SNAP_BELOW = WEIGHT_FLOOR / 1e5
+
+
 def argmin(values):
     return min(range(len(values)), key=values.__getitem__)
 
@@ -377,6 +384,13 @@ class SimAnnVRPSolver:
                 weight = reheat*((1 - p) * weight + p * average_score)
             else:
                 weight = reheat*max(weight, (weight / geom_mean_weight) ** 0.997 * geom_mean_weight)
+
+            # Snap a collapsed weight back to the floor. The 1/1e5 band is hysteresis: a weight is
+            # left alone until it has fallen five orders of magnitude under the floor, so this fires
+            # on genuine collapse and not on ordinary decay. Without it a weight reaches exactly 0
+            # whenever reaction_factor leaves no carry-over, and an operator at 0 can never recover.
+            if weight < WEIGHT_SNAP_BELOW:
+                weight = WEIGHT_FLOOR
 
             op.weight = weight
             adj_weights[op] = weight * op.exploit_selection_penalty_factor

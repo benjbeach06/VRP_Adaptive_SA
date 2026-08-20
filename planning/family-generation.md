@@ -12,6 +12,31 @@ excellent value" from "span 8 is waste", so it prices the blend and acts on neit
 **Generate the family instead:** one fixed-span operator per size. Each prices independently, on its
 own measured cost and its own measured payoff. The family aggregates them.
 
+## The worked case: K in `ReorderShortSpanExactly`
+
+**Benjamin's, 2026-08-20.** Both the cost and the power of exact reordering are factorial in K, and
+the choice of K makes a large empirical difference to performance. That combination is what makes it
+the right first target: a parameter whose value matters a lot, over a range the solver cannot afford
+to explore blindly.
+
+**Generate one operator per K.** Each carries its own weight and its own measured cost, so the
+solver learns which K is worth its time on the instance in front of it rather than being handed one
+number chosen offline.
+
+**Start with small K and expand as the run goes.** A generated set should not open with every K
+active. Small K is cheap and always affordable; large K is where the factorial cost lives and should
+have to earn admission.
+
+Two ways to do that, and the choice is open:
+
+- **Dynamic generation.** Add the next K up once the current largest is paying off. The set grows
+  only as far as the instance justifies.
+- **A fixed generated set behind strict activation gating.** All K values exist from the start, but
+  the expensive ones stay inactive until a gate opens them. That is the activation-gate stub in
+  [operator-selection](operator-selection.md), section C, and this is its first real consumer.
+
+The second is easier to reason about, because the family tree is static and only the gate moves.
+
 ## It generalizes to any numeric parameter
 
 Span length is one instance. `k` in the BestOfk operators, chain length, `NEIGHBOR_ROUTE_DRAWS` --
