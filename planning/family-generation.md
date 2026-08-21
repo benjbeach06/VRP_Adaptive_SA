@@ -2,6 +2,11 @@
 
 **Status: not started. Unlocked by family selection, which is now built.**
 
+**GATED ON THE SCORING REWORK.** Generation multiplies the number of operators whose weights must be
+priced correctly, so wrong pricing does more damage with generation than without. Same argument this
+plan already makes about family selection: generation without it is harmful. See
+[operator-selection](operator-selection.md).
+
 ## The problem it solves
 
 `ReorderShortSpanExactly` draws its span length uniformly from [3, 8]. Those spans do not cost the
@@ -75,6 +80,173 @@ Two properties of the built tree make generation safe:
   roster on every proposal.
 
 Both are in [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md).
+
+## DYNAMIC generation: a family that owns its own roster
+
+**Benjamin's, 2026-08-20.** The sections above describe a FIXED generated set -- one operator per
+parameter value, decided once. The stronger form is a family that **controls its own operator
+lifecycle**: it adds sub-operators, deletes them, and to a limited extent combines them, while the
+solve runs.
+
+That changes what a family is. Today a family is a node with fixed children. Here it is a policy that
+decides what its children should be.
+
+### Birth: what a new sub-operator is worth before it has done anything
+
+**A newly generated sub-operator starts at the geometric mean of its siblings.** Not at the family
+max, which would let it capture the family's share before earning it, and not at zero, which would
+stop it ever being drawn enough to prove itself.
+
+**The first sub-operator in a family starts at 1**, like every other operator does today. Each family
+seeds a few options at the start rather than beginning with one.
+
+### Death: staleness is a usefulness score
+
+A stale sub-operator is one that is **not doing anything productive** -- generically, the solver
+hates it. Sub-operators that do almost nothing for long periods die to make room for new ones.
+
+**FIRST-TRY CANDIDATE: reuse the selection penalty.** The scoring rework already computes
+`improvement_score = improvement_rate / cost`, EMA'd and normalized against siblings. That IS a
+usefulness score. Staleness becomes **penalty under a threshold for longer than a minimum age** --
+two knobs instead of a weighted blend of six, and the death rule then agrees with the selection rule
+by construction rather than by hand.
+
+**For an optimized operator, acceptance and improvement are the same metric.** If it only ever
+returns something at least as good as the incumbent, every accepted move is an improvement, so the
+two rates carry no independent information. That collapses the metric list further for exactly the
+operators this plan generates.
+
+**The fuller rule is TBD**, if the first try is not enough. It would combine several metrics into one
+usefulness score:
+
+- relative weight against its siblings
+- **age in seconds** -- do not discard too fast
+- improvement rate
+- no-op rate
+- acceptance rate
+- computational cost
+
+Age is the one that has to be there. Every other metric is noisy early, so a young sub-operator that
+looks bad may simply not have been drawn enough.
+
+### Growth: directed, not random
+
+Replacement is **not** a random draw. A new sub-operator is generated to fill an identified gap.
+
+| observation | response |
+|---|---|
+| MIP gap is very high for some `(k, budget)` | generate one with a **bigger budget**, if the cost gate allows it |
+| a sub-operator solves to optimality in a fraction of its budget | add one with **higher k**, randomized within a projected affordable range |
+
+**Growth is limited, proportionally.** A step from k=4 to k=6 is reasonable; 100 to 110 is
+reasonable; 100 to 150 is not. The rule wants to be careful about this rather than permissive.
+
+### Worked example: `Reorder_Chain_With_MIP`
+
+Solve the chain ordering as a **mixed-integer program** instead of brute-forcing it. Each
+sub-operator is characterised by a pair **(k, time_budget)**, and **both vary per sub-operator**.
+
+- **`k`** is the chain length. Selection uses it to draw a valid chain of exactly that length.
+- **`time_budget`** is the time limit handed to the **MIP solver** for that call.
+- **Each sub-operator covers a BUCKET of about 20 k-values**, not a single k, drawing a length within
+  its range. A MIP sees k=40 and k=41 as near-identical, so separating them wastes competition on a
+  distinction the solver cannot measure. Buckets also resolve better under random draws. **Bucket
+  width of 20 is a starting figure -- TBD.**
+- The cost gate must include **the overhead of building the MIP model**, not only solve time.
+
+**Build the model once per bucket and keep it.** Between calls, reset it and swap the distance-matrix
+coefficients rather than reconstructing the structure. Model construction in Python is likely the
+binding cost at these sizes, not the solve.
+
+**The cost is not a new risk category.** The existing brute-force reorderer already costs about 1 ms
+at k=9. A MIP at a comparable cost covers k=8 to 40 -- the same price for four times the chain
+length, and with an explicit time budget bounding it. Starting seeds are chosen ahead of time to be
+plausibly useful rather than generated blindly.
+
+**Bad sizes die by starvation.** A bucket that is not worth its cost loses weight, stops being drawn,
+goes stale, and is cut. That is how the family learns which sizes are worth having on this instance,
+and it is the same mechanism doing the work rather than a separate size-selection rule.
+
+**Warm-start the MIP with the current chain order.** Two consequences, both load-bearing:
+
+- The MIP always holds a feasible incumbent, so a time-limited solve returns something usable rather
+  than nothing. The time budget becomes a quality knob rather than a failure mode.
+- **It can never return an ordering worse than the current one.** So acceptance equals improvement
+  for this operator -- the same property `exact_span_order` gets from seeding its bound with the
+  incumbent.
+
+**Why it is worth the dependency: a MIP reorders chains of length 20 to 30 with extreme efficiency**,
+far past where brute force with pruning stops being affordable. It can also serve other optimal-move
+sets beyond reordering.
+
+**Do not pin one solver -- but do not start generic either.** Begin with one backend and expand
+toward genericity only as far as it earns. The operators should be ABSENT when no backend is
+installed, never broken.
+
+The shape, if it is ever built out:
+
+| stage | what exists |
+|---|---|
+| **1** | Two paths: one CHEAP direct backend, plus Pyomo as the catch-all for anything else. |
+| **2** | Curated model-building code per supported solver, routing to Pyomo only when the chosen solver has no curated path. |
+
+**The solver is selected by environment, and only the active path is built.** Same import-time branch
+pattern as [determinism-import-branch](determinism-import-branch.md) -- decide once at import, pay
+nothing per call.
+
+Model selection and model building would likely earn their own classes and their own folder rather
+than living inside the operator.
+
+**Measure the per-call floor before committing to any backend.** Pyomo's cost is in model
+construction and the solver-interface round trip, and it does not shrink with problem size. If that
+floor is 5 ms, MIP operators compete at 5 ms against a brute-force reorderer at 1 ms and the cost
+argument in this section stops holding. A short mutate-and-resolve timing loop settles it. Persistent
+solver interfaces avoid most of the round trip; file-based ones do not.
+
+**Honest status on this part: it is a long roadmap and may never be walked.** Stage 1 alone is worth
+having. Stage 2 is written down because the shape is clear, not because it is scheduled.
+
+**Where the family sits: `INTRA_ROUTE -> REORDER -> OPTIMIZED`**, beside the brute-force reorderer,
+inside the 25% intra-route floor. That placement is deliberate. The two solve the same problem by
+different means, so they should compete for the same budget, and under MAX one good bucket lifts the
+whole MIP family's standing within that floor.
+
+**TODO: flesh this out.** There is a lot of room to learn which operators are worth having and which
+are affordable. This entry records the shape, not the answer.
+
+### Worked example: the existing exact reorderer
+
+`exact_span_order` is n!-with-pruning. Under dynamic generation each sub-operator has a **fixed** k,
+and the selection code uses that k to draw a valid chain rather than drawing a length at random.
+
+- **Start with small chains only.** Small k is cheap and always affordable.
+- **Admitting a larger k is budget-gated**, using an alpha / (1-alpha) average-cost memory built from
+  the cheaper sub-operators already running. The family extrapolates what the next k up will cost
+  from what the current ones did cost.
+
+**Both examples get cheaper over time at fixed k.** Pruning tightens as the incumbent improves, so a
+k that was unaffordable early can become affordable later. A MIP may behave the same way. **The gate
+must therefore be re-evaluated during the run, not decided once at the start.**
+
+### The constraint this whole design is under
+
+**Careful rules are more knobs, and knobs are what generation exists to remove.** An operator set
+built on an external solver needs a more robust rule set than a hand-written operator does,
+especially when it is generated dynamically -- so the rules will not be simple.
+
+**The final design must still be very static-knob-limited.** The target shape is a small number of
+structural parameters -- something like one "acceptable growth" value -- rather than a knob per
+sub-operator or per decision. If the rule set grows a knob per behaviour, it has reproduced the
+problem it was built to solve.
+
+### Open
+
+- **Bucket width.** 20 is a starting figure with a rationale, not a measured one.
+- **Whether "combine" is needed at all** once buckets exist.
+- **The usefulness score itself** -- which metrics, weighted how.
+- **The growth rule** -- what "proportional and limited" is, exactly.
+- **The MIP dependency.** Accepted in principle. Which solver, and whether it can be optional, is
+  not decided. The project has none today and `scipy` is not installed.
 
 ## What it costs
 

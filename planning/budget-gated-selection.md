@@ -29,6 +29,21 @@ expensive ones as the run demonstrates it can afford them.
 - **Contract near the end.** The same logic in reverse: an operator whose expected cost is a large
   fraction of the time left should not be proposed at all.
 
+## The end-of-run rule, concretely
+
+**Benjamin's, 2026-08-20.** Near the end of the solver budget, do not select an operator whose
+expected cost exceeds **one quarter of the remaining budget**.
+
+Expected cost is the operator's average RECORDED cost, or a dynamic estimate when it has not run yet.
+An operator with no history still needs a number, so the estimate has to exist either way -- which is
+the same requirement the early-phase cost estimate above already creates.
+
+**The cost of the rule itself is negligible.** It wastes a few microseconds at the very end of a run
+by declining moves that would have been affordable. That is nothing against losing the last seconds
+of a solve to one call that could not finish.
+
+One quarter is a starting value, not a tuned one.
+
 The gate is about **affordability**, not about value. Weighting still decides value among the
 operators that are admitted.
 
@@ -47,7 +62,8 @@ None on correctness. It becomes urgent the first time the solver is run on a lar
 short budget, which has not happened yet -- every measurement so far used budgets generous relative
 to instance size.
 
-Related: [module-structure](module-structure.md) for where the estimate would live, and
+Related: [family-generation](family-generation.md) -- a dynamically generated family
+gates its own operator creation on the same cost estimates. [module-structure](module-structure.md) for where the estimate would live, and
 [route-distance-tracking](route-distance-tracking.md), which removes one of the current
 per-proposal costs. Design context in
 [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md).
