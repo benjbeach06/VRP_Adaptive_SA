@@ -13,6 +13,21 @@ is not a fix for another.
 Implemented mechanisms are documented in `design/`. This page records what is still open about them
 and links out; it does not restate their design.
 
+## The measurement driving this work
+
+**n=500 capacity 400, 8 arms x 20 paired seeds, 180s** (`experiment_logs/ablate_greedy_n500.json`,
+solver `8ddc893`). Dropping `ReorderShortSpanExactly` gained **24.59 at -4.8 sigma, winning 16 of 20
+seeds.** The exact-only arms got monotonically worse as K rose, and K=10 lost every seed.
+
+**Read it as a scoring failure, not an operator failure.** The operator took 74% of wall clock in an
+earlier profiled run while producing 7.5 improving moves per second, against 755 for
+`ReverseClosestPairTogether`. Its weight was the highest in the roster anyway. **The scoring could
+not price a rare large improvement against a common cheap one, so it bought the expensive one.**
+
+Benjamin's reading: the operator is not useful IN ITS CURRENT FORM UNDER THE CURRENT SCORING, and
+should be useful at some span sizes once pricing is right. That is a hypothesis, and the ablation
+does not test it -- every arm ran under the scoring being replaced.
+
 ## The formula every mechanism below acts on
 
 Ported for reference from `Operator.update_stats_for_accept`. **Only ACCEPTED moves are scored** --
@@ -107,7 +122,10 @@ share one tuning surface and cannot be searched independently.
 
 - **RISK:** the values are non-adaptive magic numbers, or static functions of instance size. Each one
   adds an ablation factor.
-- **Desire: replace with something more robust.** Mechanism 1 is the candidate.
+- **Desire: replace with something more robust.** Mechanism 1 is the candidate for the PRICING half.
+  For the wasted work itself, see
+  [repeated-work-detection](repeated-work-detection.md) -- route version stamps that let a
+  deterministic operator report NO-OP instead of re-deriving a rejected move.
 
 ### 5. Cap the cost instead of discounting the frequency -- implemented
 

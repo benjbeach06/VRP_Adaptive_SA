@@ -80,6 +80,26 @@ determinism fell out of that. Neither was the goal.
 
 ---
 
+## What an ablation result MEANS
+
+Acceptance decides whether a number is real. This decides what it is evidence of, and the obvious
+reading is usually wrong.
+
+**A correctly built selection system makes adding an operator safe.** Weighting exists so that a
+weak operator costs little. So no operator addition should substantially disimprove the solver, and
+when one does, **the mechanism is the suspect, not the operator.**
+
+| ablation result | what it signals |
+|---|---|
+| **No measurable change** | The operator is POSSIBLY UNNECESSARY. Corroborate with acceptance and proposal rates -- low on both strengthens it. |
+| **Removing it HELPS** | The scoring is flawed. The system kept paying for something it should have demoted and could not. |
+| Removing it helps, AND per-call cost is 10 ms or more | The one genuine exception. A single call can consume the budget before any feedback loop reacts, which is a budget-gating problem rather than a scoring one. **1 ms is not extreme** -- the roster already holds operators there and the scoring is expected to handle them. |
+
+So "removing operator X improves the objective" is not an argument for deleting X. It is an argument
+that the pricing failed, and the operator is the symptom that made it visible.
+
+---
+
 ## Before a long unattended run
 
 A multi-hour job reports plausible numbers whether or not the instruments it steers by are working,

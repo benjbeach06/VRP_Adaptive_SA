@@ -1,0 +1,874 @@
+{
+ "_solver": {
+  "when": "2026-08-20T12:55:34",
+  "git_sha": "8ddc893",
+  "git_subject": "Snap a collapsed operator weight back to a floor",
+  "solver_dirty": false,
+  "solver_dirty_files": [],
+  "roster_size": 24,
+  "roster": [
+   "RandomRouteReassignment",
+   "RandomCustomerReassignment",
+   "RandomCustomerChainReassignment",
+   "ReassignClosestChainWithRandomCustomer",
+   "ReassignClosestChainNextToNeighbor",
+   "ReassignChainNextToNeighbor",
+   "SwapChainsWithNeighbor",
+   "ReverseClosestPairTogether",
+   "RandomCustomerChainReversal",
+   "RandomCustomerSwap",
+   "RandomSameLengthChainSwap",
+   "RandomChainSwap",
+   "SwapRouteHeadsAtSharedDepot",
+   "SwapRouteTailsAtSharedDepot",
+   "CustomerBestOfkSwapInRandomRoute",
+   "CustomerBestOfkNeighborSwapInRandomRoute",
+   "RandomRoutePermutation",
+   "ReorderSpanByFarthestInsertion",
+   "ReorderRandomRouteByFarthestInsertion",
+   "ReorderLongRouteByFarthestInsertion",
+   "ReorderShortSpanExactly",
+   "ChangeRandomEndDepot",
+   "SplitRandomRoute",
+   "CombineRandomRoutes"
+  ],
+  "python": "3.14.6"
+ },
+ "config": {
+  "param": "ablation_arm",
+  "values": [
+   0.0,
+   1.0,
+   2.0,
+   3.0,
+   4.0,
+   5.0,
+   6.0,
+   7.0
+  ],
+  "runs": 20,
+  "seconds": 180.0,
+  "size": 500,
+  "capacity": 400,
+  "start": "nn",
+  "out": "experiment_logs/ablate_greedy_n500.json"
+ },
+ "results": {
+  "0.0": [
+   {
+    "objective": 1957.4682702593302,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1973.353020546019,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1941.752277989881,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1941.5550087281645,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1952.2086495163808,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1945.1083357265854,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1976.907328334466,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 2020.1199612570354,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1973.1510384457893,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1930.1585989355776,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1964.4060324223565,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1961.6900413513586,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1971.21005066609,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1952.0554313236312,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1965.671423815592,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1947.1562851570345,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1937.436507567395,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1951.4069173408868,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1964.0347249813217,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1950.5123307961792,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   }
+  ],
+  "1.0": [
+   {
+    "objective": 1990.7362296753654,
+    "final_overload": 0,
+    "plateau_reheats": 11
+   },
+   {
+    "objective": 1934.7425270622598,
+    "final_overload": 0,
+    "plateau_reheats": 10
+   },
+   {
+    "objective": 1933.332793436406,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 1933.241505902694,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 2001.522109140289,
+    "final_overload": 0,
+    "plateau_reheats": 11
+   },
+   {
+    "objective": 1979.0558460180057,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1947.1078988406061,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1964.6190540718562,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1954.4735102163352,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1954.6917948355003,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 1958.61462333799,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1943.094276354642,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 1965.4692162757701,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1948.484676619677,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 1958.1527550351943,
+    "final_overload": 0,
+    "plateau_reheats": 12
+   },
+   {
+    "objective": 1956.721864582403,
+    "final_overload": 0,
+    "plateau_reheats": 10
+   },
+   {
+    "objective": 1974.4768705826323,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 1947.6155815814873,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 1942.9451137203744,
+    "final_overload": 0,
+    "plateau_reheats": 10
+   },
+   {
+    "objective": 1956.2762833362526,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   }
+  ],
+  "2.0": [
+   {
+    "objective": 1990.062640925875,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2018.8632753564596,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1984.5770748985547,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1939.245915031756,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1948.4260886903576,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1989.9570923547894,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1947.5160398924147,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 2029.456673643826,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1972.6851038225077,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1989.460214403856,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1982.931503886019,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1990.366609827683,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1960.3738074870664,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1955.0767966637613,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1940.9277914950883,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 1927.55383887474,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1950.7964900769914,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1990.9827507300874,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1971.9435469001999,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 1961.783582079335,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   }
+  ],
+  "3.0": [
+   {
+    "objective": 1986.2436632225538,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1955.3194548340598,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1991.9218374279396,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1975.948640291645,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1983.9034434983173,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 2007.552846170715,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1965.4255484640094,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2004.4317360941031,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1958.956576165435,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1986.5495051762095,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2033.9861474925824,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1949.0440365745042,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1996.652717328723,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1993.041390970509,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1966.2236619157459,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1979.5099318977518,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1948.2300173605508,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1975.672602630741,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1980.5634977638913,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1985.3614027470155,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   }
+  ],
+  "4.0": [
+   {
+    "objective": 2003.6274811814233,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1989.495444888841,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 2009.09459800195,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1971.2225241917135,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 2022.3442889108353,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2001.3399786772243,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1953.008657452597,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1986.0279507675994,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1999.8282001138557,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2004.7151714941544,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1993.9120120835296,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2028.4683652094639,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1982.4912111817052,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1960.446608687029,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1979.619414711755,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1995.6830687179418,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2006.1297015884911,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2021.8857539646324,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1990.5068157375704,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1993.3335244604393,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   }
+  ],
+  "5.0": [
+   {
+    "objective": 2021.5890015353616,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2022.3563084558705,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2009.1276012849964,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2009.0013274451126,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2006.5987917794246,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2039.546489454151,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1996.1121974958737,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2020.1525580672492,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2030.554665284053,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1980.9666393708885,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2033.310030444952,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2063.868010922407,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2039.0559366038633,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1999.8536592080309,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1975.15911373629,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2027.0494963585836,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2012.0617355774045,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2030.1335714164916,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2019.5395859470577,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 2007.2215218559704,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   }
+  ],
+  "6.0": [
+   {
+    "objective": 1930.8282029773013,
+    "final_overload": 0,
+    "plateau_reheats": 10
+   },
+   {
+    "objective": 1912.400900961747,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 1910.7918344664565,
+    "final_overload": 0,
+    "plateau_reheats": 6
+   },
+   {
+    "objective": 1932.7897457225395,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 1970.97448857533,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1951.3192972467384,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 1923.4184734129785,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1963.2504793351532,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1920.5975623299637,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1933.061008237113,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1941.5832702758705,
+    "final_overload": 0,
+    "plateau_reheats": 4
+   },
+   {
+    "objective": 1921.6290067232578,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1926.1245963779274,
+    "final_overload": 0,
+    "plateau_reheats": 5
+   },
+   {
+    "objective": 1924.840383048017,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 1944.789612786935,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 1938.9528475098962,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 1923.682793290284,
+    "final_overload": 0,
+    "plateau_reheats": 7
+   },
+   {
+    "objective": 1911.8208062113802,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   },
+   {
+    "objective": 1951.8697730352346,
+    "final_overload": 0,
+    "plateau_reheats": 9
+   },
+   {
+    "objective": 1950.9106289156352,
+    "final_overload": 0,
+    "plateau_reheats": 8
+   }
+  ],
+  "7.0": [
+   {
+    "objective": 1958.2562960140663,
+    "final_overload": 0,
+    "plateau_reheats": 3
+   },
+   {
+    "objective": 1987.3520944061122,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1980.04703896797,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1976.59764760147,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1996.05908727688,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1977.7425044228005,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1974.6861681975515,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1988.196243015733,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1970.9585572393619,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1960.9560491978052,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1962.5266380403177,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1977.0163134156396,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1997.4139951654863,
+    "final_overload": 0,
+    "plateau_reheats": 0
+   },
+   {
+    "objective": 1986.299690834021,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1981.8524513521468,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1996.1135334296519,
+    "final_overload": 0,
+    "plateau_reheats": 2
+   },
+   {
+    "objective": 1957.3577664539612,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1962.6141621161012,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1989.2677917103438,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   },
+   {
+    "objective": 1987.6283161646224,
+    "final_overload": 0,
+    "plateau_reheats": 1
+   }
+  ]
+ }
+}

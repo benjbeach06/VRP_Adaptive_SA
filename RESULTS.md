@@ -51,6 +51,78 @@ the metric the roster had been ranked by, is structurally blind to that.
 
 ---
 
+## The scoring cannot price rarity against cost
+
+An exact span-reordering operator was **the most expensive thing in the roster and carried its
+highest weight at the same time.** Removing it made the solver better.
+
+| arm | mean | paired delta | σ | seeds won |
+|---|---|---|---|---|
+| control (full roster) | 1958.87 | — | — | — |
+| **drop `ReorderShortSpanExactly`** | **1934.28** | **−24.59 (−1.26%)** | **−4.8** | **16/20** |
+| drop the whole OPTIMIZED subtree | 1957.27 | −1.60 | −0.3 | 13/20 |
+| `reaction_factor` 0.01 → 1 | 1978.45 | +19.58 | +4.4 | 4/20 |
+
+*n=500 capacity 400, 180 s, NN start. 8 arms × 20 paired seeds, breadth-first, no infeasible runs.
+Solver `8ddc893`, data in `experiment_logs/ablate_greedy_n500.json`.*
+
+**The operator was not mispriced by a little.** In an earlier profiled run it took **74% of wall
+clock** while producing **7.5 improving moves per second, against 755** for
+`ReverseClosestPairTogether` — a hundredfold difference in productivity, with the weighting ranking
+it first. It makes rare large improvements, and `score = |improvement|^1.5 / mean_cost` rewards
+magnitude superlinearly while dividing cost only linearly.
+
+**The larger problem is at plateau.** When nothing is scoring, every weight converges toward
+uniform -- the EMA carries proposed operators together, and unproposed ones are pulled back toward
+the roster's geometric mean. Uniform weight means equal draw probability **regardless of cost**, so
+an operator costing a hundred times more consumes a hundred times the clock for the same number of
+attempts.
+
+That is exactly backwards. A plateau is escaped by making many attempts, so throughput matters more
+there than anywhere else in a run — and it is precisely where the weighting stops distinguishing
+cheap from expensive.
+
+Mean plateau reheats per arm show it directly:
+
+| carrying the operator | | without it | |
+|---|---|---|---|
+| control | 2.0 | drop the OPTIMIZED subtree | 7.7 |
+| K=7 | 3.8 | `farthest-only` | 6.6 |
+| K=8 | 1.9 | | |
+| K=9 | 0.7 | | |
+| K=10 | **0.0** | | |
+
+**K=10 never reached a plateau at all in twenty runs.** It did not get stuck; it ran out of time
+first. The arms without the operator plateaued three to four times as often, which is the throughput
+the objective difference is made of.
+
+**So this is a scoring result, not an operator result.** Per METHODOLOGY, an operator whose removal
+helps indicts the mechanism that kept paying for it — and its per-call cost is far under the 10 ms
+where budget gating, rather than scoring, would be the honest explanation. Deleting the operator
+would hide the defect rather than fix it.
+
+Dropping the whole optimized subtree is a **wash at −0.3σ**, so the farthest-insertion operators are
+earning their place. Only the exact one is negative.
+
+### Span size, on an exact-only roster
+
+| K | paired delta vs control | σ | seeds won |
+|---|---|---|---|
+| 7 | +13.28 | +2.3 | 7/20 |
+| 8 | +22.36 | +3.7 | 5/20 |
+| 9 | +35.79 | +5.1 | 2/20 |
+| 10 | +58.29 | +10.2 | 0/20 |
+
+Monotone: larger K is strictly worse, and K=10 lost every seed.
+
+**This does not settle what K should be.** These arms removed the farthest-insertion operators, so
+they compare K values against each other on a roster nobody ships. The earlier hand sweep that
+favoured K=9 used the full roster, and the two are not comparable. Every arm also ran under the
+scoring being replaced, and K's value is precisely a question of how rarity is priced against cost.
+A full-roster sweep varying only `max_span` is queued in `planning/ablations.md`.
+
+---
+
 ## Construction — 39× faster, bit-identical
 
 | customers | before | after |

@@ -62,13 +62,19 @@ differ from each other only by `_at_end`, so the node may be a generated pair ra
 
 If DEPOT_END and CHAIN track each other under ablation, the level is not earning its place.
 
-## What is `EXACT_REORDER_MAX_SPAN` worth?
+## What is `EXACT_REORDER_MAX_SPAN` worth? -- PARTLY ANSWERED, RERUN NEEDED
 
-Set to 8 by hand. A short sweep found 6 worse and 9 about best on the large instance, from few runs.
-Gated twice -- on operator pricing changing, and on family-level selection, since K is a within-family
-parameter whose value depends on how often the family is drawn at all.
+**Measured 2026-08-20** (`experiment_logs/ablate_greedy_n500.json`): on an EXACT-ONLY roster the K
+arms are monotone -- 7 better than 8 better than 9 better than 10, and K=10 lost all 20 seeds. Every
+one of them was worse than the full-roster control.
 
-Both instance shapes belong in it: K=8 rebuilds a whole route at capacity 25 and about an eighth of
-one at capacity 400.
+**What that does NOT settle:**
+
+- **K on the FULL roster is untested.** Those arms removed the farthest-insertion operators. The
+  earlier hand sweep that put K=9 on top used the full roster, so the two are not comparable.
+- **Every arm ran under the scoring being replaced.** K's value depends on how a rare large
+  improvement is priced against a common cheap one, which is exactly what changes next.
+
+**Rerun after the scoring rework, with full-roster arms varying only `max_span`.**
 
 Design in [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md).

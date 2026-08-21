@@ -37,6 +37,19 @@ Two ways to do that, and the choice is open:
 
 The second is easier to reason about, because the family tree is static and only the gate moves.
 
+## The measurement that made this urgent
+
+The ablation above found `ReorderShortSpanExactly` costing 24.59 at -4.8 sigma on the reference
+instance, with the exact-only arms worsening monotonically in K. One operator, one weight, one
+`mean_call_time` spread across a factorial cost range -- exactly the blend this plan exists to break
+apart.
+
+**It does not say the operator should go.** It says a single operator cannot represent a parameter
+whose cost and power both scale factorially. Generation is the fix; the ablation is the evidence
+that the current shape does not work.
+
+Numbers in [operator-selection](operator-selection.md).
+
 ## It generalizes to any numeric parameter
 
 Span length is one instance. `k` in the BestOfk operators, chain length, `NEIGHBOR_ROUTE_DRAWS` --
