@@ -5,6 +5,15 @@ argument-hint: "[optional scope, e.g. 'since the tuning run' or a topic]"
 
 Run a retro. Scope is `$ARGUMENTS` if given, otherwise everything since the last retro.
 
+## 0. Read `_session/hiccups.md` first
+
+That file is the running log of friction, dead ends and wasted effort, appended as things happened
+rather than reconstructed afterwards. Read it before writing anything -- it is the raw material for
+sections 3 and 4, and it holds the items that are easiest to forget precisely because they were
+resolved.
+
+**Clear it once consumed.** Anything durable graduates to a memory.
+
 ## 1. Summarize the work since the last retro
 
 Do this first, and do it properly. It is not a preamble.
