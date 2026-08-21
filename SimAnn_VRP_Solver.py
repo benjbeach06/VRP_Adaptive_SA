@@ -263,6 +263,13 @@ class SimAnnVRPSolver:
         5: ("exact-K10",      {"EXACT"}, 10),
         6: ("farthest-only",  {"FARTHEST_INSERTION"}, None),
         7: ("no-weight-memory", None, None),
+        # Full-roster K sweep: nothing removed, only max_span varies. Arm 12 duplicates the
+        # control, so the pair calibrates run-to-run noise at identical settings.
+        8:  ("full-K4",  None, 4),
+        9:  ("full-K5",  None, 5),
+        10: ("full-K6",  None, 6),
+        11: ("full-K7",  None, 7),
+        12: ("full-K8",  None, 8),
     }
 
     @property
