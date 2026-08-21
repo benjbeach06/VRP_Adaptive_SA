@@ -28,6 +28,12 @@ Benjamin's reading: the operator is not useful IN ITS CURRENT FORM UNDER THE CUR
 should be useful at some span sizes once pricing is right. That is a hypothesis, and the ablation
 does not test it -- every arm ran under the scoring being replaced.
 
+## The rework these mechanisms are converging on
+
+[scoring-rework](scoring-rework.md) is the agreed replacement, and
+[hierarchical-magnetism](hierarchical-magnetism.md) lands before it. Between them they resolve
+mechanisms 2, 3 and 4 below; the entries here record what each was FOR.
+
 ## The formula every mechanism below acts on
 
 Ported for reference from `Operator.update_stats_for_accept`. **Only ACCEPTED moves are scored** --

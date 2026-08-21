@@ -18,6 +18,8 @@ is worth doing, so the ordering is arguable from evidence rather than asserted.
 | [vehicle-time-limits](vehicle-time-limits.md) | blocked on the above | travel + service + loading time per vehicle; the largest step toward realistic dispatch |
 | [asymmetric-distances](asymmetric-distances.md) | gated on a real need | supplied distance oracle, directed by default; breaks O(1) chain reversal |
 | [operator-selection](operator-selection.md) | HUB | which operator gets chosen and how often; three coupled concerns and the mechanisms that attack them |
+| [scoring-rework](scoring-rework.md) | designed, not started | replaces hand-set penalties with a dynamic one that cancels inside the score, so selection ranks by improvement-per-second at plateau |
+| [hierarchical-magnetism](hierarchical-magnetism.md) | not started, goes FIRST | the weight magnet pulls toward a flat-roster mean while family weights aggregate by MAX; make the reference class siblings |
 | [repeated-work-detection](repeated-work-detection.md) | designed, gated | route version stamps so a deterministic operator reports NO-OP instead of re-deriving a rejected move |
 | [forget-benefit-not-cost](forget-benefit-not-cost.md) | idea | decay an operator's remembered payoff but keep its remembered cost, so expensive operators run less even at plateau |
 | [family-generation](family-generation.md) | not started | one operator per parameter value, competing inside a family; online parameter learning |
