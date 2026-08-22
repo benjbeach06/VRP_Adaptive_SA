@@ -62,19 +62,16 @@ differ from each other only by `_at_end`, so the node may be a generated pair ra
 
 If DEPOT_END and CHAIN track each other under ablation, the level is not earning its place.
 
-## What is `EXACT_REORDER_MAX_SPAN` worth? -- PARTLY ANSWERED, RERUN NEEDED
+## What is `EXACT_REORDER_MAX_SPAN` worth? -- ANSWERED
 
-**Measured 2026-08-20** (`experiment_logs/ablate_greedy_n500.json`): on an EXACT-ONLY roster the K
-arms are monotone -- 7 better than 8 better than 9 better than 10, and K=10 lost all 20 seeds. Every
-one of them was worse than the full-roster control.
+**K=4 or K=5, measured on the full roster.** 15 paired seeds, 600 s, n=500 capacity 400: K=4 gains
+29.70 at -4.7 sigma, K=5 gains 30.23 at -4.0 sigma, and the two are indistinguishable from each
+other. K=6 and K=7 fall inside the noise. A replicate of the control put the noise floor at -0.3
+sigma. Numbers in `RESULTS.md`.
 
-**What that does NOT settle:**
+**The shipped default is still 8.** Changing it is a one-line solver edit and has not been agreed.
 
-- **K on the FULL roster is untested.** Those arms removed the farthest-insertion operators. The
-  earlier hand sweep that put K=9 on top used the full roster, so the two are not comparable.
-- **Every arm ran under the scoring being replaced.** K's value depends on how a rare large
-  improvement is priced against a common cheap one, which is exactly what changes next.
+**Still open: K below 4.** The trend has not turned and K=3 is the shortest meaningful span.
 
-**Rerun after the scoring rework, with full-roster arms varying only `max_span`.**
-
-Design in [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md).
+**Superseded:** the earlier exact-only sweep, which removed the farthest-insertion operators and so
+compared K on a roster nobody ships.

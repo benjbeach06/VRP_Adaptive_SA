@@ -56,6 +56,10 @@ the metric the roster had been ranked by, is structurally blind to that.
 An exact span-reordering operator was **the most expensive thing in the roster and carried its
 highest weight at the same time.** Removing it made the solver better.
 
+> **Read with the full-roster K sweep below.** Removing the operator helps AT ITS SHIPPED SPAN.
+> Shortening the span helps MORE while keeping it. The scoring failure is real; "the operator is a
+> liability" is not the conclusion.
+
 | arm | mean | paired delta | σ | seeds won |
 |---|---|---|---|---|
 | control (full roster) | 1958.87 | — | — | — |
@@ -103,6 +107,44 @@ would hide the defect rather than fix it.
 
 Dropping the whole optimized subtree is a **wash at −0.3σ**, so the farthest-insertion operators are
 earning their place. Only the exact one is negative.
+
+### Span size, on the FULL roster — the operator earns its place at K=4
+
+Only `max_span` varies. Every arm carries all 24 operators, farthest-insertion included.
+
+| arm | mean | sd | paired delta | σ | won | plateau reheats |
+|---|---|---|---|---|---|---|
+| control, K=8 | 1932.36 | 21.09 | — | — | — | 12 |
+| **K=4** | 1902.65 | 12.12 | **−29.70** | −4.7 | 14/15 | 34 |
+| **K=5** | 1902.13 | 15.68 | **−30.23** | −4.0 | 13/15 | 31 |
+| K=6 | 1914.25 | 28.01 | −18.11 | −2.0 | 11/15 | 25 |
+| K=7 | 1922.27 | 23.29 | −10.08 | −1.7 | 9/15 | 19 |
+| K=8, replicate of control | 1930.30 | 19.25 | −2.05 | −0.3 | 7/15 | 12 |
+
+*n=500 capacity 400, 600 s, NN start. 15 paired seeds, 90 runs, no infeasible results. Solver
+`953db60`, data in `experiment_logs/ablate_full_roster_k.json`.*
+
+**The replicate is the point of the design.** It is the control's own configuration run as a separate
+arm, so its −0.3σ over 15 seeds is the noise floor measured directly rather than assumed. The K=4 and
+K=5 results sit six times outside it.
+
+**Dropping the operator gained 24.59. Keeping it at K=4 gains 29.70.** So the earlier result was
+about the span, not the operator. K=4 and K=5 are indistinguishable from each other and both clear
+the 3σ bar; K=6 and K=7 sit inside the noise.
+
+**The reheat column is the mechanism.** Plateau reheats run 12, 19, 25, 31, 34 as K falls — the cheap
+arms plateau nearly three times as often in the same wall clock. That is throughput converting
+directly into objective, and it matches the exact-only sweep where K=10 never plateaued once in
+twenty runs. The K=4 standard deviation also falls to 12.12 against the control's 21.09: less
+variance, not only a better mean.
+
+**What the scoring still gets wrong.** The weighting had K=8 and never demoted it, across every run
+in both sweeps. A mechanism that priced improvement against cost correctly would have found this
+without an ablation. `K` is not yet a thing the solver can learn — that is
+[planning/family-generation.md](planning/family-generation.md) — and the pricing that would let it is
+[planning/scoring-rework.md](planning/scoring-rework.md).
+
+**Untested: K below 4.** The trend has not turned. K=3 is the shortest meaningful span.
 
 ### Span size, on an exact-only roster
 

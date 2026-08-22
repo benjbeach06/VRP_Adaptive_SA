@@ -80,6 +80,29 @@ determinism fell out of that. Neither was the goal.
 
 ---
 
+## What "sigma" means in these tables
+
+**Per seed, paired.** Each seed contributes ONE delta -- the arm's objective minus the control's
+objective on that same seed. Sigma is `mean(deltas) / (stdev(deltas) / sqrt(n_seeds))`, so `n` is the
+seed count, never the run count.
+
+Pairing is what makes 15 seeds enough. Both arms saw the same instance and the same solver seed, so
+the per-seed component of variance cancels. In the K sweep the arm standard deviations were 12 to 28
+while the standard errors on the paired deltas were 6 to 9.
+
+Three things to keep in mind when reading it:
+
+- **It is a t-statistic, not a z-score.** At 15 seeds there are 14 degrees of freedom and the tails
+  are heavier than normal. "4.7 sigma" is more decisive-sounding than the sample supports if read as
+  Gaussian.
+- **The control is shared across every arm**, so the comparisons are correlated -- a lucky control
+  draw shifts them all the same way. Adding a REPLICATE ARM, identical to the control, measures that
+  directly. In the K sweep it came back at -0.3 sigma, which is what licensed reading the others.
+- **Multiple comparisons apply.** Five arms against one control is why the bar is 3 sigma rather
+  than 2.
+
+---
+
 ## What an ablation result MEANS
 
 Acceptance decides whether a number is real. This decides what it is evidence of, and the obvious
