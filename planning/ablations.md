@@ -69,7 +69,7 @@ If DEPOT_END and CHAIN track each other under ablation, the level is not earning
 other. K=6 and K=7 fall inside the noise. A replicate of the control put the noise floor at -0.3
 sigma. Numbers in `RESULTS.md`.
 
-**The shipped default is still 8.** Changing it is a one-line solver edit and has not been agreed.
+**Shipped default is now 4**, changed 2026-08-21.
 
 **Still open: K below 4.** The trend has not turned and K=3 is the shortest meaningful span.
 

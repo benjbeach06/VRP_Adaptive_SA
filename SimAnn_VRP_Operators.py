@@ -1226,8 +1226,10 @@ def farthest_insertion_order(points: Sequence[tuple[Num, Num]], left: tuple[Num,
 
 
 # Longest span the exact reorderer will attempt. Cost is K! in the worst case and INDEPENDENT of
-# problem size, so the lever is this ceiling, not a selection discount. To be ablated.
-EXACT_REORDER_MAX_SPAN = 8
+# problem size, so the lever is this ceiling, not a selection discount.
+# Ablated 2026-08-21: K=4 gains 29.70 at -4.7 sigma over K=8 on the full roster, 15 paired seeds.
+# K=5 is statistically tied; K=6 and K=7 fall inside the noise. See RESULTS.md.
+EXACT_REORDER_MAX_SPAN = 4
 
 
 def _span_cost(order, dist, n):
