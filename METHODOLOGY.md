@@ -103,6 +103,42 @@ Three things to keep in mind when reading it:
 
 ---
 
+## Record the PATH, not only the endpoint
+
+**Every ablation records time against objective, per seed.** A final objective supports a table and
+nothing else. The path supports convergence curves, tells you WHEN an arm pulled ahead, and shows
+whether a losing arm was slow or stuck -- which the endpoint cannot distinguish.
+
+The K sweep is the example. Its data holds one number per run, so the only graph it supports is a
+distribution of paired deltas. The plateau-reheat counts hinted that the cheap arms simply ran more
+iterations, but nothing in the file can confirm it.
+
+**No solver change was needed.** The solver already reports elapsed time, best objective and
+iteration count once per second at every debug level. `tools/ablate_param.py` was redirecting that
+to a discarded buffer. It now parses it into a `path` field, one entry per report interval.
+
+## Every ablation gets a folder and a plot
+
+```
+experiment_logs/ablations/<date>_<slug>/
+    README.md      question, arms, instance, budget, solver commit, verdict
+    results.json   raw data
+    run.log        the tool's progress output
+    deltas.png     paired delta per seed, and the spread
+```
+
+**The plot is not optional.** `tools/plot_ablation.py <folder>` produces it in one fixed format, so
+two ablations can be compared by eye without re-deriving a chart. A table reports the mean; the plot
+shows whether an arm won everywhere by a little or on a few seeds by a lot, which the mean hides.
+
+**Include a replicate arm where the budget allows.** An arm identical to the control measures the
+noise floor directly instead of assuming it. On the K sweep it came back at -0.3 sigma, and that is
+what licensed reading the others.
+
+The section in `RESULTS.md` describing an ablation links to its folder.
+
+---
+
 ## What an ablation result MEANS
 
 Acceptance decides whether a number is real. This decides what it is evidence of, and the obvious

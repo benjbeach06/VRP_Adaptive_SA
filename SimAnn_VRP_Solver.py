@@ -8,9 +8,8 @@ import itertools
 import heapq
 
 
-# The lowest weight an operator is allowed to hold, and the point at which it is snapped back
-# there. Hard-coded for now. WEIGHT_FLOOR matches the reheat trigger, which is the global version
-# of the same idea -- when every weight has collapsed, multiply the roster by 1e5.
+# Lowest weight an operator may hold, and the point at which it snaps back there.
+# design/operator_selection/exploitation_governance.md
 WEIGHT_FLOOR = 1e-10
 WEIGHT_SNAP_BELOW = WEIGHT_FLOOR / 1e5
 
@@ -33,6 +32,55 @@ FAMILY_FLOOR: dict[Family, float] = {
     Family.CHANGE_END_DEPOT:  0.01,
 }
 assert math.fsum(FAMILY_FLOOR.values()) < 1.0, "family floors must leave share for weighting"
+
+
+# A tree node is one or the other.
+type _TreeNode = _FamilyNode | _LeafNode
+
+
+class _LeafNode:
+    """One operator, hanging off the family node its path names."""
+    __slots__ = ("operator", "parent", "weight")
+
+    def __init__(self, operator: Operator, parent: _FamilyNode):
+        self.operator: Operator = operator
+        self.parent: _FamilyNode = parent
+        self.weight: Num = 0.0
+
+
+class _FamilyNode:
+    """An interior node. Weight is the MAX over children.
+    design/operator_selection/family_selection.md"""
+    __slots__ = ("key", "children", "cum", "parent", "weight", "floor")
+
+    def __init__(self, key: Family | None, parent: _FamilyNode | None):
+        self.key: Family | None = key            # None at the root only
+        self.children: list[_TreeNode] = []
+        self.cum: list[Num] = []
+        self.parent: _FamilyNode | None = parent  # None at the root only
+        self.weight: Num = 0.0
+        self.floor: Num = 0.0                     # meaningful on root children only
+
+
+def _fold(node: _TreeNode, adj_weights: dict[Operator, Num]) -> Num:
+    """Post-order: set every weight from the leaves up, and build each cumulative array."""
+    if isinstance(node, _LeafNode):
+        node.weight = adj_weights[node.operator]
+    else:
+        for child in node.children:
+            _fold(child, adj_weights)
+        node.weight = max(child.weight for child in node.children)
+        node.cum = list(itertools.accumulate(child.weight for child in node.children))
+    return node.weight
+
+
+def _leaves(node: _TreeNode) -> Iterator[_LeafNode]:
+    """Every leaf in this subtree."""
+    if isinstance(node, _LeafNode):
+        yield node
+        return
+    for child in node.children:
+        yield from _leaves(child)
 
 
 def apply_share_floors(weights: Sequence[Num], floors: Sequence[Num]) -> list[Num]:
@@ -140,7 +188,7 @@ class SimAnnVRPSolver:
                  plateau_reheat_exponent: float = 0.2,
                  empty_route_cleanup_interval: int = 100,
                  explore_reward: Num = 1e-5,
-                 ablation_arm: float = 0):   # see ABLATION_ARMS; 0 is the unmodified solver
+                 ):
         self.sln = sln
         self.operators: list[Operator] = []
 
@@ -200,9 +248,7 @@ class SimAnnVRPSolver:
 
         operators = self.operators
         self.adj_weights: dict[Operator, Num] = {op: op.exploit_selection_penalty_factor for op in operators}
-        self._full_roster = list(operators)
         self._build_family_tree()
-        self.ablation_arm = ablation_arm
 
         # DisposeOfEmptyRoutes / DisposeOfTrivialRoutes are deliberately NOT in the weighted
         # roster: disposal already happens unconditionally every empty_route_cleanup_interval
@@ -251,123 +297,115 @@ class SimAnnVRPSolver:
         for op in self.operators:
             op.weight_by_time = not deterministic
 
-    # Ablation arms. Driven by tools/ablate_param.py --param ablation_arm, which sets one float
-    # attribute per run. Inert unless set. "Greedy" is the OPTIMIZED subtree: the three
-    # farthest-insertion reorderers plus the exact one.
-    ABLATION_ARMS = {
-        0: ("control",        None,   None),
-        1: ("no-greedy",      set(),  None),
-        2: ("exact-K7",       {"EXACT"}, 7),
-        3: ("exact-K8",       {"EXACT"}, 8),
-        4: ("exact-K9",       {"EXACT"}, 9),
-        5: ("exact-K10",      {"EXACT"}, 10),
-        6: ("farthest-only",  {"FARTHEST_INSERTION"}, None),
-        7: ("no-weight-memory", None, None),
-        # Full-roster K sweep: nothing removed, only max_span varies. Arm 12 duplicates the
-        # control, so the pair calibrates run-to-run noise at identical settings.
-        8:  ("full-K4",  None, 4),
-        9:  ("full-K5",  None, 5),
-        10: ("full-K6",  None, 6),
-        11: ("full-K7",  None, 7),
-        12: ("full-K8",  None, 8),
-    }
-
-    @property
-    def ablation_arm(self):
-        return getattr(self, "_ablation_arm", 0)
-
-    @ablation_arm.setter
-    def ablation_arm(self, value):
-        arm = int(value)
-        self._ablation_arm = arm
-        name, keep_greedy, max_span = self.ABLATION_ARMS[arm]
-
-        if arm == 7:
-            self.reaction_factor = 1.0          # weight = last segment's average, no memory
-
-        operators = list(self._full_roster)
-        if keep_greedy is not None:
-            operators = [op for op in operators
-                         if Family.OPTIMIZED not in op.family
-                         or op.family[-1].name in keep_greedy]
-        if max_span is not None:
-            for op in operators:
-                if hasattr(op, "max_span"):
-                    op.max_span = max_span
-
-        self.operators = operators
-        self.adj_weights = {op: op.exploit_selection_penalty_factor for op in operators}
-        self._build_family_tree()
-
-    def _build_family_tree(self):
+    def _build_family_tree(self) -> None:
         """
-        Flatten each operator's family path into a tree of integer node ids.
-        See design/operator_selection/family_selection.md.
+        Build the family tree from each operator's path.
+        design/operator_selection/family_selection.md
 
-        Ids below n_internal index node_children; ids at or above it index leaf_operator. Parents
-        are always created before their children, so a reverse scan is a valid bottom-up order.
+        Sub-families are created before any leaf is attached, so a node lists its sub-families
+        first and its own operators after. That ordering decides which child a draw selects.
         """
-        ids: dict[tuple, int] = {(): 0}
-        children: list[list[int]] = [[]]
+        root = _FamilyNode(None, None)
+        by_prefix: dict[tuple[Family, ...], _FamilyNode] = {(): root}
 
-        def node_for(prefix: tuple) -> int:
-            if prefix not in ids:
+        def node_for(prefix: tuple[Family, ...]) -> _FamilyNode:
+            node = by_prefix.get(prefix)
+            if node is None:
                 parent = node_for(prefix[:-1])
-                ids[prefix] = len(children)
-                children.append([])
-                children[parent].append(ids[prefix])
-            return ids[prefix]
+                node = _FamilyNode(prefix[-1], parent)
+                parent.children.append(node)
+                by_prefix[prefix] = node
+            return node
 
-        # Every internal node first, so no leaf id can fall below one.
         for op in self.operators:
             path = getattr(type(op), "family", None)
-            assert isinstance(path, tuple) and path, f"{type(op).__name__} is in the roster with no family path"
+            assert isinstance(path, tuple) and path,                 f"{type(op).__name__} is in the roster with no family path"
             node_for(path)
 
-        n_internal = len(children)
-        leaf_operator: list[Operator] = []
         for op in self.operators:
-            children[ids[type(op).family]].append(n_internal + len(leaf_operator))
-            leaf_operator.append(op)
-
-        self.n_internal = n_internal
-        self.node_children = children
-        self.leaf_operator = leaf_operator
-        self.node_weight: list[Num] = [0.0] * (n_internal + len(leaf_operator))
-        self.node_cum: list[list[Num]] = [[] for _ in range(n_internal)]
+            parent = by_prefix[type(op).family]
+            parent.children.append(_LeafNode(op, parent))
 
         # A missing floor would read as "no guarantee" when it means the table was not updated.
-        prefix_of = {nid: prefix for prefix, nid in ids.items()}
-        missing = sorted({prefix_of[nid][0].name for nid in children[0]
-                          if prefix_of[nid][0] not in FAMILY_FLOOR})
-        assert not missing, f"root families with no floor: {missing}"
-        self.root_floor = [FAMILY_FLOOR[prefix_of[nid][0]] for nid in children[0]]
+        missing: list[str] = []
+        for child in root.children:
+            assert isinstance(child, _FamilyNode) and child.key is not None,                 "a root child must be a family"
+            if child.key not in FAMILY_FLOOR:
+                missing.append(child.key.name)
+            else:
+                child.floor = FAMILY_FLOOR[child.key]
+        assert not missing, f"root families with no floor: {sorted(missing)}" 
+
+        self.family_root: _FamilyNode = root
 
         # Selection starts before the first update_weights, so the cumulative arrays have to be
         # populated here rather than only per segment.
         self.refresh_family_tree()
 
-    def refresh_family_tree(self):
+    def _resolve_node(self, target: _TreeNode | tuple[Family, ...] | type) -> _TreeNode:
+        """A tree node from a family path tuple, an Operator subclass, or a node itself."""
+        if isinstance(target, (_FamilyNode, _LeafNode)):
+            return target
+        if isinstance(target, tuple):
+            node: _FamilyNode = self.family_root
+            for key in target:
+                found = None
+                for child in node.children:
+                    if isinstance(child, _FamilyNode) and child.key is key:
+                        found = child
+                        break
+                assert found is not None, f"no family node at path {target}"
+                node = found
+            return node
+        if isinstance(target, type) and issubclass(target, Operator):
+            for leaf in _leaves(self.family_root):
+                assert isinstance(leaf, _LeafNode)
+                if type(leaf.operator) is target:
+                    return leaf
+            raise AssertionError(f"{target.__name__} is not in the roster")
+        raise TypeError(f"cannot remove {target!r}: want a path tuple, an Operator subclass, "
+                        f"or a tree node")
+
+    def remove(self, target: _TreeNode | tuple[Family, ...] | type) -> list[Operator]:
+        """Detach an operator or a whole family; return the operators removed.
+        design/operator_selection/family_selection.md"""
+        node = self._resolve_node(target)
+        parent = node.parent
+        assert parent is not None, "cannot remove the tree root"
+
+        gone: list[Operator] = [leaf.operator for leaf in _leaves(node)]
+        parent.children.remove(node)
+        for op in gone:
+            self.adj_weights.pop(op, None)
+            self.operators.remove(op)
+
+        while parent.parent is not None and not parent.children:
+            grandparent = parent.parent
+            grandparent.children.remove(parent)
+            parent = grandparent
+
+        assert self.family_root.children, "every family was removed"
+        self.refresh_family_tree()
+        return gone
+
+    def refresh_family_tree(self) -> None:
         """
         Recompute node weights and the cumulative arrays selection descends. Once per segment.
         A node's weight is the MAX over its children -- design/operator_selection/family_selection.md.
         """
+        root = self.family_root
         adj_weights = self.adj_weights
-        node_children = self.node_children
-        node_weight = self.node_weight
-        n_internal = self.n_internal
+        for child in root.children:
+            _fold(child, adj_weights)
 
-        for i, op in enumerate(self.leaf_operator):
-            node_weight[n_internal + i] = adj_weights[op]
-        # No internal node is childless, so max() never sees an empty sequence.
-        for nid in range(n_internal - 1, -1, -1):
-            node_weight[nid] = max([node_weight[k] for k in node_children[nid]])
-
-        node_cum = self.node_cum
-        node_cum[0] = list(itertools.accumulate(
-            apply_share_floors([node_weight[k] for k in node_children[0]], self.root_floor)))
-        for nid in range(1, n_internal):
-            node_cum[nid] = list(itertools.accumulate(node_weight[k] for k in node_children[nid]))
+        # Floors bind at level 0 only. Below the root, weight decides alone.
+        weights: list[Num] = []
+        floors: list[Num] = []
+        for child in root.children:
+            assert isinstance(child, _FamilyNode), "a root child must be a family"
+            weights.append(child.weight)
+            floors.append(child.floor)
+        root.cum = list(itertools.accumulate(apply_share_floors(weights, floors)))
 
     def update_weights(self):
         weights = [op.weight for op in self.operators]
@@ -392,10 +430,7 @@ class SimAnnVRPSolver:
             else:
                 weight = reheat*max(weight, (weight / geom_mean_weight) ** 0.997 * geom_mean_weight)
 
-            # Snap a collapsed weight back to the floor. The 1/1e5 band is hysteresis: a weight is
-            # left alone until it has fallen five orders of magnitude under the floor, so this fires
-            # on genuine collapse and not on ordinary decay. Without it a weight reaches exactly 0
-            # whenever reaction_factor leaves no carry-over, and an operator at 0 can never recover.
+            # Fires on collapse, not on decay. See exploitation_governance.md.
             if weight < WEIGHT_SNAP_BELOW:
                 weight = WEIGHT_FLOOR
 
@@ -425,22 +460,15 @@ class SimAnnVRPSolver:
 
 
 
-    def choose_operator(self):
-        """
-        Descend the family tree, sampling among siblings in proportion to weight at each level.
-        Identical in distribution to a flat draw over the product of conditionals, and it touches
-        only one root-to-leaf path. See design/operator_selection/family_selection.md.
-        """
-        node_children = self.node_children
-        node_cum = self.node_cum
-        n_internal = self.n_internal
+    def choose_operator(self) -> Operator:
+        """Descend the tree, sampling among siblings in proportion to weight at each level.
+        design/operator_selection/family_selection.md"""
+        node: _TreeNode = self.family_root
+        while not isinstance(node, _LeafNode):
+            cum = node.cum
+            node = node.children[bisect.bisect_left(cum, rand_unit() * cum[-1])]
 
-        node = 0
-        while node < n_internal:
-            cum = node_cum[node]
-            node = node_children[node][bisect.bisect_left(cum, rand_unit() * cum[-1])]
-
-        return self.leaf_operator[node - n_internal]
+        return node.operator
 
     # TODO(warm-start): add a third constructor that loads a saved solution instead of building
     # one, so a run can resume from a recorded best rather than from the greedy sweep.

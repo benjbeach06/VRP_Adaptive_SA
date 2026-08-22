@@ -19,6 +19,7 @@ import argparse
 import contextlib
 import io
 import json
+import re
 import statistics
 import sys
 import time
@@ -34,15 +35,40 @@ from SimAnn_VRP_Solver import SimAnnVRPSolver       # noqa: E402
 from run_stamp import solver_stamp
 
 
-def run_once(param: str, value: float, size: int, seed: int, seconds: float, start: str) -> dict:
-    """One solve. Returns objective, overload and reheat count, or inf on failure."""
+# The solver reports once per second at every debug level, so a run's whole path is already on
+# stdout. run_once captures it instead of discarding it -- see METHODOLOGY.md, "Record the PATH".
+_REPORT = re.compile(r"Elapsed time: ([\d.]+) seconds, Best objective: ([\d.]+)")
+_ITERS = re.compile(r"Iterations: (\d+)")
+
+
+def _path_from(log: str) -> list[list[float]]:
+    """[[elapsed, best_objective, iterations], ...], one entry per report interval."""
+    reports = _REPORT.findall(log)
+    iters = _ITERS.findall(log)
+    return [[float(t), float(best), float(iters[i]) if i < len(iters) else 0.0]
+            for i, (t, best) in enumerate(reports)]
+
+
+def run_once(param: str, value: float, size: int, seed: int, seconds: float, start: str,
+             configure=None) -> dict:
+    """
+    One solve. Returns objective, overload and reheat count, or inf on failure.
+
+    Without `configure`, the swept value is passed to the solver constructor. With it, the solver
+    is built with defaults and `configure(solver, value)` runs afterwards -- which is how an
+    experiment configures a roster without the solver knowing anything about arms.
+    """
     CM.seed_solver_rng(seed)
     sln = tune.build_instance(size)
     kwargs = tune.solver_kwargs(tune.DEFAULTS)
-    kwargs[param] = value
+    if configure is None:
+        kwargs[param] = value
+    log = io.StringIO()
     try:
         solver = SimAnnVRPSolver(sln, max_time=seconds, **kwargs)
-        with contextlib.redirect_stdout(io.StringIO()):
+        if configure is not None:
+            configure(solver, value)
+        with contextlib.redirect_stdout(log):
             if start == "dumb":
                 solver.make_dumb_initial_solution()
             else:
@@ -55,6 +81,7 @@ def run_once(param: str, value: float, size: int, seed: int, seconds: float, sta
             "objective": best,
             "final_overload": sln.total_overload(),
             "plateau_reheats": solver.num_plateau_reheats,
+            "path": _path_from(log.getvalue()),
         }
     except Exception as exc:
         return {"objective": float("inf"), "error": f"{type(exc).__name__}: {exc}"}
@@ -71,6 +98,9 @@ def main() -> int:
     ap.add_argument("--capacity", type=int, default=25)
     ap.add_argument("--start", choices=["dumb", "nn"], default="dumb")
     ap.add_argument("--out", default="tools/ablate_param_results.json")
+    ap.add_argument("--configure", default=None,
+                    help="module:function applied after the solver is built, "
+                         "e.g. ablation_arms:apply_arm")
     args = ap.parse_args()
 
     tune.CAPACITY = args.capacity
@@ -83,11 +113,17 @@ def main() -> int:
           f"n={args.size} capacity={args.capacity}, start={args.start}")
     print(f"{total} runs, estimated {total * args.seconds / 3600:.1f} h\n", flush=True)
 
+    configure = None
+    if args.configure:
+        mod_name, _, fn_name = args.configure.partition(":")
+        configure = getattr(__import__(mod_name), fn_name)
+
     started = time.time()
     for seed in range(args.runs):                       # breadth-first: balanced if interrupted
         row = []
         for value in arms:
-            r = run_once(args.param, value, args.size, seed, args.seconds, args.start)
+            r = run_once(args.param, value, args.size, seed, args.seconds,
+                         args.start, configure)
             results[value].append(r)
             row.append(f"{r['objective']:9.2f}" if r["objective"] != float("inf") else "     FAIL")
         done = (seed + 1) * len(arms)

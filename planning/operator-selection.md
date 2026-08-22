@@ -15,7 +15,7 @@ and links out; it does not restate their design.
 
 ## The measurement driving this work
 
-**n=500 capacity 400, 8 arms x 20 paired seeds, 180s** (`experiment_logs/ablate_greedy_n500.json`,
+**n=500 capacity 400, 8 arms x 20 paired seeds, 180s** (`experiment_logs/ablations/2026-08-20_greedy_subtree_n500/`,
 solver `8ddc893`). Dropping `ReorderShortSpanExactly` gained **24.59 at -4.8 sigma, winning 16 of 20
 seeds.** The exact-only arms got monotonically worse as K rose, and K=10 lost every seed.
 

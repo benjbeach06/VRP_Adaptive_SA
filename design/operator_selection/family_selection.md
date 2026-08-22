@@ -116,8 +116,15 @@ Flat selection was O(roster) per proposal, so adding an operator taxed every fam
 O(depth x branching), so a new operator costs one extra comparison inside its own family and nothing
 anywhere else. **That is what makes generated families affordable later.**
 
-Measured, 300,000 calls on a 200-customer instance: **1.575 us per selection flat, 0.434 us
-descending.** The cumulative arrays are built once per segment in `refresh_family_tree`, not per
+Measured against the flat version it replaced, same roster of 24, same protocol -- 10,000 reps of
+100 calls, median reported because a scheduling tail pulls the mean:
+
+| | us per selection |
+|---|---|
+| flat accumulate | 1.538 |
+| tree descent | **0.432** |
+
+**3.56x.** The cumulative arrays are built once per segment in `refresh_family_tree`, not per
 proposal, which is where the saving comes from.
 
 ## Depth changes share, and that is the point
@@ -147,18 +154,42 @@ three split what is left at 0.166. Measured root shares at equal weights: 0.250,
 The deep families are deep because they earned refinement. The root floors are what pays for that
 depth -- see [share_floors.md](share_floors.md).
 
-## Node layout: internal nodes before leaves
+## The tree is objects, not arrays
 
-Ids below `n_internal` index `node_children`; ids at or above it index `leaf_operator`. Two
-consequences, both deliberate:
+Two classes. `_FamilyNode` holds children, a cumulative array and a floor. `_LeafNode` holds one
+operator. Every node carries a `parent` link.
 
-- **Neither array holds `None`.** An earlier version mixed internal nodes and operators in one array
-  and needed `Operator | None` everywhere it was read.
-- **A reverse scan is a valid bottom-up order**, because a parent is always created before its
-  children. No topological sort is kept.
+**Two classes rather than one.** One class would need `Operator | None` on every node and a check at
+every read. The Optional is the thing being avoided, not a detail.
 
-Every internal node exists because some operator's path ran through it, so none is childless and the
-fold never calls `max()` on an empty sequence.
+**Narrowing is by `isinstance`.** A literal discriminator attribute does not narrow a union in
+pyright -- neither `ClassVar[Literal[True]]` nor an instance `Literal[True]`. Only `isinstance`
+does, and it costs nothing measurable. So the union carries no flag attribute at all.
+
+### Rejected: integer-indexed arrays
+
+The first version encoded the tree as adjacency lists over integer ids, with internal nodes below
+`n_internal` and leaves above.
+
+**It assumed the tree shape never changes**, and that assumption was never stated or checked.
+[planning/family-generation.md](../../planning/family-generation.md) has families adding and removing
+members during a solve, so positional ids would mean reindexing or tombstones on every change.
+
+The two forms are within a few nanoseconds of each other per selection, which is under 0.1% of even
+the cheapest operator's cost. **Nothing was traded for the object form.**
+
+## Changing the roster
+
+`remove(target)` takes a family path tuple, an `Operator` subclass, or a node.
+
+It detaches the node from its parent, drops that subtree's operators from `adj_weights` and the
+roster, and removes any parent left with no children. **It rebuilds nothing.** Ancestor weights and
+cumulative arrays are recomputed by `refresh_family_tree`, which already runs once per segment.
+
+A node with no children cannot report a MAX, which is why an emptied parent goes as well.
+
+**Dynamic ADD is the same capability and is not built.** The structure now permits it. See
+[planning/family-generation.md](../../planning/family-generation.md).
 
 ## Related
 

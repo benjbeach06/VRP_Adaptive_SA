@@ -19,6 +19,14 @@ reconstructed.
 
 Milestones the states refer to:
 
+## Ablations live in `ablations/`
+
+One folder per ablation, named `<date>_<slug>`, holding its own `README.md`, `results.json`,
+`run.log` and `deltas.png`. Each folder is readable on its own. Regenerate a plot with
+`tools/plot_ablation.py <folder>`.
+
+Files outside that folder predate the convention.
+
 | commit | date | what changed |
 |---|---|---|
 | `58ae053` | 08-16 | 20-operator roster, neighbor-guided operators present |

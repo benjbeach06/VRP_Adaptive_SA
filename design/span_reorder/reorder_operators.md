@@ -102,23 +102,19 @@ progress signal the solver does not expose -- adjust the activation rule per
 
 ### Choosing K
 
-`EXACT_REORDER_MAX_SPAN = 8`, set by hand. A short sweep informs it; a measurement does not.
+**The lever is a ceiling on K, not a selection discount.** Cost is bounded by K and does not depend
+on instance size, so discounting how often the operator is drawn prices the wrong thing. That is the
+general rule stated above: discount selection when cost scales with the problem; cap the scale when
+it does not.
 
-Lowering K to 6 made solves WORSE. K was then raised to 10, and 9 looked like the best point on the
-large instance. That is low evidence from few runs, and K was reverted to 8.
+**`max_span` is per instance, not a module constant.** `EXACT_REORDER_MAX_SPAN` is the default an
+operator starts at, and each instance carries its own. That is what lets an ablation vary K without
+touching solver code, and it is what
+[planning/family-generation.md](../../planning/family-generation.md) needs to generate one operator
+per K.
 
-**The direction is the useful part.** Shrinking K cost objective, so K is buying real improvement and
-pruning is absorbing its cost. That agrees with the section above: the practical cost is not K!.
-
-**Deeper testing is deferred, and gated twice.**
-
-- **Operator pricing is about to change.** The right K depends on what a call costs relative to other
-  operators. Tuning K against the current scoring would measure a rule that is being replaced.
-- **Family-level selection is now built.** K
-  is a within-family parameter. Its value depends on how often the family is selected at all.
-
-Both instance shapes belong in that ablation. K=8 covers a whole route at capacity 25 and about an
-eighth of one at capacity 400, so the operator does a different job on each.
+**The value is measured.** See `RESULTS.md`, "Span size, on the FULL roster", and
+[planning/ablations.md](../../planning/ablations.md) for what remains open.
 
 ## `choose_random_nonempty_route_ordered`
 

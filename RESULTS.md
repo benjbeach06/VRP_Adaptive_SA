@@ -68,7 +68,7 @@ highest weight at the same time.** Removing it made the solver better.
 | `reaction_factor` 0.01 → 1 | 1978.45 | +19.58 | +4.4 | 4/20 |
 
 *n=500 capacity 400, 180 s, NN start. 8 arms × 20 paired seeds, breadth-first, no infeasible runs.
-Solver `8ddc893`, data in `experiment_logs/ablate_greedy_n500.json`.*
+Solver `8ddc893`, data and plot in `experiment_logs/ablations/2026-08-20_greedy_subtree_n500/`.*
 
 **The operator was not mispriced by a little.** In an earlier profiled run it took **74% of wall
 clock** while producing **7.5 improving moves per second, against 755** for
@@ -122,7 +122,7 @@ Only `max_span` varies. Every arm carries all 24 operators, farthest-insertion i
 | K=8, replicate of control | 1930.30 | 19.25 | −2.05 | −0.3 | 7/15 | 12 |
 
 *n=500 capacity 400, 600 s, NN start. 15 paired seeds, 90 runs, no infeasible results. Solver
-`953db60`, data in `experiment_logs/ablate_full_roster_k.json`.*
+`953db60`, data and plot in `experiment_logs/ablations/2026-08-21_full_roster_k/`.*
 
 **The replicate is the point of the design.** It is the control's own configuration run as a separate
 arm, so its −0.3σ over 15 seeds is the noise floor measured directly rather than assumed. The K=4 and
