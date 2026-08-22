@@ -130,6 +130,11 @@ class Operator[Ops: tuple](ABC):
 
         self.explore_reward = explore_reward
 
+        # Exponent on cost in the EXPLOITATION term only. Exploration is a different mode, so its
+        # reward always divides by plain cost. 1 is probably right but unevaluated, which is why it
+        # is a parameter. planning/scoring-rework.md
+        self.cost_exponent: Num = 1.0
+
         # When False, update_stats() treats every operator's mean cost per move as 1 instead of
         # measuring it. See SimAnnVRPSolver.set_deterministic_weighting -- TESTING ONLY.
         self.weight_by_time = True
@@ -400,7 +405,8 @@ class Operator[Ops: tuple](ABC):
 
         # `sign` and `abs` are gone. A disimproving move produced a negative second term that the
         # max discarded anyway, because explore_reward / cost is strictly positive.
-        gain = (improvement ** improvement_exponent) / cost if improvement > 0 else 0.0
+        gain = ((improvement ** improvement_exponent) / cost ** self.cost_exponent
+                if improvement > 0 else 0.0)
 
         # `/ penalty` divides the WHOLE max, so both terms cancel against
         # adj_weight = weight * penalty. Scaling only the exploitation term would deliver the

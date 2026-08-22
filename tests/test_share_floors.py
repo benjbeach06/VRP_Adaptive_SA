@@ -105,3 +105,125 @@ class ShareFloors(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FloorInvariants(unittest.TestCase):
+    """
+    Stage 7. Benjamin flagged a measured INTER_ROUTE share of 0.251 against a 0.25 floor and asked
+    whether a clamped family can land above its floor.
+
+    It cannot. The projection returns `floors[i]` for a clamped family, exactly. The 0.251 was
+    binomial noise at 300,000 draws, where one standard error is 0.00079. These tests assert the
+    exact property directly, and compare any SAMPLED share against a proper bound rather than a
+    hand-picked tolerance.
+    """
+
+    def test_a_clamped_family_gets_exactly_its_floor(self):
+        """Not approximately. The projection assigns the floor value itself."""
+        weights = [1e-9, 10.0, 10.0, 10.0, 10.0]
+        floors = [0.25, 0.25, 0.02, 0.01, 0.01]
+        shares = apply_share_floors(weights, floors)
+        self.assertEqual(shares[0], 0.25)
+        self.assertEqual(shares[1], 0.25)
+
+    def test_no_family_ever_ends_below_its_floor(self):
+        for weights, floors in _floor_cases():
+            shares = apply_share_floors(weights, floors)
+            for i, (share, floor) in enumerate(zip(shares, floors)):
+                self.assertGreaterEqual(share, floor - 1e-12,
+                                        f"family {i} landed under its floor: {shares} / {floors}")
+
+    def test_shares_always_sum_to_one(self):
+        for weights, floors in _floor_cases():
+            self.assertAlmostEqual(math.fsum(apply_share_floors(weights, floors)), 1.0, places=12)
+
+    def test_a_family_above_its_floor_is_never_clamped_down_to_it(self):
+        """
+        Clamping must only ever RAISE. A family whose proportional share already clears its floor
+        keeps that larger share.
+        """
+        for weights, floors in _floor_cases():
+            total = math.fsum(weights)
+            if total <= 0:
+                continue
+            shares = apply_share_floors(weights, floors)
+            for i, (w, floor) in enumerate(zip(weights, floors)):
+                proportional = w / total
+                if proportional > floor:
+                    self.assertGreaterEqual(shares[i], floor,
+                                            f"family {i} was pushed below its floor")
+
+    def test_unclamped_families_keep_their_weight_ratios_under_fuzz(self):
+        for weights, floors in _floor_cases():
+            shares = apply_share_floors(weights, floors)
+            free = [i for i, (s, f) in enumerate(zip(shares, floors)) if s > f + 1e-12]
+            for a, b in zip(free, free[1:]):
+                if weights[b] > 0:
+                    self.assertAlmostEqual(shares[a] / shares[b], weights[a] / weights[b], places=9,
+                                           msg=f"ratio broke between {a} and {b}")
+
+    def test_sampled_shares_match_the_projection_within_a_binomial_bound(self):
+        """
+        Draw operators and compare each root family's observed share to the projection's OWN output.
+
+        The bound is five standard errors of a binomial proportion, not a chosen tolerance, so it
+        scales with the draw count instead of being retuned whenever the count changes.
+        """
+        import collections, contextlib, io as _io, os as _os, sys as _sys
+        _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+        from _harness import random_instance
+        from SimAnn_VRP_Solver import SimAnnVRPSolver, FAMILY_FLOOR, _FamilyNode
+        from SimAnn_VRP_Operators import Family
+
+        sln = random_instance(seed=20260822, n_customers=200, n_vehicles=40, capacity=25)
+        solver = SimAnnVRPSolver(sln)
+        with contextlib.redirect_stdout(_io.StringIO()):
+            solver.make_initial_solution()
+        for op in solver.operators:
+            starved = op.family[0] is Family.INTRA_ROUTE
+            solver.adj_weights[op] = 1e-9 if starved else 10.0
+        solver.refresh_family_tree()
+
+        root = solver.family_root
+        families: list[Family] = []
+        weights: list[float] = []
+        floors: list[float] = []
+        for child in root.children:
+            assert isinstance(child, _FamilyNode) and child.key is not None
+            families.append(child.key)
+            weights.append(child.weight)
+            floors.append(child.floor)
+        expected = dict(zip(families, apply_share_floors(weights, floors)))
+
+        draws = 300_000
+        counts = collections.Counter(solver.choose_operator().family[0] for _ in range(draws))
+        for family, want in expected.items():
+            got = counts[family] / draws
+            bound = 5.0 * math.sqrt(max(want * (1 - want), 1e-12) / draws)
+            self.assertLess(abs(got - want), bound,
+                            f"{family.name}: sampled {got:.5f} against projected {want:.5f}, "
+                            f"5-sigma bound {bound:.5f}")
+            if abs(want - FAMILY_FLOOR.get(family, 0.0)) < 1e-12:
+                self.assertEqual(want, FAMILY_FLOOR[family],
+                                 f"{family.name} is clamped and must equal its floor exactly")
+
+
+def _floor_cases():
+    """The shipped shape, some hand-built edge cases, and a deterministic fuzz sweep."""
+    yield [1e-9, 10.0, 10.0, 10.0, 10.0], [0.25, 0.25, 0.02, 0.01, 0.01]
+    yield [1.0, 1.0, 1.0, 1.0, 1.0], [0.25, 0.25, 0.02, 0.01, 0.01]
+    yield [1e-30, 1e-30, 1e-30, 1e-30, 1.0], [0.25, 0.25, 0.02, 0.01, 0.01]
+    yield [5.0, 1.0], [0.4, 0.1]
+    yield [1.0, 1.0, 1.0], [0.0, 0.0, 0.0]
+
+    rng = random.Random(20260822)
+    for _ in range(400):
+        n = rng.randint(2, 7)
+        weights = [rng.choice([rng.random(), rng.random() * 1e-6, rng.random() * 1e3])
+                   for _ in range(n)]
+        if math.fsum(weights) <= 0:
+            continue
+        headroom = rng.uniform(0.05, 0.9)          # keep sum(floors) < 1, the stated precondition
+        raw = [rng.random() for _ in range(n)]
+        scale = headroom / math.fsum(raw)
+        yield weights, [r * scale for r in raw]

@@ -245,6 +245,7 @@ class SimAnnVRPSolver:
                  explore_reward: Num = 1e-5,
                  Bayes_magnet: Num = 0.997,
                  statistic_reaction_factor: Num = -1,
+                 cost_exponent: Num = 1.0,
                  ):
         self.sln = sln
         self.operators: list[Operator] = []
@@ -257,6 +258,7 @@ class SimAnnVRPSolver:
         # so the two knobs are independent only when someone sets this one.
         self.statistic_reaction_factor = (reaction_factor if statistic_reaction_factor < 0
                                          else statistic_reaction_factor)
+        self.cost_exponent = cost_exponent
         self.reaction_factor = reaction_factor
         self.max_time = max_time
 
@@ -311,6 +313,9 @@ class SimAnnVRPSolver:
         ))
 
         operators = self.operators
+        for op in operators:
+            op.cost_exponent = cost_exponent
+
         self.adj_weights: dict[Operator, Num] = {
             op: op.exploit_selection_penalty_factor * op.penalty for op in operators}
         self._build_family_tree()
