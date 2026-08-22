@@ -20,6 +20,7 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from _harness import SeededTestCase, random_instance
 from SimAnn_VRP_Solver import SimAnnVRPSolver, _fold_estimates, _lift_unproposed
 from SimAnn_VRP_Operators import ESTIMATE_FLOOR, Family
+from SimAnn_VRP_BLOperators import Move, MoveKind
 
 FARTHEST = (Family.INTRA_ROUTE, Family.REORDER, Family.OPTIMIZED, Family.FARTHEST_INSERTION)
 
@@ -217,7 +218,7 @@ class DynamicPenalty(SeededTestCase):
         for penalty in (1.0, 0.25):
             op.penalty = penalty
             op.stats.reset()
-            op.last_move = _StubMove(0.5)
+            op.last_move = Move(kind=MoveKind.VALID, improvement=0.5)
             op.update_stats_for_accept()
             raw[penalty] = op.stats.score_sum
         self.assertAlmostEqual(raw[0.25], raw[1.0] * 4.0, places=9,
@@ -236,8 +237,48 @@ class DynamicPenalty(SeededTestCase):
                 op.weight * op.exploit_selection_penalty_factor * op.penalty, places=12)
 
 
-class _StubMove:
-    """Minimal stand-in for a priced move; update_stats_for_accept reads only `improvement`."""
+class CostAccounting(SeededTestCase):
+    """Stage 5: no-ops and invalids must not dilute the cost denominator."""
 
-    def __init__(self, improvement):
-        self.improvement = improvement
+    def _op(self):
+        sln = random_instance(seed=17, n_customers=60, n_vehicles=8)
+        solver = SimAnnVRPSolver(sln)
+        with contextlib.redirect_stdout(io.StringIO()):
+            solver.make_initial_solution()
+        op = solver.operators[0]
+        op.weight_by_time = True
+        op._proposal_count = op._apply_count = op.num_useful_calls = 0
+        op._propose_time_total = op._apply_time_total = op._valid_propose_time_total = 0.0
+        return op
+
+    def test_a_never_proposed_operator_is_priced_near_zero(self):
+        """So everything gets sampled early rather than being priced out before its first call."""
+        self.assertLessEqual(self._op().scoring_cost, 1e-11)
+
+    def test_an_operator_that_is_never_valid_is_priced_at_its_proposal_cost(self):
+        """Expensive invalids are penalised, but not catastrophically."""
+        op = self._op()
+        op._proposal_count, op._propose_time_total = 100, 0.5      # 5 ms each, all invalid
+        self.assertAlmostEqual(op.scoring_cost, 0.005, places=9)
+
+    def test_cheap_invalids_do_not_dilute_the_cost(self):
+        """
+        The point of the stage. 900 cheap invalids beside 100 expensive valid calls must price the
+        operator at the VALID cost, not at the blended average.
+        """
+        op = self._op()
+        op._proposal_count = 1000
+        op.num_useful_calls = 100
+        op._valid_propose_time_total = 1.0                          # 10 ms per valid call
+        op._propose_time_total = 1.0 + 900 * 1e-6                   # plus 1 us per invalid
+        blended = op._propose_time_total / 1000
+        self.assertAlmostEqual(op.scoring_cost, 0.01, places=6)
+        self.assertGreater(op.scoring_cost, blended * 9,
+                           "the blended average would understate the true cost about tenfold")
+
+    def test_the_valid_cost_never_falls_below_the_proposal_cost(self):
+        """A valid proposal does at least as much work as an average one."""
+        op = self._op()
+        op._proposal_count, op._propose_time_total = 100, 1.0
+        op.num_useful_calls, op._valid_propose_time_total = 50, 0.1  # implausibly cheap valids
+        self.assertAlmostEqual(op.scoring_cost, 0.01, places=9)

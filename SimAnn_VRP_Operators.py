@@ -159,6 +159,9 @@ class Operator[Ops: tuple](ABC):
         # improvement-per-second against the roster best. 1.0 until the first update.
         self.penalty: Num = 1.0
 
+        # Time spent on proposals that returned a VALID move. num_useful_calls is its count.
+        self._valid_propose_time_total: float = 0.0
+
     # All three guard a zero denominator, because report_stats() reads every one at the end of
     # solve() and a proposal count really can be zero.
     #
@@ -181,12 +184,36 @@ class Operator[Ops: tuple](ABC):
     @property
     def scoring_cost(self) -> float:
         """
-        Cost used for pricing, floored.
+        Cost used for pricing: mean time per VALID proposal, plus apply time.
 
         1.0 when `weight_by_time` is off, so selection stays a pure function of improvements and a
         run is reproducible. See `set_deterministic_weighting`.
+
+        A three-step cascade, because an operator with no valid calls yet still needs a price:
+
+        - **never proposed** -> near zero, so everything gets sampled early
+        - **proposed, never valid** -> its mean PROPOSAL cost, so an operator that only ever returns
+          invalid is priced at what those invalids actually cost. Expensive invalids are penalised,
+          but not catastrophically
+        - **otherwise** -> its mean VALID cost, held at or above the mean proposal cost
+
+        Applies are only reached on accept, which implies VALID, so apply time is always valid time.
+        planning/scoring-rework.md
         """
-        return max(self.mean_call_time if self.weight_by_time else 1.0, 1e-9)
+        if not self.weight_by_time:
+            return 1.0
+        if self._proposal_count == 0:
+            return 1e-12
+
+        applies = self._apply_count
+        mean_proposal = ((self._propose_time_total + self._apply_time_total)
+                         / (self._proposal_count + applies))
+        if self.num_useful_calls == 0:
+            return max(mean_proposal, 1e-9)
+
+        mean_valid = ((self._valid_propose_time_total + self._apply_time_total)
+                      / (self.num_useful_calls + applies))
+        return max(mean_valid, mean_proposal, 1e-9)
 
     @property
     def mean_call_time(self) -> float:
@@ -209,7 +236,7 @@ class Operator[Ops: tuple](ABC):
 
         self.prev_operands = operands
         self.last_move = move
-        self._update_reporting_stats(move)
+        self._update_reporting_stats(move, propose_time)
         return move
 
     def evaluate(self, operands: Ops) -> Move[Ops]:
@@ -303,13 +330,16 @@ class Operator[Ops: tuple](ABC):
         move.mark_applied(False)
         return
 
-    def _update_reporting_stats(self, move: Move[Ops]):
+    def _update_reporting_stats(self, move: Move[Ops], propose_time: float = 0.0):
         eps = 1e-9
         if move.kind is MoveKind.INVALID:
             self.num_invalid_calls += 1
         elif move.kind is MoveKind.NOOP:
             self.num_noop_calls += 1
         else:
+            # Only a VALID proposal did the work this operator exists to do. A cheap degenerate
+            # return must not dilute the cost denominator. planning/scoring-rework.md
+            self._valid_propose_time_total += propose_time
             self.num_useful_calls += 1
             improvement = move.improvement
             if improvement > eps:
@@ -442,7 +472,7 @@ class BestOfCandidates[Ops: tuple](Operator[Ops]):
         self._propose_time_total += propose_time
         self._last_propose_time = propose_time
 
-        self._update_reporting_stats(best)
+        self._update_reporting_stats(best, propose_time)
         return best
 
 
