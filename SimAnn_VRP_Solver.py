@@ -40,19 +40,21 @@ type _TreeNode = _FamilyNode | _LeafNode
 
 class _LeafNode:
     """One operator, hanging off the family node its path names."""
-    __slots__ = ("operator", "parent", "weight", "proposed")
+    __slots__ = ("operator", "parent", "weight", "proposed", "estimate")
 
     def __init__(self, operator: Operator, parent: _FamilyNode):
         self.operator: Operator = operator
         self.parent: _FamilyNode = parent
         self.weight: Num = 0.0
         self.proposed: bool = False       # set per segment by update_weights
+        self.estimate: Num = 0.0          # improvement_estimate, folded and magnetised like weight
 
 
 class _FamilyNode:
     """An interior node. Weight is the MAX over children.
     design/operator_selection/family_selection.md"""
-    __slots__ = ("key", "children", "cum", "parent", "weight", "floor", "proposed")
+    __slots__ = ("key", "children", "cum", "parent", "weight", "floor", "proposed",
+                 "estimate")
 
     def __init__(self, key: Family | None, parent: _FamilyNode | None):
         self.key: Family | None = key            # None at the root only
@@ -62,6 +64,7 @@ class _FamilyNode:
         self.weight: Num = 0.0
         self.floor: Num = 0.0                     # meaningful on root children only
         self.proposed: bool = False               # did anything in this subtree get proposed?
+        self.estimate: Num = 0.0                  # MAX over children, like weight
 
 
 def _fold(node: _TreeNode, adj_weights: dict[Operator, Num]) -> Num:
@@ -77,17 +80,29 @@ def _fold(node: _TreeNode, adj_weights: dict[Operator, Num]) -> Num:
     return node.weight
 
 
-def _scale_subtree(node: _TreeNode, factor: Num) -> None:
-    """Multiply every weight in this subtree, operators included, by one factor."""
-    node.weight *= factor
+def _fold_estimates(node: _TreeNode) -> Num:
+    """Post-order MAX over improvement estimates. No cumulative array -- these do not drive draws."""
     if isinstance(node, _LeafNode):
-        node.operator.weight *= factor
+        node.estimate = node.operator.improvement_estimate
+    else:
+        for child in node.children:
+            _fold_estimates(child)
+        node.estimate = max(child.estimate for child in node.children)
+    return node.estimate
+
+
+def _scale_subtree(node: _TreeNode, factor: Num, node_attr: str, op_attr: str) -> None:
+    """Multiply one field across a whole subtree, the operators' own copies included."""
+    setattr(node, node_attr, getattr(node, node_attr) * factor)
+    if isinstance(node, _LeafNode):
+        setattr(node.operator, op_attr, getattr(node.operator, op_attr) * factor)
         return
     for child in node.children:
-        _scale_subtree(child, factor)
+        _scale_subtree(child, factor, node_attr, op_attr)
 
 
-def _lift_unproposed(node: _FamilyNode, magnet: Num) -> None:
+def _lift_unproposed(node: _FamilyNode, magnet: Num,
+                     node_attr: str = "weight", op_attr: str = "weight") -> None:
     """
     Pull a subtree that saw no proposals toward its SIBLINGS' geometric mean, top-down.
 
@@ -99,18 +114,19 @@ def _lift_unproposed(node: _FamilyNode, magnet: Num) -> None:
     """
     children = node.children
     if len(children) > 1:
-        gm = math.exp(math.fsum(math.log(max(c.weight, 1e-300)) for c in children) / len(children))
-        for child in children:
-            if not child.proposed and child.weight > 0.0:
-                lifted = max(child.weight, (child.weight / gm) ** magnet * gm)
-                if lifted > child.weight:
-                    _scale_subtree(child, lifted / child.weight)
+        values = [getattr(c, node_attr) for c in children]
+        gm = math.exp(math.fsum(math.log(max(v, 1e-300)) for v in values) / len(values))
+        for child, value in zip(children, values):
+            if not child.proposed and value > 0.0:
+                lifted = max(value, (value / gm) ** magnet * gm)
+                if lifted > value:
+                    _scale_subtree(child, lifted / value, node_attr, op_attr)
 
     # An only child gets no lift here, because a geometric mean of one value is that value. It is
     # reached through its parent instead, one level up.
     for child in children:
         if isinstance(child, _FamilyNode):
-            _lift_unproposed(child, magnet)
+            _lift_unproposed(child, magnet, node_attr, op_attr)
 
 
 def _leaves(node: _TreeNode) -> Iterator[_LeafNode]:
@@ -228,6 +244,7 @@ class SimAnnVRPSolver:
                  empty_route_cleanup_interval: int = 100,
                  explore_reward: Num = 1e-5,
                  Bayes_magnet: Num = 0.997,
+                 statistic_reaction_factor: Num = -1,
                  ):
         self.sln = sln
         self.operators: list[Operator] = []
@@ -236,6 +253,10 @@ class SimAnnVRPSolver:
         # Shrinkage exponent for the sibling magnet. Closer to 1 pulls more weakly.
         # design/operator_selection/family_selection.md
         self.Bayes_magnet = Bayes_magnet
+        # EMA rate for the shrunk rate estimates. Negative means "track reaction_factor",
+        # so the two knobs are independent only when someone sets this one.
+        self.statistic_reaction_factor = (reaction_factor if statistic_reaction_factor < 0
+                                         else statistic_reaction_factor)
         self.reaction_factor = reaction_factor
         self.max_time = max_time
 
@@ -290,7 +311,8 @@ class SimAnnVRPSolver:
         ))
 
         operators = self.operators
-        self.adj_weights: dict[Operator, Num] = {op: op.exploit_selection_penalty_factor for op in operators}
+        self.adj_weights: dict[Operator, Num] = {
+            op: op.exploit_selection_penalty_factor * op.penalty for op in operators}
         self._build_family_tree()
 
         # DisposeOfEmptyRoutes / DisposeOfTrivialRoutes are deliberately NOT in the weighted
@@ -475,8 +497,16 @@ class SimAnnVRPSolver:
             if weight < WEIGHT_SNAP_BELOW:
                 weight = WEIGHT_FLOOR
 
+            if proposed:
+                # Shrunk rate estimates. Denominator is PROPOSALS: a random operator is cheap but
+                # rarely improves, and that is the signal. planning/scoring-rework.md
+                q = self.statistic_reaction_factor
+                op.improvement_estimate = max(
+                    (1 - q) * op.improvement_estimate + q * (num_improvements / num_proposals),
+                    ESTIMATE_FLOOR)
+
             op.weight = weight
-            adj_weights[op] = weight * op.exploit_selection_penalty_factor
+            adj_weights[op] = weight * op.exploit_selection_penalty_factor * op.penalty
             self.leaf_of[op].proposed = proposed
 
             total_proposals += num_proposals
@@ -493,7 +523,24 @@ class SimAnnVRPSolver:
             _fold(child, adj_weights)
         _lift_unproposed(root, self.Bayes_magnet)
         for op in self.operators:
-            adj_weights[op] = op.weight * op.exploit_selection_penalty_factor
+            adj_weights[op] = op.weight * op.exploit_selection_penalty_factor * op.penalty
+
+        # The improvement estimate takes the same treatment: MAX up the tree, and an unproposed
+        # subtree shrinks toward its siblings rather than toward the whole roster.
+        for child in root.children:
+            _fold_estimates(child)
+        _lift_unproposed(root, self.Bayes_magnet, "estimate", "improvement_estimate")
+
+        # Dynamic penalty, from the MAGNETISED estimates. Normalisation is GLOBAL on purpose: a
+        # family's weight is its best member's ADJUSTED weight and that carries to the root, so a
+        # per-family maximum would make weights mean different things across families.
+        # planning/scoring-rework.md
+        improvement_scores = [max(op.improvement_estimate / op.scoring_cost,
+                                  IMPROVEMENT_SCORE_FLOOR) for op in self.operators]
+        best = max(improvement_scores)
+        for op, improvement_score in zip(self.operators, improvement_scores):
+            op.penalty = improvement_score / best
+            adj_weights[op] = (op.weight * op.exploit_selection_penalty_factor * op.penalty)
 
         self.refresh_family_tree()
 

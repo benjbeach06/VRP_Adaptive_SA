@@ -48,6 +48,15 @@ class Family(Enum):
     EXACT              = auto()
 
 
+# Lowest value a shrunk rate estimate may hold. The floor cancels out of any ratio between two
+# estimates, so it is numerical hygiene rather than policy. planning/scoring-rework.md
+ESTIMATE_FLOOR: Num = 1e-10
+
+# Floor on improvement-per-second before it is normalised into a penalty. It appears in both the
+# numerator and the denominator of that ratio, so it cancels: numerical hygiene, not policy.
+IMPROVEMENT_SCORE_FLOOR: Num = 1e-20
+
+
 class OperatorStats:
     def __init__(self):
         self.proposals: int = 0
@@ -142,6 +151,14 @@ class Operator[Ops: tuple](ABC):
         self.exploit_only = False # For operators that determine moves by optimizing instead of through random choice
         self.exploit_selection_penalty_factor = 1.0
 
+        # Shrunk estimate of this operator's improvement rate, EMA'd when proposed and magnetised
+        # toward siblings when not. NOT a measured frequency -- see planning/scoring-rework.md.
+        self.improvement_estimate: Num = ESTIMATE_FLOOR
+
+        # Selection penalty, in (0, 1]. Set once per segment by the solver from this operator's
+        # improvement-per-second against the roster best. 1.0 until the first update.
+        self.penalty: Num = 1.0
+
     # All three guard a zero denominator, because report_stats() reads every one at the end of
     # solve() and a proposal count really can be zero.
     #
@@ -161,6 +178,16 @@ class Operator[Ops: tuple](ABC):
     def mean_propose_time(self) -> float:
         count = self._proposal_count
         return 0 if count == 0 else self._propose_time_total / count
+    @property
+    def scoring_cost(self) -> float:
+        """
+        Cost used for pricing, floored.
+
+        1.0 when `weight_by_time` is off, so selection stays a pure function of improvements and a
+        run is reproducible. See `set_deterministic_weighting`.
+        """
+        return max(self.mean_call_time if self.weight_by_time else 1.0, 1e-9)
+
     @property
     def mean_call_time(self) -> float:
         count = self._apply_count + self._proposal_count
@@ -334,17 +361,22 @@ class Operator[Ops: tuple](ABC):
         #  what the score should divide by -- don't tune the formula against numbers that are
         #  measuring the wrong thing.
 
-        # Cost-aware weighting: an operator's score is its improvement per unit of time spent,
-        # so cheap operators are preferred at equal improvement. Substituting 1 makes selection a
-        # pure function of improvements, and therefore reproducible (see set_deterministic_weighting).
-        mean_cost = (self.mean_call_time if self.weight_by_time else 1.0)
-
-        improvement_exponent = 1.5 #1.5
+        # Improvement per unit of time, so cheap operators win at equal improvement.
+        cost = self.scoring_cost
+        improvement_exponent = 1.5
 
         improvement = move.improvement
-        sign = -1 if improvement < 0 else 1
-        improved = improvement>1e-9
-        score = max(self.explore_reward, sign * (abs(improvement) ** improvement_exponent) )/ max(mean_cost, 1e-9)
+        improved = improvement > 1e-9
+
+        # `sign` and `abs` are gone. A disimproving move produced a negative second term that the
+        # max discarded anyway, because explore_reward / cost is strictly positive.
+        gain = (improvement ** improvement_exponent) / cost if improvement > 0 else 0.0
+
+        # `/ penalty` divides the WHOLE max, so both terms cancel against
+        # adj_weight = weight * penalty. Scaling only the exploitation term would deliver the
+        # exploration contribution penalty-suppressed, hardest for the very operator that
+        # explore_reward exists to keep alive. planning/scoring-rework.md
+        score = max(self.explore_reward / cost, gain) / self.penalty
         self.stats.record_accept(score, improved)
 
     def get_stats(self):

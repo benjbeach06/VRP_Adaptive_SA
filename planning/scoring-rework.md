@@ -21,10 +21,14 @@ flat penalty on optimizers can be reimposed later as a broad category -- **not p
 **TODO attached:** find a way to reduce repeated work. That is what the factor was really proxying
 for. See `planning/repeated-work-detection.md`.
 
-## 2. Two new memory-gated statistics per operator
+## 2. One new memory-gated statistic per operator
 
-Acceptance rate and improvement estimate, both EMA'd. `operator_reaction_factor` governs operator
-weight; `statistic_reaction_factor` governs these two, default -1 meaning "same as the operator one".
+The improvement estimate, EMA'd. `reaction_factor` governs operator weight;
+`statistic_reaction_factor` governs this one, default -1 meaning "same as the operator one".
+
+**Acceptance rate is EXCLUDED**, Benjamin 2026-08-22. Nothing reads it, and the temperature-blend
+idea that would have used it is dropped for this pass. Building it now is work for a consumer that
+does not exist.
 
 **Renamed from `improvement_rate` to `improvement_estimate`.** It is not a measured frequency. It is a
 SHRUNK ESTIMATE of one, and calling it a rate invites the objection that its meaning drifts.
@@ -48,6 +52,18 @@ not from the statistics. Two honest caveats: the theory supplies a shrinkage FAC
 variance and sample count, which we do not have -- 0.997 was hand-tuned on one or two instances in
 summer 2025. And the `max(...)` makes it one-directional, pulling only up; pure shrinkage is
 symmetric. The asymmetry is a deliberate "do not let an untested operator die" rule.
+
+### Segment length must grow with the machinery
+
+**Benjamin, 2026-08-22.** Every statistic here is estimated once per segment, from that segment's
+proposals. As machinery and operators accumulate, each operator gets a smaller share of the same
+budget, so each update resolves less. Segment length has to grow to compensate.
+
+**When it does, every update parameter should shift from a per-operator-update meaning to a
+PER-ITERATION meaning.** Otherwise changing `segment_length` silently changes what
+`reaction_factor`, `statistic_reaction_factor` and `Bayes_magnet` mean, and the knobs stop being
+independent. `tools/tune.py` already does this for `reaction_factor`, deriving it as
+`1 - retention ** segment_length`. The rest should follow the same shape.
 
 ### `Bayes_magnet` is a parameter
 
@@ -180,9 +196,9 @@ statistics and in ablation, never in improvement statistics.
    num_valid == 0 else mean_valid_proposal_cost`, with `mean_valid_proposal_cost >=
    mean_proposal_cost` enforced. Everything samples early; an operator that has never been valid is
    priced at its invalid/no-op cost; expensive invalids are penalized but not catastrophically.
-8. **The penalty is blind to exploration**, and that is accepted for now. Acceptance rate is tracked
-   but unused. The temperature-blend idea -- acceptance rate high, improvement estimate low -- is
-   DROPPED for this pass rather than built on speculation.
+8. **The penalty is blind to exploration**, and that is accepted for now. Acceptance rate is NOT
+   tracked at all -- see section 2. The temperature-blend idea, acceptance rate high with a low
+   improvement estimate, is DROPPED for this pass rather than built on speculation.
 9. **AFTER this redesign: should magnetism be symmetric, on formal shrinkage rules?** A proper
    Bayesian treatment could handle the distribution directly at every level. It may not transfer,
    since exploration and plateau phases plausibly want different shapes and formal shrinkage assumes
