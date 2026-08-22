@@ -293,6 +293,38 @@ def deterministic_clock(solver, iterations: int):
         solver_module.time.time = real_time
 
 
+@contextlib.contextmanager
+def fixed_operator_sequence(solver, seed: int = 20260822):
+    """
+    Pin the operator sequence, so scoring can be tested without selection moving underneath it.
+
+    Benjamin's idea. Normally a scoring change shifts weights, which shifts selection, which shifts
+    the trajectory -- so any objective difference is unattributable. With the sequence pinned, the
+    only thing that can move is the scoring.
+
+    **Operators are drawn by sorted CLASS NAME, not by roster position.** Position changes when the
+    roster is reordered or an operator is added, which would silently break the cross-version
+    comparison this exists to support. A name-indexed sequence survives anything but a rename.
+
+    The RNG is private to this helper, so it does not disturb the solver's own stream.
+    """
+    import random as _random
+
+    ordered = sorted(solver.operators, key=lambda op: type(op).__name__)
+    rng = _random.Random(seed)
+    had_own = "choose_operator" in solver.__dict__
+    previous = solver.__dict__.get("choose_operator")
+
+    solver.choose_operator = lambda: ordered[rng.randrange(len(ordered))]
+    try:
+        yield
+    finally:
+        if had_own:
+            solver.choose_operator = previous
+        else:
+            del solver.choose_operator
+
+
 def run_solver(sln: FullSolution, max_time: float, debug_level: int = 3, iterations=None,
                deterministic_weighting: bool = False):
     """

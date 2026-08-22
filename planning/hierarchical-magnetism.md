@@ -28,35 +28,31 @@ This also makes the pull independent of population size, which is the same prope
 gives family weights. A family with many members no longer distorts the reference for a family with
 few.
 
-### Only children
+### Only children need no rule
 
-`RandomRoutePermutation` is the sole leaf under `RANDOM`, so its sibling set is itself and the magnet
-degenerates.
+An earlier draft of this plan gave only children a special reference class: walk up to the smallest
+ancestor subtree holding more than one leaf.
 
-**Reference class = the leaves of the smallest ancestor subtree containing more than one leaf.** An
-only child has no competition at its own level anyway -- it is drawn whenever its parent is, so what
-it needs is for its PARENT not to be starved. The walk up is computed once when the tree is built.
+**The recursion removes the need.** The magnet runs at every internal node over its own children. An
+only child gets no lift at its own level, because a geometric mean of one value is that value. Its
+PARENT is lifted a level up instead, and that factor multiplies down into it.
 
-### Propagation: lifting a family lifts its whole subtree
+### Propagation: lifting a node lifts its whole subtree
 
-A node's weight is the MAX of its children, so a node cannot be raised on its own -- raising it has
-to mean something about its members.
+A node's weight is the MAX of its children, so raising a node has to mean something about its
+members. **The lift factor multiplies every leaf in the subtree**, which preserves both the MAX
+relationship and the internal ordering.
 
-**When a node is pulled up by a factor `f`, every descendant is multiplied by `f`.** A uniform
-proportion preserves both the MAX relationship and the internal ordering, so the family rises without
-its internal competition changing.
+Order per segment, in `update_weights`:
 
-Order of work, once per segment:
+1. Fold post-order: node weight = MAX over children, and mark whether the subtree saw a proposal.
+2. Lift top-down: at each internal node take the geometric mean of its children, pull any child whose
+   subtree saw no proposals toward it, and scale that child's whole subtree.
+3. Write the lifted weights back into `adj_weights`, then fold again for the floors and cumulative
+   arrays.
 
-1. **Bottom-up:** node weight = MAX over children. Also mark whether any operator in the subtree was
-   proposed this segment.
-2. **Top-down DFS:** at each internal node, take the geometric mean of its children's weights. For
-   each child whose subtree saw no proposals, compute the magnet factor and carry it down,
-   multiplying it into every descendant.
-
-One pass each way, `O(total nodes)`. The current tree has 17 internal nodes and 24 leaves, once per
-100 proposals. It stays linear as the tree grows, which matters once
-[family-generation](family-generation.md) starts creating sub-operators.
+**Partial proposal needs no special case.** The recursion descends into proposed children and lifts
+unproposed ones wherever they sit.
 
 ### The reheat trigger stays global
 

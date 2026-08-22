@@ -40,18 +40,19 @@ type _TreeNode = _FamilyNode | _LeafNode
 
 class _LeafNode:
     """One operator, hanging off the family node its path names."""
-    __slots__ = ("operator", "parent", "weight")
+    __slots__ = ("operator", "parent", "weight", "proposed")
 
     def __init__(self, operator: Operator, parent: _FamilyNode):
         self.operator: Operator = operator
         self.parent: _FamilyNode = parent
         self.weight: Num = 0.0
+        self.proposed: bool = False       # set per segment by update_weights
 
 
 class _FamilyNode:
     """An interior node. Weight is the MAX over children.
     design/operator_selection/family_selection.md"""
-    __slots__ = ("key", "children", "cum", "parent", "weight", "floor")
+    __slots__ = ("key", "children", "cum", "parent", "weight", "floor", "proposed")
 
     def __init__(self, key: Family | None, parent: _FamilyNode | None):
         self.key: Family | None = key            # None at the root only
@@ -60,6 +61,7 @@ class _FamilyNode:
         self.parent: _FamilyNode | None = parent  # None at the root only
         self.weight: Num = 0.0
         self.floor: Num = 0.0                     # meaningful on root children only
+        self.proposed: bool = False               # did anything in this subtree get proposed?
 
 
 def _fold(node: _TreeNode, adj_weights: dict[Operator, Num]) -> Num:
@@ -70,8 +72,45 @@ def _fold(node: _TreeNode, adj_weights: dict[Operator, Num]) -> Num:
         for child in node.children:
             _fold(child, adj_weights)
         node.weight = max(child.weight for child in node.children)
+        node.proposed = any(child.proposed for child in node.children)
         node.cum = list(itertools.accumulate(child.weight for child in node.children))
     return node.weight
+
+
+def _scale_subtree(node: _TreeNode, factor: Num) -> None:
+    """Multiply every weight in this subtree, operators included, by one factor."""
+    node.weight *= factor
+    if isinstance(node, _LeafNode):
+        node.operator.weight *= factor
+        return
+    for child in node.children:
+        _scale_subtree(child, factor)
+
+
+def _lift_unproposed(node: _FamilyNode, magnet: Num) -> None:
+    """
+    Pull a subtree that saw no proposals toward its SIBLINGS' geometric mean, top-down.
+
+    Siblings are the reference class. A mean over the whole roster compares operators that do
+    different jobs -- see design/operator_selection/family_selection.md.
+
+    Lifting a node has to mean something about its members, so the factor multiplies its entire
+    subtree. That preserves the MAX relationship and the internal ordering.
+    """
+    children = node.children
+    if len(children) > 1:
+        gm = math.exp(math.fsum(math.log(max(c.weight, 1e-300)) for c in children) / len(children))
+        for child in children:
+            if not child.proposed and child.weight > 0.0:
+                lifted = max(child.weight, (child.weight / gm) ** magnet * gm)
+                if lifted > child.weight:
+                    _scale_subtree(child, lifted / child.weight)
+
+    # An only child gets no lift here, because a geometric mean of one value is that value. It is
+    # reached through its parent instead, one level up.
+    for child in children:
+        if isinstance(child, _FamilyNode):
+            _lift_unproposed(child, magnet)
 
 
 def _leaves(node: _TreeNode) -> Iterator[_LeafNode]:
@@ -188,11 +227,15 @@ class SimAnnVRPSolver:
                  plateau_reheat_exponent: float = 0.2,
                  empty_route_cleanup_interval: int = 100,
                  explore_reward: Num = 1e-5,
+                 Bayes_magnet: Num = 0.997,
                  ):
         self.sln = sln
         self.operators: list[Operator] = []
 
         self.segment_length = segment_length
+        # Shrinkage exponent for the sibling magnet. Closer to 1 pulls more weakly.
+        # design/operator_selection/family_selection.md
+        self.Bayes_magnet = Bayes_magnet
         self.reaction_factor = reaction_factor
         self.max_time = max_time
 
@@ -337,6 +380,8 @@ class SimAnnVRPSolver:
         assert not missing, f"root families with no floor: {sorted(missing)}" 
 
         self.family_root: _FamilyNode = root
+        self.leaf_of: dict[Operator, _LeafNode] = {
+            leaf.operator: leaf for leaf in _leaves(root)}
 
         # Selection starts before the first update_weights, so the cumulative arrays have to be
         # populated here rather than only per segment.
@@ -408,13 +453,8 @@ class SimAnnVRPSolver:
         root.cum = list(itertools.accumulate(apply_share_floors(weights, floors)))
 
     def update_weights(self):
-        weights = [op.weight for op in self.operators]
-        reheat = 1e5 if max(weights) <= 1e-10 else 1
-
-        # Floor before the log: a weight can reach exactly 0 when reaction_factor is 1, which
-        # leaves no carry-over from the previous segment. Inert for any normal weight.
-        geom_mean_weight = math.exp(
-            math.fsum([math.log(max(w, 1e-300)) for w in weights]) / len(weights))
+        # Global: total collapse is a whole-roster condition, not a per-family one.
+        reheat = 1e5 if max(op.weight for op in self.operators) <= 1e-10 else 1
         total_proposals = 0
         total_accepts = 0
         improving_moves = 0
@@ -424,11 +464,12 @@ class SimAnnVRPSolver:
             weight = op.weight
             (num_proposals, num_accepts, num_improvements, score_sum) = op.get_stats()
             p = self.reaction_factor
-            if num_proposals > 0:
+            proposed = num_proposals > 0
+            if proposed:
                 average_score = score_sum / num_proposals if score_sum > 0 else 0
                 weight = reheat*((1 - p) * weight + p * average_score)
             else:
-                weight = reheat*max(weight, (weight / geom_mean_weight) ** 0.997 * geom_mean_weight)
+                weight = reheat*weight      # the magnet runs on the TREE, below
 
             # Fires on collapse, not on decay. See exploitation_governance.md.
             if weight < WEIGHT_SNAP_BELOW:
@@ -436,12 +477,23 @@ class SimAnnVRPSolver:
 
             op.weight = weight
             adj_weights[op] = weight * op.exploit_selection_penalty_factor
+            self.leaf_of[op].proposed = proposed
 
             total_proposals += num_proposals
             total_accepts += num_accepts
             improving_moves += num_improvements
 
             op.reset_stats()
+
+        # Magnet, sibling-local. Fold first so every node carries a weight and knows whether its
+        # subtree was proposed, lift the unproposed ones, then push the lifted weights back into
+        # adj_weights before the final fold. design/operator_selection/family_selection.md
+        root = self.family_root
+        for child in root.children:
+            _fold(child, adj_weights)
+        _lift_unproposed(root, self.Bayes_magnet)
+        for op in self.operators:
+            adj_weights[op] = op.weight * op.exploit_selection_penalty_factor
 
         self.refresh_family_tree()
 
