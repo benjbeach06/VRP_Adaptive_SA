@@ -26,6 +26,8 @@ Milestones the states refer to:
 | `fed10e8` | 08-16 | improvement counter fixed, so plateau reheating works |
 | `2fb9857` | 08-18 | 23 operators: the farthest-insertion family, `PermuteChain` |
 | *uncommitted* | 08-19 | `exploit_only`, selection penalty factors, `adj_weights` mirror |
+| `f14b82b` | 08-19 | 24 operators; family-level selection with a tree, MAX weights and root floors |
+| `a54710e` | 08-21 | `EXACT_REORDER_MAX_SPAN` 8 -> 4, after the full-roster K sweep |
 
 ## Results
 
@@ -47,6 +49,7 @@ Milestones the states refer to:
 | `tune_selection_v2.json` | **post-`fed10e8`, 20 operators**, counter fixed | `tools/tune.py --sizes 200 --capacity 25 --seconds-per-run 60 --runs-per-size 4 --budget-seconds 36000`. 149 trials, 10h. Found nothing: best 0.9889 was less extreme than pure noise predicts. |
 | `tune_v2_log.txt` | as above | stdout of the v2 selection search. |
 | `Robustness_Smoke_Test.txt` | **20 operators** (confirmed from its own stats block) | `SimAnn_VRP.py` by hand: 600s, n=500, capacity 400, DUMB initial solution. Robustness case study. Digest with `tools/digest_run_log.py`. |
+| `JIT_Smoke_Test.txt` | `a54710e`, 24 operators, K=4 | CPython 3.14.6 experimental JIT, `PYTHON_JIT=1` against unset. n=500 capacity 400, 20s, deterministic weighting so both arms share a trajectory. **Verdict: do not enable, 5.4% slower.** Per-operator data in `jit_smoke_ops_off.json` and `jit_smoke_ops_on.json`. |
 | `ablate_explore_reward.json` | **post-`2fb9857`, 23 operators**, before `exploit_only` | `tools/ablate_param.py` -- paired ablation of `explore_reward` over 0 / 1e-2 / 1e-5 / 1e-8. 30 seeds x 5min x 4 arms, n=500 capacity 400, dumb start, 9.9h. |
 | `ablate_explore_reward_log.txt` | as above | stdout of that ablation. |
 | `run_comparison.png` | **23 operators WITH `exploit_only` and penalty factors** | `tools/compare_runs.py` -- Hexaly against two SimAnn configurations, same instance. |

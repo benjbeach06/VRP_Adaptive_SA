@@ -1,0 +1,98 @@
+{
+ "RandomRouteReassignment": {
+  "calls": 10007,
+  "us": 15.820492324117733
+ },
+ "RandomCustomerReassignment": {
+  "calls": 4751,
+  "us": 17.685735599774073
+ },
+ "RandomCustomerChainReassignment": {
+  "calls": 4639,
+  "us": 19.023884617805635
+ },
+ "ReassignClosestChainWithRandomCustomer": {
+  "calls": 4622,
+  "us": 46.19584589703343
+ },
+ "ReassignClosestChainNextToNeighbor": {
+  "calls": 29931,
+  "us": 68.9231121188838
+ },
+ "ReassignChainNextToNeighbor": {
+  "calls": 8572,
+  "us": 43.706638228546915
+ },
+ "SwapChainsWithNeighbor": {
+  "calls": 18632,
+  "us": 44.04528140249166
+ },
+ "ReverseClosestPairTogether": {
+  "calls": 4056,
+  "us": 43.54852518567848
+ },
+ "RandomCustomerChainReversal": {
+  "calls": 2875,
+  "us": 7.456791592337196
+ },
+ "RandomCustomerSwap": {
+  "calls": 4349,
+  "us": 16.71507411896635
+ },
+ "RandomSameLengthChainSwap": {
+  "calls": 4154,
+  "us": 21.05130000061458
+ },
+ "RandomChainSwap": {
+  "calls": 4092,
+  "us": 21.349217448855146
+ },
+ "SwapRouteHeadsAtSharedDepot": {
+  "calls": 5757,
+  "us": 19.422430098832898
+ },
+ "SwapRouteTailsAtSharedDepot": {
+  "calls": 5560,
+  "us": 22.117634638360446
+ },
+ "CustomerBestOfkSwapInRandomRoute": {
+  "calls": 2761,
+  "us": 193.65984445500885
+ },
+ "CustomerBestOfkNeighborSwapInRandomRoute": {
+  "calls": 2777,
+  "us": 56.466797442134265
+ },
+ "RandomRoutePermutation": {
+  "calls": 3633,
+  "us": 114.27164832840165
+ },
+ "ReorderSpanByFarthestInsertion": {
+  "calls": 1600,
+  "us": 730.9344260195554
+ },
+ "ReorderRandomRouteByFarthestInsertion": {
+  "calls": 1130,
+  "us": 1829.6237884187817
+ },
+ "ReorderLongRouteByFarthestInsertion": {
+  "calls": 837,
+  "us": 1963.3985660567416
+ },
+ "ReorderShortSpanExactly": {
+  "calls": 215391,
+  "us": 33.619965844083005
+ },
+ "ChangeRandomEndDepot": {
+  "calls": 6996,
+  "us": 9.59286738009756
+ },
+ "SplitRandomRoute": {
+  "calls": 4000,
+  "us": 10.70617517689243
+ },
+ "CombineRandomRoutes": {
+  "calls": 3955,
+  "us": 141.35228824953626
+ }
+}

@@ -1,0 +1,46 @@
+# HOW RUN: CPython 3.14.6 experimental JIT, PYTHON_JIT=1 against the same interpreter unset.
+#   n=500 capacity 400, tune.build_instance(500), NN start, 20s per run, seed 0,
+#   set_deterministic_weighting() so both arms follow the SAME trajectory.
+#   Solver a54710e (EXACT_REORDER_MAX_SPAN = 4). Per-operator data in
+#   jit_smoke_ops_off.json and jit_smoke_ops_on.json.
+# STATUS: VALID. Smoke test, not an experiment -- 2 reps for throughput, 1 run per arm for the
+#   per-operator table.
+
+VERDICT: do NOT enable the JIT on this profile. It is 5.4% slower overall.
+
+THROUGHPUT, deterministic weighting, identical trajectories (best objective 1994.98 in all four):
+
+    jit=OFF  rep1  17,506 proposals/s     rep2  17,209 proposals/s     mean 17,358
+    jit=ON   rep1  16,662 proposals/s     rep2  16,172 proposals/s     mean 16,417
+
+Non-overlapping arms. 5.4% slower with the JIT on.
+
+PER-OPERATOR COST, us per call, same trajectory, 355,077 proposals off / 333,404 on:
+
+    operator                                    off      on    change    calls(off)
+    ReorderRandomRouteByFarthestInsertion   1829.62 1640.81   -10.3%         1,130
+    ReorderLongRouteByFarthestInsertion     1963.40 1760.80   -10.3%           837
+    ReorderSpanByFarthestInsertion           730.93  677.59    -7.3%         1,600
+    ReassignClosestChainNextToNeighbor        68.92   67.46    -2.1%        29,931
+    ... most others between +3% and +8% ...
+    ReorderShortSpanExactly                   33.62   40.79   +21.3%       215,391
+
+THE FINDING: the JIT helps exactly what it should -- the O(k^2) farthest-insertion loops gain
+7-10%. Those three operators are 3,567 of 355,077 calls, or 1%. Everything else loses 3-8%, and
+the worst regression is the operator holding 61% of all calls.
+
+Arithmetic: the farthest-insertion trio saves about 0.47s; ReorderShortSpanExactly alone loses
+about 1.54s.
+
+HYPOTHESIS, NOT MEASURED: ReorderShortSpanExactly is also a numeric loop, so it "should" have
+gained. At K=4 its spans are 3 or 4 points and the branch-and-bound finishes in a few iterations,
+so the JIT's tracing overhead plausibly exceeds what it can recover. The farthest-insertion
+operators run 700-2000us per call and amortize it easily.
+
+TESTABLE PREDICTION: rerun with EXACT_REORDER_MAX_SPAN = 8, where this operator cost 368us per
+call and held 48% of the clock. The sign may flip. The K decision may have decided whether the
+JIT is worth having.
+
+WIDER POINT: the JIT delivered a real 10% on the expensive operators and bought nothing, because
+they are 1% of calls. Any optimization aimed at that end of the roster -- JIT, a C port, or
+anything else -- is aimed at the wrong 1%.
