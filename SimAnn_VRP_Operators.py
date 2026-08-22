@@ -1365,11 +1365,10 @@ class _FarthestInsertionReorderBase(_SpanReorderBase):
         # Using it for exploration can make the solution get stuck.
         self.exploit_only = True
 
-        conservative_customer_capacity = sln.mean_customer_capacity/2
-        max_vehicle_capacity = sln.max_vehicle_capacity
-        conservative_vehicle_customers = 0 if abs(conservative_customer_capacity) < 1e-9 else min(len(sln.customers), max_vehicle_capacity/conservative_customer_capacity)
-
-        self.exploit_selection_penalty_factor = 1 if abs(sln.mean_vehicle_capacity) < 1e-9 else 1.0/conservative_vehicle_customers # O(k^2) operation. Amortize cost down to ~O(k)
+        # The hand-set cost discount was removed here. It priced these O(k^2) operators by a
+        # per-operator constant, which is the shape planning/scoring-rework.md replaces with a
+        # measured, adaptive penalty. exploit_selection_penalty_factor stays at its 1.0 default
+        # so a flat penalty on a broad CATEGORY can be reimposed later -- never per operator.
 
     def _reorder(self, points, left, right):
         return farthest_insertion_order(points, left, right)
@@ -1377,10 +1376,6 @@ class _FarthestInsertionReorderBase(_SpanReorderBase):
 
 class ReorderSpanByFarthestInsertion(_FarthestInsertionReorderBase):
     """A uniformly random span of a random route. Position and length both uniform."""
-    def __init__(self, sln: FullSolution, explore_reward: Num):
-        super().__init__(sln, explore_reward)
-        self.exploit_selection_penalty_factor *= 4 # Average span is half a route, so average cost is half
-
     def _choose_span(self):
         route = self.sln.choose_random_nonempty_route_ordered()
         if route is None:
@@ -1410,10 +1405,6 @@ class ReorderLongRouteByFarthestInsertion(_FarthestInsertionReorderBase):
     Selection is O(total customers) per proposal -- no route caches its length. Accepted for
     now; planning/route-distance-tracking.md makes it O(1).
     """
-    def __init__(self, sln: FullSolution, explore_reward: Num):
-        super().__init__(sln, explore_reward)
-        self.exploit_selection_penalty_factor /= 4 # Bias towards long routes increases cost.
-
     def _choose_span(self):
         routes = self.sln.all_routes
         if len(routes) == 0:

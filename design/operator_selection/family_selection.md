@@ -195,9 +195,10 @@ A node with no children cannot report a MAX, which is why an emptied parent goes
 
 - [share_floors.md](share_floors.md) -- the projection that guarantees each root family a minimum
   share. Floors bind at level 0 only.
-- [exploitation_governance.md](exploitation_governance.md) -- the per-leaf penalty factor. It still
-  multiplies into the leaf weight, and now feeds the family max as well, so **families compete on
-  cost-adjusted merit rather than on raw performance.**
+- [exploitation_governance.md](exploitation_governance.md) -- the per-leaf penalty factor, which
+  multiplies into the leaf weight and so feeds the family max. **It is 1.0 for every operator as of
+  2026-08-22**, so families currently compete on raw weight. The adaptive penalty that replaces it
+  restores cost-adjusted competition -- [planning/scoring-rework.md](../../planning/scoring-rework.md).
 - [planning/operator-selection.md](../../planning/operator-selection.md) -- open selection work.
 - [span_reorder/reorder_operators.md](../span_reorder/reorder_operators.md) -- the inheritance there
   marks a family boundary, and the tree now reads it.

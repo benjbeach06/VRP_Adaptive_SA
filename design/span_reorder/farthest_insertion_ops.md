@@ -57,13 +57,17 @@ ones on small instances without anybody choosing in advance.
 
 These three exist to occupy the expensive-and-effective end, which the roster previously lacked.
 
-**How to PRICE that end is still open.** The penalty factors are a first attempt, and they now sit
+**SUPERSEDED 2026-08-22: the penalty factors are gone.** They were removed in stage 2 of the scoring
+rework, so these operators now carry no cost discount at all until the adaptive penalty lands. The
+paragraph below records what the attempt was.
+
+**How to PRICE that end is still open.** The penalty factors were a first attempt, and they sat
 beside `ReorderShortSpanExactly`, whose cost does not scale with the problem at all. Whether these
 three are priced correctly against it, and against the cheap operators, is an ABLATION question. Do
 not treat the current factors as settled.
 
 Two properties on `Operator` do that pricing, and both apply to all three: `exploit_only` restricts
-them to improving moves, and `exploit_selection_penalty_factor` discounts their selection rate to
+them to improving moves. `exploit_selection_penalty_factor` used to discount their selection rate to
 amortize O(k^2) toward O(k). The span variant carries a x4 correction, since half a span costs a
 quarter. Full reasoning in
 [../operator_selection/exploitation_governance.md](../operator_selection/exploitation_governance.md).
