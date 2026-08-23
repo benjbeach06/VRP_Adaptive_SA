@@ -109,7 +109,7 @@ def main() -> int:
     if op is not None:
         proposals = op._proposal_count
         print(f"{args.operator}: {proposals} proposals, "
-              f"{op.mean_propose_time * 1e6:.1f}us each under the sampler")
+              f"{op.mean_valid_propose_time * 1e6:.1f}us each under the sampler")
         print("Compare that against the uninstrumented baseline in experiment_logs/profile_cold.json. "
               "A sampling profiler should barely move it; a large gap means the profile is "
               "measuring itself.")

@@ -309,7 +309,7 @@ its shape.
 fix the trajectory, for two independent reasons:
 
 1. **Wall-clock termination.** Run length varies with machine speed and load.
-2. **Operator weighting is TIMING-BASED.** `mean_call_time` divides into every score, so CPU load
+2. **Operator weighting is TIMING-BASED.** `mean_valid_call_time` divides into every score, so CPU load
    changes which operators get selected. This one alters the trajectory even at a fixed iteration
    count.
 

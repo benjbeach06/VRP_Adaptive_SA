@@ -169,7 +169,7 @@ class DynamicPenalty(SeededTestCase):
     def _set_cost(op, seconds):
         """Force mean_call_time. It is derived from totals and counts, so set those."""
         op._proposal_count, op._apply_count = 1, 0
-        op._propose_time_total, op._apply_time_total = seconds, 0.0
+        op._valid_propose_time_total, op._apply_time_total = seconds, 0.0
 
     def test_the_penalty_is_a_ratio_against_the_roster_best(self):
         """In (0, 1], and exactly 1.0 for whichever operator has the best improvement per second."""

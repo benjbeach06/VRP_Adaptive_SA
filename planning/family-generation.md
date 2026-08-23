@@ -11,7 +11,7 @@ plan already makes about family selection: generation without it is harmful. See
 
 `ReorderShortSpanExactly` draws its span length uniformly from [3, 8]. Those spans do not cost the
 same -- 6 permutations against 40,320 -- and they do not pay off the same either. One operator, one
-weight, one `mean_call_time` **averaged over a 6000x cost range.** The scoring cannot tell "span 4 is
+weight, one `mean_valid_call_time` **averaged over a 6000x cost range.** The scoring cannot tell "span 4 is
 excellent value" from "span 8 is waste", so it prices the blend and acts on neither.
 
 **Generate the family instead:** one fixed-span operator per size. Each prices independently, on its
@@ -46,7 +46,7 @@ The second is easier to reason about, because the family tree is static and only
 
 The ablation above found `ReorderShortSpanExactly` costing 24.59 at -4.8 sigma on the reference
 instance, with the exact-only arms worsening monotonically in K. One operator, one weight, one
-`mean_call_time` spread across a factorial cost range -- exactly the blend this plan exists to break
+`mean_valid_call_time` spread across a factorial cost range -- exactly the blend this plan exists to break
 apart.
 
 **It does not say the operator should go.** It says a single operator cannot represent a parameter

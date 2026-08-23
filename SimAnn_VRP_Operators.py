@@ -62,21 +62,25 @@ class OperatorStats:
         self.proposals: int = 0
         self.accepts: int = 0
         self.score_sum: Num = 0
+        self.valid_proposals: int = 0
         self.improvements: int = 0
 
-    def record_reject(self) -> None:
+    def record_reject(self, valid: bool) -> None:
         self.proposals += 1
+        self.valid_proposals += valid
 
     def record_accept(self, score: Num, improved: bool) -> None:
         self.improvements += improved
         self.accepts += 1
         self.proposals += 1
+        self.valid_proposals += 1
         self.score_sum += max(0, score)
 
     def reset(self):
         self.proposals = 0
         self.accepts = 0
         self.improvements = 0
+        self.valid_proposals = 0
         self.score_sum = 0
 
 class Operator[Ops: tuple](ABC):
@@ -128,6 +132,8 @@ class Operator[Ops: tuple](ABC):
         self._proposal_count = 0
         self._propose_time_total = 0.0
 
+        self._invalid_or_noop_proposal_time_total = 0
+
         self.explore_reward = explore_reward
 
         # Exponent on cost in the EXPLOITATION term only. Exploration is a different mode, so its
@@ -158,7 +164,13 @@ class Operator[Ops: tuple](ABC):
 
         # Shrunk estimate of this operator's improvement rate, EMA'd when proposed and magnetised
         # toward siblings when not. NOT a measured frequency -- see planning/scoring-rework.md.
-        self.improvement_estimate: Num = ESTIMATE_FLOOR
+        #
+        # BORN AT 1.0, like `weight`, NOT at the floor. Starting every operator at ESTIMATE_FLOOR
+        # makes the sibling geometric mean equal to the floor as well, so the magnet computes a lift
+        # factor of exactly 1.0 and can never rescue anything. Every operator then begins dead, and
+        # only one that happens to improve early ever leaves -- which inverts the penalty in favour
+        # of whichever operator improved most recently, regardless of cost.
+        self.improvement_estimate: Num = 1.0
 
         # Selection penalty, in (0, 1]. Set once per segment by the solver from this operator's
         # improvement-per-second against the roster best. 1.0 until the first update.
@@ -181,11 +193,19 @@ class Operator[Ops: tuple](ABC):
     @property
     def mean_apply_time(self) -> float:
         count = self._apply_count
-        return 0 if count == 0 else self._apply_time_total / count
+        return 1e-12 if count == 0 else self._apply_time_total / count
     @property
     def mean_propose_time(self) -> float:
         count = self._proposal_count
-        return 0 if count == 0 else self._propose_time_total / count
+        return 1e-12 if count == 0 else self._propose_time_total / count
+    @property
+    def mean_valid_propose_time(self) -> float:
+        count = self.num_useful_calls
+        return 1e-12 if count == 0 else self._valid_propose_time_total / count
+    @property
+    def mean_invalid_propose_time(self) -> float:
+        count = self.num_invalid_calls + self.num_noop_calls
+        return 1e-12 if count == 0 else self._invalid_or_noop_proposal_time_total / count
     @property
     def scoring_cost(self) -> float:
         """
@@ -205,25 +225,17 @@ class Operator[Ops: tuple](ABC):
         Applies are only reached on accept, which implies VALID, so apply time is always valid time.
         planning/scoring-rework.md
         """
-        if not self.weight_by_time:
-            return 1.0
-        if self._proposal_count == 0:
-            return 1e-12
-
-        applies = self._apply_count
-        mean_proposal = ((self._propose_time_total + self._apply_time_total)
-                         / (self._proposal_count + applies))
-        if self.num_useful_calls == 0:
-            return max(mean_proposal, 1e-9)
-
-        mean_valid = ((self._valid_propose_time_total + self._apply_time_total)
-                      / (self.num_useful_calls + applies))
-        return max(mean_valid, mean_proposal, 1e-9)
+        return 1 if not self.weight_by_time else self.mean_valid_call_time if self.num_useful_calls > 0 else self.mean_call_time
 
     @property
     def mean_call_time(self) -> float:
         count = self._apply_count + self._proposal_count
-        return 0 if count == 0 else (self._propose_time_total + self._apply_time_total) / count
+        return 1e-12 if count == 0 else (self._propose_time_total + self._apply_time_total) / count
+
+    @property
+    def mean_valid_call_time(self) -> float:
+        count = self._apply_count + self.num_useful_calls
+        return 1e-12 if count == 0 else (self._valid_propose_time_total + self._apply_time_total) / count
 
     def propose(self) -> Move[Ops]:
         """Select operands and price the move. Never mutates the solution (unless the base
@@ -233,11 +245,16 @@ class Operator[Ops: tuple](ABC):
         move = self.base_operator.evaluate(operands)
         propose_time = time.perf_counter() - t0
         self.segment_time += propose_time
-        self.segment_proposals += 1
-        self._last_propose_time = propose_time
 
+        self.segment_proposals += 1
+
+        count_proposal_time = move.kind == MoveKind.VALID
+
+        self._last_propose_time = propose_time if count_proposal_time else self._last_propose_time
         self._proposal_count += 1
         self._propose_time_total += propose_time
+        self._valid_propose_time_total += propose_time if count_proposal_time else 0
+        self._invalid_or_noop_proposal_time_total += 0 if count_proposal_time else propose_time
 
         self.prev_operands = operands
         self.last_move = move
@@ -276,6 +293,11 @@ class Operator[Ops: tuple](ABC):
 
         self._apply_count += 1
         self._apply_time_total += dt + self._last_propose_time
+
+        # Apply time is time this operator cost the budget, so it belongs in segment_time. Only
+        # `dt`: the propose that produced this move already charged itself in propose(). Excluded
+        # until 2026-08-23, which understated the segment share of every expensive-apply operator.
+        self.segment_time += dt
 
     def apply(self, move: Move[Ops]):
         """
@@ -342,9 +364,7 @@ class Operator[Ops: tuple](ABC):
         elif move.kind is MoveKind.NOOP:
             self.num_noop_calls += 1
         else:
-            # Only a VALID proposal did the work this operator exists to do. A cheap degenerate
-            # return must not dilute the cost denominator. planning/scoring-rework.md
-            self._valid_propose_time_total += propose_time
+            #self._valid_propose_time_total += propose_time
             self.num_useful_calls += 1
             improvement = move.improvement
             if improvement > eps:
@@ -367,8 +387,8 @@ class Operator[Ops: tuple](ABC):
               f"Num degrading calls: {self.num_degrading_calls}, Mean degradation: {self.mean_degrading_degradation}\n"
               f"Average apply time: {self.mean_apply_time}, Average propose time: {self.mean_propose_time}, Average call time: {self.mean_call_time}")
 
-    def update_stats_for_reject(self):
-        self.stats.record_reject()
+    def update_stats_for_reject(self, valid: bool):
+        self.stats.record_reject(valid)
 
         # TODO: MISSING STATISTICS - Operator times for proposals must be separated from operator times for accepts.
         #  IF move rejected:
@@ -405,19 +425,20 @@ class Operator[Ops: tuple](ABC):
 
         # `sign` and `abs` are gone. A disimproving move produced a negative second term that the
         # max discarded anyway, because explore_reward / cost is strictly positive.
-        gain = ((improvement ** improvement_exponent) / cost ** self.cost_exponent
+        gain = ((improvement ** improvement_exponent) #/ cost ** self.cost_exponent
                 if improvement > 0 else 0.0)
+        explore_gain = self.explore_reward#/cost
 
         # `/ penalty` divides the WHOLE max, so both terms cancel against
         # adj_weight = weight * penalty. Scaling only the exploitation term would deliver the
         # exploration contribution penalty-suppressed, hardest for the very operator that
         # explore_reward exists to keep alive. planning/scoring-rework.md
-        score = max(self.explore_reward / cost, gain) / self.penalty
+        score = max(explore_gain, gain )
         self.stats.record_accept(score, improved)
 
     def get_stats(self):
         stats = self.stats
-        return stats.proposals, stats.accepts, stats.improvements, stats.score_sum
+        return stats.proposals, stats.accepts, stats.improvements, stats.valid_proposals, stats.score_sum
 
     def reset_stats(self):
         self.stats.reset()
@@ -474,9 +495,13 @@ class BestOfCandidates[Ops: tuple](Operator[Ops]):
         self.prev_operands = best.operands
         self.last_move = best
 
+        count_proposal_time = best.kind == MoveKind.VALID
+
+        self._last_propose_time = propose_time if count_proposal_time else self._last_propose_time
         self._proposal_count += 1
         self._propose_time_total += propose_time
-        self._last_propose_time = propose_time
+        self._valid_propose_time_total += propose_time if count_proposal_time else 0
+        self._invalid_or_noop_proposal_time_total += 0 if count_proposal_time else propose_time
 
         self._update_reporting_stats(best, propose_time)
         return best

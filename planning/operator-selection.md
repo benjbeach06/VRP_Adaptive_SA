@@ -40,7 +40,7 @@ Ported for reference from `Operator.update_stats_for_accept`. **Only ACCEPTED mo
 a rejection just increments the proposal count.
 
 ```python
-mean_cost = self.mean_call_time if self.weight_by_time else 1.0
+mean_cost = self.mean_valid_call_time if self.weight_by_time else 1.0
 improvement_exponent = 1.5
 sign = -1 if improvement < 0 else 1
 score = max(explore_reward, sign * abs(improvement) ** improvement_exponent) / max(mean_cost, 1e-9)

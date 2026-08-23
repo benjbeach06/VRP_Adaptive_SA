@@ -239,13 +239,17 @@ class SimAnnVRPSolver:
                  reaction_factor: float = 0.01,
                  cooling_factor: float = 1 - 1e-4,
                  initial_temp_factor: float = 1e-4, # exploit first
-                 max_plateau_size: int = 1000,
+                 max_plateau_size: int = 1500,
                  plateau_reheat_exponent: float = 0.2,
                  empty_route_cleanup_interval: int = 100,
                  explore_reward: Num = 1e-5,
                  Bayes_magnet: Num = 0.997,
                  statistic_reaction_factor: Num = -1,
                  cost_exponent: Num = 1.0,
+                 weight_time_constant: float = 0.019,
+                 time_based_schedule: bool = True,
+                 cooling_rate_per_second: float = 4.47,
+                 max_plateau_seconds: float = 4.84,
                  ):
         self.sln = sln
         self.operators: list[Operator] = []
@@ -260,6 +264,25 @@ class SimAnnVRPSolver:
                                          else statistic_reaction_factor)
         self.cost_exponent = cost_exponent
         self.reaction_factor = reaction_factor
+        # Time constant of the weight EMA, in SECONDS OF THIS OPERATOR'S OWN TIME. This is the
+        # DEFAULT path. Negative selects the old per-segment `reaction_factor`, which decayed every
+        # operator equally however much of the segment it consumed, so 100 calls of an expensive
+        # operator decayed it exactly as much as 100 calls of a cheap one.
+        #
+        # 0.019 s is derived, not chosen. At segment_length=100 and reaction_factor=0.01 the old
+        # roster-wide half-life was about 0.31 s of wall clock at roughly 22,000 itr/s. For an
+        # operator holding the average share of a 24-operator roster, 0.019 s reproduces that. So
+        # the default is neutral at the center and only redistributes across the roster.
+        #
+        # This also decouples the decay rate from `segment_length`, which was previously a sampling
+        # rate that silently set the real memory length. tools/tune.py normalises for that; see the
+        # note in its module docstring, which describes the NEGATIVE path.
+        #
+        # `reaction_factor` keeps its meaning on purpose -- tools/tune.py derives it as
+        # 1 - K**segment_length and the recorded tuning results are indexed by it.
+        # `statistic_reaction_factor` still tracks `reaction_factor`: it weights a per-segment
+        # ratio, so it must NOT inherit a time constant.
+        self.weight_time_constant = weight_time_constant
         self.max_time = max_time
 
         #self.cooling_factor = 0.93304 # Factor per 100 iterations
@@ -276,6 +299,31 @@ class SimAnnVRPSolver:
         self.curr_plateau_size = 0
         self.max_plateau_size = max_plateau_size
         self.plateau_reheat_exponent = plateau_reheat_exponent # Fractional exponent of "reheat to this factor of plateau start"
+
+        # THE SCHEDULE CLOCK. Cooling and plateau detection both read one clock, so they can never
+        # disagree about units. True runs it in SECONDS, which is production. False runs it in
+        # ITERATIONS, which reproduces the pre-2026-08-23 solver exactly and is what
+        # set_deterministic_weighting selects.
+        #
+        # Each mode keeps its own pair of parameters, so neither is ever silently inactive:
+        #   time       -> cooling_rate_per_second, max_plateau_seconds
+        #   iterations -> cooling_factor,          max_plateau_size (x segment_length)
+        #
+        # The time defaults are DERIVED from the iteration ones at a measured 31,000 itr/s, so the
+        # two modes start out equivalent on this machine:
+        #   |log2(1 - 1e-4)| * 31,000            = 4.47 log2 units per second
+        #   1500 segments * 100 iterations / 31,000 = 4.84 seconds
+        # That calibration is machine-specific. The tune searches both, so it self-corrects.
+        #
+        # In time mode `segment_length` has NO schedule role at all -- it is a pure sampling rate.
+        self.time_based_schedule = time_based_schedule
+        self.cooling_rate_per_second = cooling_rate_per_second
+        self.max_plateau_seconds = max_plateau_seconds
+        # Position and timestamps on whichever clock is active. Reset in solve(). Initialized here
+        # because update_weights reads schedule_now, and tests call it without running solve().
+        self.schedule_now = 0.0
+        self.last_cool_at = 0.0
+        self.last_improvement_at = 0.0
 
         self.best_objective = float("inf")
         self.curr_objective = float("inf")
@@ -360,12 +408,26 @@ class SimAnnVRPSolver:
         stochastic solver, but makes an intermittent bug impossible to reproduce or bisect.
 
         With this on, every operator's mean cost is taken as 1, so selection depends only on the
-        improvements achieved. Everything else (the RNG stream, the acceptance test, operand
-        selection) is already seed-determined, so this is the last input needed to make a run a
-        pure function of its seed.
+        improvements achieved.
+
+        THREE wall-clock paths have to close, not one. Operator cost was the original; the other two
+        arrived on 2026-08-23 and each reads the clock independently:
+
+        - `weight_by_time` -- the cost term in scoring, and the cost ratio in the penalty.
+        - `weight_time_constant` -- the weight EMA decays by each operator's OWN elapsed time.
+          Negative restores the per-segment `reaction_factor`.
+        - `time_based_schedule` -- cooling and plateau detection run on seconds, so ACCEPTANCE
+          itself becomes clock-dependent. False restores the iteration clock.
+
+        NOTE what this now means. Deterministic mode is a DIFFERENT CONFIGURATION, not production
+        with a frozen clock. A green determinism test says nothing about the time-based path. A real
+        clock accessor that the harness can fake is still owed.
         """
         for op in self.operators:
             op.weight_by_time = not deterministic
+        if deterministic:
+            self.weight_time_constant = -1
+            self.time_based_schedule = False
 
     def _build_family_tree(self) -> None:
         """
@@ -489,11 +551,18 @@ class SimAnnVRPSolver:
         adj_weights = self.adj_weights
         for op in self.operators:
             weight = op.weight
-            (num_proposals, num_accepts, num_improvements, score_sum) = op.get_stats()
+            (num_proposals, num_accepts, num_improvements, _, score_sum) = op.get_stats()
             p = self.reaction_factor
             proposed = num_proposals > 0
             if proposed:
                 average_score = score_sum / num_proposals if score_sum > 0 else 0
+
+                # Time-based decay: p is this operator's own segment time against the time
+                # constant. An unproposed operator has segment_time == 0, so it would give p == 0,
+                # which is the no-decay the else branch already applies and the magnet assumes.
+                if self.weight_time_constant > 0:
+                    p = 1.0 - math.exp(-op.segment_time / self.weight_time_constant)
+
                 weight = reheat*((1 - p) * weight + p * average_score)
             else:
                 weight = reheat*weight      # the magnet runs on the TREE, below
@@ -524,8 +593,10 @@ class SimAnnVRPSolver:
         # subtree was proposed, lift the unproposed ones, then push the lifted weights back into
         # adj_weights before the final fold. design/operator_selection/family_selection.md
         root = self.family_root
+        # EXPERIMENT: magnet folds RAW weights, not adjusted ones.
+        raw = {op: op.weight for op in self.operators}
         for child in root.children:
-            _fold(child, adj_weights)
+            _fold(child, raw)
         _lift_unproposed(root, self.Bayes_magnet)
         for op in self.operators:
             adj_weights[op] = op.weight * op.exploit_selection_penalty_factor * op.penalty
@@ -540,19 +611,29 @@ class SimAnnVRPSolver:
         # family's weight is its best member's ADJUSTED weight and that carries to the root, so a
         # per-family maximum would make weights mean different things across families.
         # planning/scoring-rework.md
-        improvement_scores = [max(op.improvement_estimate / op.scoring_cost,
-                                  IMPROVEMENT_SCORE_FLOOR) for op in self.operators]
-        best = max(improvement_scores)
-        for op, improvement_score in zip(self.operators, improvement_scores):
-            op.penalty = improvement_score / best
+        #improvement_scores = [max(op.improvement_estimate / op.scoring_cost,
+        #                          IMPROVEMENT_SCORE_FLOOR) for op in self.operators]
+        #best = max(improvement_scores)
+        #for op, improvement_score in zip(self.operators, improvement_scores):
+        #    op.penalty = improvement_score / best
+        #    adj_weights[op] = (op.weight * op.exploit_selection_penalty_factor * op.penalty)
+
+        best = min(op.scoring_cost for op in self.operators)
+        for op in self.operators:
+            op.penalty = best / op.scoring_cost
             adj_weights[op] = (op.weight * op.exploit_selection_penalty_factor * op.penalty)
 
         self.refresh_family_tree()
 
         if improving_moves == 0:
+            # Plateau length on the SCHEDULE CLOCK: seconds without an improving move in time mode,
+            # segments in iteration mode. `schedule_now` is set once per iteration in solve().
             self.curr_plateau_size += 1
-            if self.curr_plateau_size >= self.max_plateau_size:
+            plateau_span = (self.max_plateau_seconds if self.time_based_schedule
+                            else self.max_plateau_size * self.segment_length)
+            if self.schedule_now - self.last_improvement_at >= plateau_span:
                 self.curr_plateau_size = 0
+                self.last_improvement_at = self.schedule_now
                 # Reheat factor = plateau_reheat_factor / (max_size^cooling factor). Undoes cooling during plateau, then reheats by the cooling factor.
                 #log_reheat_factor = math.log(self.plateau_reheat_factor, 2) - self.segment_length*self.max_plateau_size*self.log_cooling_factor
                 #self.log_temperature += log_reheat_factor
@@ -561,6 +642,7 @@ class SimAnnVRPSolver:
                 self.num_plateau_reheats += 1
         else:
             self.curr_plateau_size = 0
+            self.last_improvement_at = self.schedule_now
 
 
 
@@ -800,6 +882,12 @@ class SimAnnVRPSolver:
         elapsed_time = 0
         iterations = 0
 
+        # Schedule clock starts at zero in either mode, so a re-solve does not inherit timestamps.
+        self.schedule_now = 0.0
+        self.last_cool_at = 0.0
+        self.last_improvement_at = 0.0
+        self.elapsed_time = 0.0
+
         # 0 = none.
         # 1 = verify accepted moves' reported improvement against solution_cost() before/after
         #     apply() (or before/after propose() for escape-hatch operators, which mutate there).
@@ -817,8 +905,15 @@ class SimAnnVRPSolver:
         iterations_between_recomputes = 10000
 
         while elapsed_time < self.max_time:
-            self.log_temperature += self.log_cooling_factor
+            # One schedule clock, read by cooling here and by plateau detection in update_weights.
+            # elapsed_time is refreshed at the BOTTOM of this loop, so in time mode the delta covers
+            # the previous iteration. The deltas telescope to rate * total_elapsed, so no drift.
             iterations += 1
+            self.schedule_now = elapsed_time if self.time_based_schedule else iterations
+            cooling_rate = (self.cooling_rate_per_second if self.time_based_schedule
+                            else -self.log_cooling_factor)
+            self.log_temperature -= cooling_rate * (self.schedule_now - self.last_cool_at)
+            self.last_cool_at = self.schedule_now
             iterations_since_last_recompute += 1
 
             if iterations_since_last_recompute >= iterations_between_recomputes:
@@ -841,6 +936,7 @@ class SimAnnVRPSolver:
             if not move.is_actionable:
                 assert not move.already_applied, f"{type(op).__name__}: A non-actionable move was applied!"
                 elapsed_time = time.time() - start_time
+                op.update_stats_for_reject(valid = False)
                 continue
 
             if debug_level >= 1 and move.already_applied:
@@ -936,13 +1032,14 @@ class SimAnnVRPSolver:
                     if problems:
                         print(f"[debug] invariant violations after rejected {type(op).__name__}: {problems}")
 
-                op.update_stats_for_reject()
+                op.update_stats_for_reject(valid = True)
 
             if len(self.snapshots) > 2*self.max_snapshots:
                 self.pare_snapshots_to_top_k(self.max_snapshots)
 
             curr_time = time.time()
             elapsed_time = curr_time - start_time
+            self.elapsed_time = elapsed_time
 
             if elapsed_time > self.report_every * self.num_reports_so_far:
                 self.num_reports_so_far += 1

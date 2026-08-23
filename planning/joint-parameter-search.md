@@ -80,7 +80,7 @@ serialize the timings that operator weighting reads. Independent processes, one 
 only local form that works.
 
 **Either way, one measurement risk, and it is the same one that rules out iteration-gating.**
-Operator weighting is timing-based. Solves that contend for a core inflate `mean_call_time`, which
+Operator weighting is timing-based. Solves that contend for a core inflate `mean_valid_call_time`, which
 changes which operators get selected, so a contended run measures a slightly different solver.
 Pin one solve per physical core, and check that a parallel trial reproduces a solo trial's operator
 mix before trusting a parallel search.
