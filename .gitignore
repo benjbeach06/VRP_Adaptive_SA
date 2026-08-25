@@ -11,3 +11,4 @@ design/_TODO_REVIEW.md
 
 # Session scratch: flags, deviations, hiccups. Consumed in post-discussion and retro.
 _session/
+experiment_logs/ablations/*/_worktrees/

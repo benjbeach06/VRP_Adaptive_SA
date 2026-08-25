@@ -1,0 +1,22 @@
+07_head_K8: 19 seeds x 300s, n=500, arm 12
+  seed   0     1931.89
+  seed   1     1925.31
+  seed   2     1945.55
+  seed   3     1921.62
+  seed   4     1942.99
+  seed   5     1939.01
+  seed   6     1926.79
+  seed   7     1939.98
+  seed   8     1930.17
+  seed   9     1893.99
+  seed  10     1942.04
+  seed  11     1927.13
+  seed  12     1919.71
+  seed  13     1967.05
+  seed  14     1965.23
+  seed  15     1961.27
+  seed  16     1969.31
+  seed  17     1940.54
+  seed  18     1945.94
+
+07_head_K8: mean 1938.71 over 19 runs
