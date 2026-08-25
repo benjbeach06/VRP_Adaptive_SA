@@ -1,6 +1,7 @@
 # Every reference is doubly linked
 
-**Status: rule agreed, tooling not built. Benjamin's, 2026-08-22.**
+**Status: rule agreed. Checker BUILT (`tools/check_links.sh`); rollout in progress.**
+Benjamin's, 2026-08-22.
 
 ## The problem it solves
 
@@ -27,13 +28,46 @@ Each document carries two sections, at the bottom:
 ## Links to here
 
 - [family_selection.md](family_selection.md) -- summarises the projection's guarantees.
-- [planning/scoring-rework.md](../../planning/scoring-rework.md) -- cites the floor ordering.
+- [planning/implemented/scoring-rework.md](../../planning/implemented/scoring-rework.md) -- cites the floor ordering.
 ```
 
 **`References`** is what this file points at. **`Links to here`** is what points at this file.
 
+**`References` lists DOCUMENTATION only** -- other design and planning docs, `RESULTS.md`,
+`METHODOLOGY.md`. Not code, not experiment folders, not run logs. An experiment belongs under a
+separate `## Related experiments` heading, which names what was studied and what it informed, and
+never restates its result.
+
+**The two sections are maintained in opposite directions.** `References` is derived from the links
+in a file's own BODY, and is the only list an author writes by hand. `Links to here` then fills in
+as a SIDE EFFECT of other files adding References. Nobody writes a back-link speculatively.
+
+**Links inside the two sections do not themselves count as references.** Only body links do.
+Otherwise a back-link would manufacture a forward reference and the two lists would inflate each
+other.
+
 Both entries carry a short reason. The reason is the part that makes the section worth having: it
 says WHY the other file cares, so a reader can judge whether a change reaches it without opening it.
+
+## Link TEXT is repo-root-relative; the target stays relative
+
+**Unresolved, recorded 2026-08-25. The convention is currently inconsistent and needs a cleanup
+pass.**
+
+What a reader sees should locate the file from the repository root, so a path means the same thing
+in every document. The link target stays a normal relative path, because that is what resolves.
+
+```markdown
+[design/operator_selection/share_floors.md](share_floors.md)
+[planning/ablations.md](../../planning/ablations.md)
+```
+
+Not `[share_floors.md](share_floors.md)`, which reads differently depending on which file it
+appears in, and gives a reader no idea where the target lives.
+
+Today some entries use the bare filename and some use the full path, including in docs written
+after the rule was agreed. `tools/check_links.sh` does not check display text yet. Both are for the
+cleanup pass, not now.
 
 ## What it buys
 
@@ -56,21 +90,37 @@ the folder `README.md` files.
 **Not source comments.** A one-line design-doc reference in code stays one line. Source is covered by
 the existing rule: a design doc replaces long prose, and the code keeps a pointer.
 
-## Tooling, when it is worth building
+## Tooling
 
-The rule is enforceable by a script, and should be, because a by-hand back-link rots.
+**Built: `tools/check_links.sh`.** A by-hand back-link rots, so the rule is enforced by a script.
 
-`tools/check_links.py`, doing three things:
+```bash
+bash tools/check_links.sh                       # every in-scope doc
+bash tools/check_links.sh design/foo.md ...     # just these
+```
 
-1. **Parse every markdown link** between tracked documents.
-2. **Report asymmetry** -- A references B while B has no `Links to here` entry for A, or the reverse.
-3. **Report dangling paths.** The existing check already does this and would fold in.
+It does four things:
 
-`--fix` could insert missing `Links to here` entries with a placeholder reason, leaving the reason
-for a human. **It must never write a reason**, because an invented reason is worse than a missing
-one: it reads as verified.
+1. **Derives `References`** from each file's body links, ignoring fenced code blocks so an
+   illustrative example is not mistaken for a real reference.
+2. **Reports `REF MISSING` / `REF EXTRA`** where the section and the body disagree, and
+   `REF NOT A DOC` where a reference points at something that is not documentation.
+3. **Reports `BACKLINK GAP`** -- A references B, and B has no `Links to here` entry for A.
+4. **Reports `DANGLING`** paths, wherever they appear.
 
-A pre-commit hook is the obvious home once the sections exist.
+**It reports only, and deliberately has no `--fix`.** A `Links to here` entry carries a REASON, and
+a generated reason is worse than a missing one because it reads as verified.
+
+A pre-commit hook is the obvious home once the sections exist more widely.
+
+## Rollout state
+
+As of 2026-08-23 the checker reports over 200 problems, almost all from the 32 docs that predate
+the rule and carry no `References` section at all. That is expected, not a regression: the sections
+are being added folder by folder, in the order below.
+
+**Done:** the five docs from the scoring rework and the time-based schedule, plus everything they
+link to. Verified with `bash tools/check_links.sh <those five>`.
 
 ## Cost, stated honestly
 

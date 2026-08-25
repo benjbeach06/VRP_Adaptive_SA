@@ -1,5 +1,11 @@
 # Hierarchical weight magnetism
 
+**IMPLEMENTED, commit `c539a1e`.** See
+[design/operator_selection/hierarchical_magnetism.md](../../design/operator_selection/hierarchical_magnetism.md)
+for what shipped. The plan as agreed follows; how it diverged, and why, is recorded at the end.
+
+---
+
 **Status: not started. PRECEDES the scoring rework**, and is separable from it.
 
 ## The inconsistency it fixes
@@ -89,3 +95,26 @@ exploration and plateau phases plausibly want different shapes.
 
 **Current expectation:** keep the resolvability argument on the low end, but a weaker pull on the
 high end than a symmetric rule would give.
+
+---
+
+## How this diverged, and why
+
+Built almost exactly as designed. One refinement, not anticipated above: the fold in step 1 of
+"Propagation" reads RAW `op.weight`, not `adj_weights`.
+
+Folding adjusted weights cancels the penalty and can invert it. Equalizing adjusted weights forces
+raw weights apart by `1/penalty`, so a cheap operator's raw weight is pulled down and an expensive
+one's is pulled up -- backwards. Benjamin's framing, 2026-08-23, once the dynamic penalty
+([scoring-rework.md](scoring-rework.md)) made the two differ enough to matter.
+
+## References
+
+- [design/operator_selection/hierarchical_magnetism.md](../../design/operator_selection/hierarchical_magnetism.md)
+  -- the design this plan became.
+- [scoring-rework.md](scoring-rework.md) -- the plan that lands after this one, and whose penalty
+  made the raw versus adjusted fold distinction matter.
+
+## Links to here
+
+- [scoring-rework.md](scoring-rework.md) -- names this as the plan that landed first.

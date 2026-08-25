@@ -48,8 +48,9 @@ class Family(Enum):
     EXACT              = auto()
 
 
-# Lowest value a shrunk rate estimate may hold. The floor cancels out of any ratio between two
-# estimates, so it is numerical hygiene rather than policy. planning/scoring-rework.md
+# Lowest value a shrunk rate estimate may hold. Numerical hygiene, not policy.
+# UNUSED as of 2026-08-23 -- see improvement_estimate below.
+# design/operator_selection/dynamic_penalty.md
 ESTIMATE_FLOOR: Num = 1e-10
 
 # Floor on improvement-per-second before it is normalised into a penalty. It appears in both the
@@ -136,9 +137,8 @@ class Operator[Ops: tuple](ABC):
 
         self.explore_reward = explore_reward
 
-        # Exponent on cost in the EXPLOITATION term only. Exploration is a different mode, so its
-        # reward always divides by plain cost. 1 is probably right but unevaluated, which is why it
-        # is a parameter. planning/scoring-rework.md
+        # DEAD as of 2026-08-23: the score no longer divides by cost at all, so nothing reads
+        # this. Cost is priced once, in the penalty. design/operator_selection/dynamic_penalty.md
         self.cost_exponent: Num = 1.0
 
         # When False, update_stats() treats every operator's mean cost per move as 1 instead of
@@ -162,8 +162,11 @@ class Operator[Ops: tuple](ABC):
         self.exploit_only = False # For operators that determine moves by optimizing instead of through random choice
         self.exploit_selection_penalty_factor = 1.0
 
-        # Shrunk estimate of this operator's improvement rate, EMA'd when proposed and magnetised
-        # toward siblings when not. NOT a measured frequency -- see planning/scoring-rework.md.
+        # Shrunk estimate of this operator's improvement rate. NOT a measured frequency.
+        # DEAD as of 2026-08-23: neither the EMA that wrote it nor the magnet that folded it runs
+        # any more, and the penalty it fed is now a pure cost ratio. Left in place, commented at
+        # both sites, in case a future consumer wants it.
+        # design/operator_selection/dynamic_penalty.md
         #
         # BORN AT 1.0, like `weight`, NOT at the floor. Starting every operator at ESTIMATE_FLOOR
         # makes the sibling geometric mean equal to the floor as well, so the magnet computes a lift
@@ -214,16 +217,17 @@ class Operator[Ops: tuple](ABC):
         1.0 when `weight_by_time` is off, so selection stays a pure function of improvements and a
         run is reproducible. See `set_deterministic_weighting`.
 
-        A three-step cascade, because an operator with no valid calls yet still needs a price:
+        Two branches, because an operator with no valid calls yet still needs a price. With valid
+        calls it is priced on those alone, so cheap degenerate returns cannot dilute it. Without
+        any, it falls back to its all-proposal cost -- an operator that only ever returns INVALID
+        is priced at what those invalids really cost. A never-proposed operator lands near zero
+        through the empty-count guards, so everything gets sampled early.
 
-        - **never proposed** -> near zero, so everything gets sampled early
-        - **proposed, never valid** -> its mean PROPOSAL cost, so an operator that only ever returns
-          invalid is priced at what those invalids actually cost. Expensive invalids are penalised,
-          but not catastrophically
-        - **otherwise** -> its mean VALID cost, held at or above the mean proposal cost
+        NO FLOOR holds the valid cost at or above the proposal cost. That floor was removed on
+        2026-08-23 with the rest of the cascade.
 
         Applies are only reached on accept, which implies VALID, so apply time is always valid time.
-        planning/scoring-rework.md
+        design/operator_selection/dynamic_penalty.md
         """
         return 1 if not self.weight_by_time else self.mean_valid_call_time if self.num_useful_calls > 0 else self.mean_call_time
 
@@ -429,11 +433,10 @@ class Operator[Ops: tuple](ABC):
                 if improvement > 0 else 0.0)
         explore_gain = self.explore_reward#/cost
 
-        # `/ penalty` divides the WHOLE max, so both terms cancel against
-        # adj_weight = weight * penalty. Scaling only the exploitation term would deliver the
-        # exploration contribution penalty-suppressed, hardest for the very operator that
-        # explore_reward exists to keep alive. planning/scoring-rework.md
-        score = max(explore_gain, gain )
+        # Score is improvement magnitude ONLY -- no cost, no penalty. It used to carry
+        # `/ penalty` so the two cancelled inside adj_weight; that cancellation is removed.
+        # design/operator_selection/dynamic_penalty.md
+        score = max(explore_gain, gain)
         self.stats.record_accept(score, improved)
 
     def get_stats(self):
@@ -1459,8 +1462,8 @@ class _FarthestInsertionReorderBase(_SpanReorderBase):
         self.exploit_only = True
 
         # The hand-set cost discount was removed here. It priced these O(k^2) operators by a
-        # per-operator constant, which is the shape planning/scoring-rework.md replaces with a
-        # measured, adaptive penalty. exploit_selection_penalty_factor stays at its 1.0 default
+        # per-operator constant, which is the shape design/operator_selection/dynamic_penalty.md
+        # replaces with a measured, adaptive penalty. exploit_selection_penalty_factor stays at its 1.0 default
         # so a flat penalty on a broad CATEGORY can be reimposed later -- never per operator.
 
     def _reorder(self, points, left, right):

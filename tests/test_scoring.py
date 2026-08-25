@@ -105,6 +105,8 @@ class RateEstimates(SeededTestCase):
         self.assertEqual(split.statistic_reaction_factor, 0.5)
         self.assertNotEqual(split.statistic_reaction_factor, split.reaction_factor)
 
+    @unittest.skip("update_weights' improvement_estimate update is commented out, 2026-08-23 -- "
+                   "nothing reads the estimate any more. design/operator_selection/dynamic_penalty.md")
     def test_the_estimate_moves_toward_the_measured_rate(self):
         """
         One segment of known stats moves the estimate by exactly alpha toward the observed rate.
@@ -156,7 +158,12 @@ if __name__ == "__main__":
 
 
 class DynamicPenalty(SeededTestCase):
-    """Stage 4: penalty = improvement-per-second against the roster best, and its cancellation."""
+    """The penalty is a pure COST ratio against the roster's cheapest operator.
+
+    Superseded 2026-08-23. It used to be improvement-per-second, with the score dividing by the
+    penalty so the two cancelled while an operator kept earning. That inverted the ranking it was
+    meant to produce -- see design/operator_selection/dynamic_penalty.md.
+    """
 
     def _solver(self, **kw):
         sln = random_instance(seed=13, n_customers=200, n_vehicles=40, capacity=25)
@@ -167,9 +174,16 @@ class DynamicPenalty(SeededTestCase):
 
     @staticmethod
     def _set_cost(op, seconds):
-        """Force mean_call_time. It is derived from totals and counts, so set those."""
-        op._proposal_count, op._apply_count = 1, 0
-        op._valid_propose_time_total, op._apply_time_total = seconds, 0.0
+        """Force scoring_cost to `seconds`, on BOTH of its branches.
+
+        scoring_cost reads mean_valid_call_time when num_useful_calls > 0, and falls back to
+        mean_call_time otherwise. Both are derived from totals and counts, so set all of them --
+        setting only the valid-side totals leaves the fallback branch at 0 and divides by zero.
+        """
+        op.weight_by_time = True
+        op._proposal_count, op._apply_count, op.num_useful_calls = 1, 0, 1
+        op._propose_time_total = op._valid_propose_time_total = seconds
+        op._apply_time_total = 0.0
 
     def test_the_penalty_is_a_ratio_against_the_roster_best(self):
         """In (0, 1], and exactly 1.0 for whichever operator has the best improvement per second."""
@@ -186,10 +200,14 @@ class DynamicPenalty(SeededTestCase):
         self.assertAlmostEqual(max(penalties), 1.0, places=12,
                                msg="the best operator must sit at penalty 1")
 
-    def test_at_plateau_the_penalty_collapses_to_min_cost_over_cost(self):
+    def test_the_penalty_is_exactly_min_cost_over_cost(self):
         """
-        Equal estimates make penalty = min_cost / cost. Ranking by cost alone is what a plateau
-        wants, and it is the direct answer to the ablation finding.
+        Ranking by cost alone, unconditionally -- not only at plateau.
+
+        The old penalty was `improvement_estimate / cost`, normalised against the roster best, so
+        it only degenerated to `min_cost / cost` when every estimate happened to agree. Estimates
+        did NOT agree in practice: they spread over five orders of magnitude, and an exhaustive
+        operator's estimate stayed high enough to swamp its own cost. The improvement term is gone.
         """
         solver = self._solver()
         costs = {}
@@ -197,22 +215,22 @@ class DynamicPenalty(SeededTestCase):
             seconds = 1e-5 * (i + 1)
             self._set_cost(op, seconds)
             costs[op] = seconds
-            op.improvement_estimate = 0.25          # identical: nothing is distinguishing itself
-            op.stats.proposals = 0                   # unproposed, so the EMA leaves the estimate
+            op.stats.proposals = 0                   # unproposed: no EMA, no magnet interference
+        solver.update_weights()
 
-        # Penalty only, without the magnet moving the estimates underneath it.
-        scores = [max(op.improvement_estimate / op.scoring_cost, 1e-20) for op in solver.operators]
-        best = max(scores)
         cheapest = min(costs.values())
-        for op, score in zip(solver.operators, scores):
-            self.assertAlmostEqual(score / best, cheapest / costs[op], places=9)
+        for op in solver.operators:
+            self.assertAlmostEqual(op.penalty, cheapest / costs[op], places=9)
 
-    def test_the_score_carries_one_over_penalty(self):
-        """The recorded score is the raw score divided by the penalty in force."""
+    def test_the_score_does_not_depend_on_the_penalty(self):
+        """
+        The score used to carry `1 / penalty`, so it cancelled against `adj_weight = weight *
+        penalty` while an operator kept earning. That cancellation is REMOVED -- the penalty must
+        now bite durably rather than washing out of the weight it feeds.
+        """
         solver = self._solver()
         op = solver.operators[0]
         self._set_cost(op, 1e-4)
-        op.weight_by_time = True
 
         raw = {}
         for penalty in (1.0, 0.25):
@@ -221,11 +239,11 @@ class DynamicPenalty(SeededTestCase):
             op.last_move = Move(kind=MoveKind.VALID, improvement=0.5)
             op.update_stats_for_accept()
             raw[penalty] = op.stats.score_sum
-        self.assertAlmostEqual(raw[0.25], raw[1.0] * 4.0, places=9,
-                               msg="a quarter penalty must quadruple the recorded score")
+        self.assertAlmostEqual(raw[0.25], raw[1.0], places=12,
+                               msg="the penalty must not reach the recorded score at all")
 
-    def test_the_adjusted_weight_multiplies_the_penalty_back_in(self):
-        """`adj_weight = weight * penalty` is the other half of the cancellation."""
+    def test_the_adjusted_weight_multiplies_the_penalty_in(self):
+        """`adj_weight = weight * penalty` is where the penalty actually acts on selection."""
         solver = self._solver()
         for i, op in enumerate(solver.operators):
             op.stats.proposals, op.stats.accepts, op.stats.improvements = 100, 10, i
@@ -276,9 +294,20 @@ class CostAccounting(SeededTestCase):
         self.assertGreater(op.scoring_cost, blended * 9,
                            "the blended average would understate the true cost about tenfold")
 
-    def test_the_valid_cost_never_falls_below_the_proposal_cost(self):
-        """A valid proposal does at least as much work as an average one."""
+    def test_the_first_valid_call_switches_the_cost_off_the_proposal_fallback(self):
+        """
+        `num_useful_calls > 0` is the branch condition, so one valid call moves an operator off
+        its all-proposal fallback price and onto its valid-only price.
+
+        There is NO floor holding the valid cost at or above the proposal cost. That floor existed
+        until 2026-08-23 and was removed with the rest of the cost cascade -- an operator whose
+        valid calls really are cheaper than its average proposal is now priced as cheap.
+        """
         op = self._op()
-        op._proposal_count, op._propose_time_total = 100, 1.0
-        op.num_useful_calls, op._valid_propose_time_total = 50, 0.1  # implausibly cheap valids
-        self.assertAlmostEqual(op.scoring_cost, 0.01, places=9)
+        op._proposal_count, op._propose_time_total = 100, 1.0        # 10 ms per proposal
+        self.assertAlmostEqual(op.scoring_cost, 0.01, places=9,
+                               msg="no valid calls yet: priced at the proposal cost")
+
+        op.num_useful_calls, op._valid_propose_time_total = 50, 0.1  # 2 ms per valid call
+        self.assertAlmostEqual(op.scoring_cost, 0.002, places=9,
+                               msg="valid calls exist: priced at the valid cost, with no floor")

@@ -47,7 +47,7 @@ class _LeafNode:
         self.parent: _FamilyNode = parent
         self.weight: Num = 0.0
         self.proposed: bool = False       # set per segment by update_weights
-        self.estimate: Num = 0.0          # improvement_estimate, folded and magnetised like weight
+        self.estimate: Num = 0.0          # improvement_estimate; UNUSED, see dynamic_penalty.md
 
 
 class _FamilyNode:
@@ -64,7 +64,7 @@ class _FamilyNode:
         self.weight: Num = 0.0
         self.floor: Num = 0.0                     # meaningful on root children only
         self.proposed: bool = False               # did anything in this subtree get proposed?
-        self.estimate: Num = 0.0                  # MAX over children, like weight
+        self.estimate: Num = 0.0                  # UNUSED, see dynamic_penalty.md
 
 
 def _fold(node: _TreeNode, adj_weights: dict[Operator, Num]) -> Num:
@@ -168,7 +168,15 @@ def apply_share_floors(weights: Sequence[Num], floors: Sequence[Num]) -> list[Nu
 
 # NOTE(tuning): results of a 704-trial Optuna/TPE search over the annealing constants
 # (2026-08-11). Full report in experiment_logs/tuning_report.txt; harness in tools/tune.py; raw
-# trials in experiment_logs/tune_results.json. Defaults below are UNCHANGED -- this is a record, not an application.
+# trials in experiment_logs/tune_results.json.
+#
+# SUPERSEDED 2026-08-23 for the schedule/selection parameters. This block described the
+# ITERATION-based schedule under the PRE-REWORK scoring, and both are gone -- see
+# design/schedule/time_based_schedule.md and design/operator_selection/dynamic_penalty.md. A
+# 6-parameter search over the rebuilt mechanism found a region worth roughly -58 objective units
+# at 9-10 sigma against the rework's own starting point, so "the landscape is FLAT" does NOT
+# generalise past the mechanism it was measured on. Kept as a record of that measurement.
+# Numbers: experiment_logs/tuning/2026-08-23_six_param_time_based.json.
 #
 #   The landscape is FLAT. Best-to-worst across the whole searched space is 3.6%, so no parameter
 #   setting is going to rescue or ruin a run. The existing hand-tuned values were already within
@@ -235,21 +243,21 @@ class SimAnnVRPSolver:
     # and the caveats on which ones are worth tuning yet.
     def __init__(self, sln: FullSolution, max_time: float = 120,
                  *,
-                 segment_length: int = 100,
+                 segment_length: int = 123,
                  reaction_factor: float = 0.01,
                  cooling_factor: float = 1 - 1e-4,
                  initial_temp_factor: float = 1e-4, # exploit first
                  max_plateau_size: int = 1500,
-                 plateau_reheat_exponent: float = 0.2,
+                 plateau_reheat_exponent: float = 0.5561,
                  empty_route_cleanup_interval: int = 100,
                  explore_reward: Num = 1e-5,
-                 Bayes_magnet: Num = 0.997,
+                 Bayes_magnet: Num = 1-0.002156,
                  statistic_reaction_factor: Num = -1,
                  cost_exponent: Num = 1.0,
-                 weight_time_constant: float = 0.019,
+                 weight_time_constant: float = 1.937,
                  time_based_schedule: bool = True,
-                 cooling_rate_per_second: float = 4.47,
-                 max_plateau_seconds: float = 4.84,
+                 cooling_rate_per_second: float = 2.322,
+                 max_plateau_seconds: float = 0.343,
                  ):
         self.sln = sln
         self.operators: list[Operator] = []
@@ -571,13 +579,16 @@ class SimAnnVRPSolver:
             if weight < WEIGHT_SNAP_BELOW:
                 weight = WEIGHT_FLOOR
 
-            if proposed:
-                # Shrunk rate estimates. Denominator is PROPOSALS: a random operator is cheap but
-                # rarely improves, and that is the signal. planning/scoring-rework.md
-                q = self.statistic_reaction_factor
-                op.improvement_estimate = max(
-                    (1 - q) * op.improvement_estimate + q * (num_improvements / num_proposals),
-                    ESTIMATE_FLOOR)
+            # DEAD as of 2026-08-23: nothing reads improvement_estimate any more -- the penalty it
+            # fed is replaced by a pure cost ratio, below. Commented out rather than removed; kept
+            # in case a future consumer needs it. design/operator_selection/dynamic_penalty.md
+            #if proposed:
+            #    # Shrunk rate estimates. Denominator is PROPOSALS: a random operator is cheap but
+            #    # rarely improves, and that is the signal. planning/implemented/scoring-rework.md
+            #    q = self.statistic_reaction_factor
+            #    op.improvement_estimate = max(
+            #        (1 - q) * op.improvement_estimate + q * (num_improvements / num_proposals),
+            #        ESTIMATE_FLOOR)
 
             op.weight = weight
             adj_weights[op] = weight * op.exploit_selection_penalty_factor * op.penalty
@@ -601,16 +612,16 @@ class SimAnnVRPSolver:
         for op in self.operators:
             adj_weights[op] = op.weight * op.exploit_selection_penalty_factor * op.penalty
 
-        # The improvement estimate takes the same treatment: MAX up the tree, and an unproposed
-        # subtree shrinks toward its siblings rather than toward the whole roster.
-        for child in root.children:
-            _fold_estimates(child)
-        _lift_unproposed(root, self.Bayes_magnet, "estimate", "improvement_estimate")
+        # DEAD as of 2026-08-23, same reason as above -- nothing reads improvement_estimate.
+        #for child in root.children:
+        #    _fold_estimates(child)
+        #_lift_unproposed(root, self.Bayes_magnet, "estimate", "improvement_estimate")
 
-        # Dynamic penalty, from the MAGNETISED estimates. Normalisation is GLOBAL on purpose: a
-        # family's weight is its best member's ADJUSTED weight and that carries to the root, so a
-        # per-family maximum would make weights mean different things across families.
-        # planning/scoring-rework.md
+        # SUPERSEDED 2026-08-23. Penalty from the MAGNETISED estimates, normalised globally. It
+        # inverted the ranking it was built to produce: estimates spread over five orders of
+        # magnitude instead of clustering, so an exhaustive operator's estimate swamped its own
+        # cost. Replaced by the pure cost ratio below.
+        # design/operator_selection/dynamic_penalty.md
         #improvement_scores = [max(op.improvement_estimate / op.scoring_cost,
         #                          IMPROVEMENT_SCORE_FLOOR) for op in self.operators]
         #best = max(improvement_scores)

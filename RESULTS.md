@@ -141,8 +141,9 @@ variance, not only a better mean.
 **What the scoring still gets wrong.** The weighting had K=8 and never demoted it, across every run
 in both sweeps. A mechanism that priced improvement against cost correctly would have found this
 without an ablation. `K` is not yet a thing the solver can learn — that is
-[planning/family-generation.md](planning/family-generation.md) — and the pricing that would let it is
-[planning/scoring-rework.md](planning/scoring-rework.md).
+[planning/family-generation.md](planning/family-generation.md) — and the pricing that would let it
+is now built:
+[design/operator_selection/dynamic_penalty.md](design/operator_selection/dynamic_penalty.md).
 
 **Untested: K below 4.** The trend has not turned. K=3 is the shortest meaningful span.
 

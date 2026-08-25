@@ -28,42 +28,33 @@ Benjamin's reading: the operator is not useful IN ITS CURRENT FORM UNDER THE CUR
 should be useful at some span sizes once pricing is right. That is a hypothesis, and the ablation
 does not test it -- every arm ran under the scoring being replaced.
 
-## The rework these mechanisms are converging on
+## The rework these mechanisms converged on
 
-[scoring-rework](scoring-rework.md) is the agreed replacement, and
-[hierarchical-magnetism](hierarchical-magnetism.md) lands before it. Between them they resolve
-mechanisms 2, 3 and 4 below; the entries here record what each was FOR.
+[planning/implemented/scoring-rework.md](implemented/scoring-rework.md) and
+[planning/implemented/hierarchical-magnetism.md](implemented/hierarchical-magnetism.md) are both
+built now. Between them they resolved mechanisms 2, 3 and 4 below, though not as originally
+planned -- see the implemented docs' own "what changed" notes. The entries here still record what
+each mechanism was FOR.
 
 ## The formula every mechanism below acts on
 
-Ported for reference from `Operator.update_stats_for_accept`. **Only ACCEPTED moves are scored** --
-a rejection just increments the proposal count.
+**Superseded.** The formula that shipped is
+[design/operator_selection/dynamic_penalty.md](../design/operator_selection/dynamic_penalty.md),
+not the one this section used to quote. Read that doc instead of this one.
 
-```python
-mean_cost = self.mean_valid_call_time if self.weight_by_time else 1.0
-improvement_exponent = 1.5
-sign = -1 if improvement < 0 else 1
-score = max(explore_reward, sign * abs(improvement) ** improvement_exponent) / max(mean_cost, 1e-9)
-```
+**The table and the note below describe the PRE-REWORK formula.** Left as historical context for
+the mechanism numbers used elsewhere in this file; not a description of shipped behaviour.
 
-Scores accumulate into `score_sum`, and `update_weights` folds the segment average into the weight:
-
-```python
-average_score = score_sum / num_proposals    # PROPOSALS, so acceptance rate is priced in
-weight = (1 - reaction_factor) * weight + reaction_factor * average_score
-```
-
-Where each mechanism acts:
-
-| term | mechanism |
+| term | mechanism, pre-rework |
 |---|---|
 | `explore_reward` floor | 2 -- keeps an accepted uphill move from scoring at or below zero |
 | `improvement_exponent` | 3 -- currently a literal, not a solver parameter |
 | the `mean_cost` divider | 1 would change how it decays; 4 multiplies a per-operator factor alongside it |
 | `reaction_factor` in the fold | shares a tuning surface with 3 |
 
-**A note on the floor.** `sign` makes a disimproving move score negative, and `explore_reward` then
-raises it to a small positive value. So the floor is what lets an operator paying off through
+**A note on the floor, pre-rework.** `sign` makes a disimproving move score negative, and
+`explore_reward` then raises it to a small positive value. So the floor is what lets an operator
+paying off through
 exploration earn any weight at all -- and it is also why `record_accept` still clamps with
 `max(0, score)`, which the floor has made unreachable.
 

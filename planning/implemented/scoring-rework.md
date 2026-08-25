@@ -1,5 +1,11 @@
 # Scoring rework
 
+**IMPLEMENTED, then PARTLY SUPERSEDED.** See
+[design/operator_selection/dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md)
+for what shipped. The plan as agreed follows; how it diverged, and why, is recorded at the end.
+
+---
+
 **Status: designed, not started. Agreed in substance**, Benjamin's design, 2026-08-20 and 08-21.
 
 **Lands AFTER [hierarchical-magnetism](hierarchical-magnetism.md)**, which supplies the sibling-local
@@ -213,3 +219,60 @@ statistics and in ablation, never in improvement statistics.
 - Benjamin's WIP: exact reorder may be replaced by MIP above some size, or compete with it as a
   sister family. Both become dynamic generators -- Exact spawns K values, MIP spawns
   (K, time_limit) pairs. Each K may itself become a generating subfamily.
+
+---
+
+## How this diverged, and why
+
+Sections 1 and 6 shipped as designed: the hand-set penalty factor went to 1.0 for every operator,
+and `explore_reward` stays.
+
+**Section 5 shipped in half.** Cost accounting does exclude no-op and invalid propose time from the
+denominator, as designed. But the other half of that section -- "no-ops and invalids still count as
+proposals" -- was NOT true until 2026-08-23. The solver returned early on a non-actionable move
+without recording anything, so those proposals were invisible to the weight EMA's denominator, and
+an operator was judged only on the calls that did something. Smoke testing the time-based EMA
+surfaced it.
+
+**Sections 2, 3, and 4 -- the empirical-Bayes shrinkage on `improvement_estimate` feeding a dynamic
+penalty, and the score dividing by that penalty to cancel it -- were built (stages 2-4), then found
+to invert the ranking they were meant to produce.** The per-operator arm of the trajectory ablation
+revealed it: at plateau, `improvement_estimate` spread widely instead of clustering as this plan's
+"why this gives the plateau behaviour" section assumed. An exhaustive operator kept finding small
+improvements every call, so its estimate stayed far enough above a cheap operator's to swamp the
+cost difference the penalty was meant to price, and the penalty promoted the expensive operator
+instead of suppressing it.
+
+**This is a design defect, not an implementation bug.** It reached commits and blocked effective
+use -- the trajectory ablation measured throughput falling with no objective gain while this
+mechanism was live. The fix, 2026-08-23, does not repair the mechanism: it removes cost from the
+estimate
+side entirely. The penalty is now a plain cost ratio (`min(scoring_cost) / scoring_cost`), and the
+score no longer divides by penalty -- there is nothing left to cancel.
+`improvement_estimate` is now dead in three places at once -- the EMA that wrote it, the magnet
+that folded it up the tree, and the penalty that read it are all commented out, kept in case a
+future consumer wants them.
+
+Two further changes followed from the same diagnosis, neither anticipated here. The weight EMA
+moved from a shared per-segment `reaction_factor` to a per-operator time-based decay, and the
+annealing schedule moved onto the same wall-clock unit. Both are covered in
+[design/schedule/time_based_schedule.md](../../design/schedule/time_based_schedule.md).
+
+The rebuilt mechanism was then tuned and measured against this plan's own stage-1 commit:
+`experiment_logs/ablations/2026-08-23_tuned_vs_stage1/`.
+
+## References
+
+- [design/operator_selection/dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md)
+  -- the score, weight and penalty this plan became.
+- [design/schedule/time_based_schedule.md](../../design/schedule/time_based_schedule.md) -- the two
+  further changes that followed from the same diagnosis.
+- [hierarchical-magnetism.md](hierarchical-magnetism.md) -- the plan that landed first and supplied
+  the sibling-local machinery this one reused.
+
+## Links to here
+
+- [design/operator_selection/dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md)
+  -- cites this plan for why its improvement-weighted penalty was abandoned.
+- [hierarchical-magnetism.md](hierarchical-magnetism.md) -- names this plan as what made the raw
+  versus adjusted fold distinction matter.

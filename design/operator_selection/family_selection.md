@@ -197,8 +197,17 @@ A node with no children cannot report a MAX, which is why an emptied parent goes
   share. Floors bind at level 0 only.
 - [exploitation_governance.md](exploitation_governance.md) -- the per-leaf penalty factor, which
   multiplies into the leaf weight and so feeds the family max. **It is 1.0 for every operator as of
-  2026-08-22**, so families currently compete on raw weight. The adaptive penalty that replaces it
-  restores cost-adjusted competition -- [planning/scoring-rework.md](../../planning/scoring-rework.md).
+  2026-08-22**, so families currently compete on raw weight and cost. The adaptive penalty that
+  restores cost-adjusted competition is now built -- [dynamic_penalty.md](dynamic_penalty.md).
+- [hierarchical_magnetism.md](hierarchical_magnetism.md) -- the sibling-local magnet that runs on
+  this tree, folding and lifting the same `adj_weights` this doc describes.
 - [planning/operator-selection.md](../../planning/operator-selection.md) -- open selection work.
 - [span_reorder/reorder_operators.md](../span_reorder/reorder_operators.md) -- the inheritance there
   marks a family boundary, and the tree now reads it.
+
+## Links to here
+
+- [../span_reorder/reorder_operators.md](../span_reorder/reorder_operators.md) -- its inheritance
+  marks a family boundary this tree reads.
+- [README.md](README.md) -- summarises this doc in the folder index.
+- [../README.md](../README.md) -- summarises this doc in the top-level index.

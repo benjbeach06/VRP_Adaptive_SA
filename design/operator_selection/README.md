@@ -11,18 +11,17 @@ adjustments applied to a weight before it is drawn on.
 | [family_selection.md](family_selection.md) | The family tree. Operators carry a path; a node's weight is the MAX over its subtree; selection descends one level at a time instead of accumulating over the whole roster. |
 | [share_floors.md](share_floors.md) | The guaranteed minimum share per root family, and the projection that enforces it without distorting the ratios between the families that are not clamped. |
 | [exploitation_governance.md](exploitation_governance.md) | `exploit_only`, the per-operator selection penalty for operators whose cost scales with the problem, and the `adj_weights` mirror both are applied through. |
+| [hierarchical_magnetism.md](hierarchical_magnetism.md) | Pulls an unproposed operator's weight toward its SIBLINGS, not the whole roster, so a rare reversal is not shrunk toward noise from a whole-route rebuild. |
+| [dynamic_penalty.md](dynamic_penalty.md) | How an accepted move becomes a score, how weight EMAs that score, and the cost-ratio penalty that prices selection against wall-clock time. Includes the design defect that forced the current shape. |
 
 **Reading order.** `family_selection.md` first -- it is the structure the other two attach to.
 `share_floors.md` is a helper it calls. `exploitation_governance.md` predates the tree and describes
-per-leaf adjustments, which now feed the family max as well.
+per-leaf adjustments, which now feed the family max as well. `hierarchical_magnetism.md` and
+`dynamic_penalty.md` cover what actually decides a weight's value, and read well together.
 
-## What is not here
+## Everything unbuilt
 
-**The scoring formula itself.** How an accepted move becomes a number is still undocumented in
-`design/`; the formula is quoted for reference in
-[planning/operator-selection.md](../../planning/operator-selection.md) until it gets a proper doc.
-
-**Everything unbuilt.** Open selection work is in
+Open selection work is in
 [planning/operator-selection.md](../../planning/operator-selection.md), which frames it as three
 related concerns: exploit-only against exploratory operators, expensive against cheap ones, and
 running operators the solver has no time for.

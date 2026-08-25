@@ -53,9 +53,15 @@ METHOD -- and why it is shaped this way:
   * cooling_rate_per_second and max_plateau_seconds and plateau_reheat_exponent were EXCLUDED from
     every previous search (2026-08-11, 704 trials; 2026-08-16, 149 trials) on the argument that the
     reheat equilibrium (gap = C x S x R) makes C and R self-damping through S, so only the plateau
-    quantity P is expected to resolve cleanly. That argument was derived for the ITERATION-based
-    schedule. Whether it still holds in seconds is UNTESTED, not assumed -- hence tuning all six
-    together tonight rather than re-excluding two of them on an argument that predates this code.
+    quantity P is expected to resolve cleanly.
+
+    That equilibrium is UNIT-INVARIANT and carries over to the time-based schedule unchanged: C is
+    cooling per unit of the schedule clock and S is clock-units per reheat, so the product is the
+    same whether the unit is an iteration or a second. Switching units does not require
+    re-deriving it. What the argument does NOT establish is that the parameters stay unresolvable
+    under the REBUILT SCORING -- weights, penalty and decay all changed on 2026-08-23 -- which is
+    why all six are searched together here rather than two of them being excluded on a
+    self-damping argument that was measured against a different selection mechanism.
 
 Results are written to the output JSON after every trial, so an interrupted run keeps its work.
 """

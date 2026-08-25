@@ -31,7 +31,13 @@ The other three homes do not overlap with this one:
 | span reorder | [reorder_operators](span_reorder/reorder_operators.md) | the `_SpanReorderBase` seam, the family tree, and the exact short-span optimizer |
 | | [farthest_insertion_ops](span_reorder/farthest_insertion_ops.md) | the three heuristic variants and how they differ |
 | | [farthest_insertion_order](span_reorder/farthest_insertion_order.md) | the fixed-endpoint path helper, why farthest insertion, the measured O(n^2) |
-| operator selection | [exploitation_governance](operator_selection/exploitation_governance.md) | `exploit_only`, the cost-amortizing penalty factor, the `adj_weights` mirror |
+| operator selection | [README](operator_selection/README.md) | the folder's own reading order |
+| | [family_selection](operator_selection/family_selection.md) | the family tree, MAX aggregation, and descending it one level at a time |
+| | [share_floors](operator_selection/share_floors.md) | the guaranteed minimum share per root family, and the projection that enforces it |
+| | [exploitation_governance](operator_selection/exploitation_governance.md) | `exploit_only`, the cost-amortizing penalty factor, the `adj_weights` mirror |
+| | [hierarchical_magnetism](operator_selection/hierarchical_magnetism.md) | pulling an unproposed operator toward its SIBLINGS rather than the flat roster |
+| | [dynamic_penalty](operator_selection/dynamic_penalty.md) | score, the weight EMA, and the cost-ratio penalty -- plus the design defect that forced its current shape |
+| schedule | [time_based_schedule](schedule/time_based_schedule.md) | one clock for cooling and plateau detection, in seconds by default and iterations as the determinism fallback |
 
 ## Target structure
 
