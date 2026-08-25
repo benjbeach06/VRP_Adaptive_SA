@@ -1,0 +1,21 @@
+tuning ['cooling_rate_per_second', 'max_plateau_seconds', 'one_minus_bayes_magnet', 'plateau_reheat_exponent', 'segment_length', 'weight_time_constant'] over sizes [500] at capacity 400; 5 runs/size x 120.0s; budget 28800s
+  defaults construct cleanly: {'segment_length': 100, 'time_based_schedule': True, 'cooling_rate_per_second': 4.47, 'max_plateau_seconds': 4.84, 'plateau_reheat_exponent': 0.2, 'weight_time_constant': 0.019, 'Bayes_magnet': 0.997, 'initial_temp_factor': 0.0001, 'explore_reward': 1e-05}
+  reference (defaults) size=500: 1910.80
+  trial    0  score 1.0125  (1200s elapsed)
+  trial   10  score 1.0199  (7201s elapsed)
+  trial   20  score 1.0232  (13202s elapsed)
+  trial   28  score 0.9845  (18003s elapsed)
+  trial   30  score 1.0002  (19203s elapsed)
+  trial   32  score 0.9890  (20403s elapsed)
+  trial   40  score 1.0452  (25204s elapsed)
+
+completed 47 trials in 28804s
+best score 0.9845  (1.0 == current defaults)
+    segment_length                      123   (default 100)
+    cooling_rate_per_second  2.3223527887007878   (default 4.47)
+    weight_time_constant     1.9367135166472722   (default 0.019)
+    max_plateau_seconds      0.34346846383725366   (default 4.84)
+    plateau_reheat_exponent  0.5560715314156229   (default 0.2)
+    one_minus_bayes_magnet   0.0021562045651978114   (default 0.003)
+
+results written to experiment_logs/tuning/2026-08-23_six_param_time_based.json

@@ -33,7 +33,7 @@ BLOCK = re.compile(
     r"Num degrading calls: (?P<degrading>\d+), Mean degradation: (?P<mean_deg>[-\d.eE+]+)\s*\n"
     r"Average apply time: (?P<avg_apply>[-\d.eE+]+), "
     r"Average (?P<valid_only>valid )?propose time: (?P<avg_propose>[-\d.eE+]+), "
-    r"Average valid call time: (?P<avg_call>[-\d.eE+]+)"
+    r"Average (?:valid )?call time: (?P<avg_call>[-\d.eE+]+)"
 )
 
 

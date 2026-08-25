@@ -13,55 +13,49 @@ transfer to real solves.
 
     python tools/tune.py --budget-seconds 28800
 
-  * plateau_reheat_exponent is NEW and has never been searched, so it holds most of the headroom
-    here. It is also the parameter this setup is least able to fit: it exists to sustain
-    exploration across a long run, and a 60s tuning run rewards reaching a decent solution
-    quickly. Validate the winner at 4x length on unseen seeds before adopting it -- as was done
-    for the 2026-08-11 results.
+2026-08-23: SEARCH_SPACE was rebuilt for the time-based schedule (SimAnn_VRP_Solver.py, commit
+4aaf2c3). Weight decay, cooling, and plateau detection all read wall-clock seconds now instead of
+iteration counts, and segment_length is no longer confounded with any of them -- it is a pure
+sampling rate. The author's explicit instruction: tune all six live schedule/selection parameters
+TOGETHER, not a subset -- their earlier scoring behaviour was measured under a mechanism that no
+longer exists (see RESULTS.md, "The scoring cannot price rarity against cost"), so nothing about
+this landscape should be assumed flat before it is searched.
+
+    python tools/tune.py --budget-seconds 28800
 
 METHOD -- and why it is shaped this way:
 
-  * Production settings, deliberately. Runs use wall-clock termination and the normal
-    timing-based operator weighting, i.e. the solver exactly as shipped. Fixing the iteration
-    count and forcing deterministic weighting would give a much quieter objective, but it would
-    be tuning a solver nobody runs.
+  * Production settings, deliberately. Runs use wall-clock termination, the normal timing-based
+    operator weighting, and the normal time-based schedule -- the solver exactly as shipped.
+    Fixing the iteration count and forcing deterministic weighting would give a much quieter
+    objective, but it would be tuning a solver nobody runs.
 
   * Noise is handled by AVERAGING, not by removing it. Each configuration is scored over
     RUNS_PER_SIZE short runs at each instance size rather than one long run. Short-and-many beats
-    long-and-few here because the run-to-run spread is large (measured at roughly +-30% on
-    iteration rate), so the variance of the mean is what matters.
+    long-and-few here because the run-to-run spread is large, so the variance of the mean is what
+    matters.
 
   * Scores are normalized per instance size against a reference configuration (the current
-    defaults), because raw objectives differ by an order of magnitude between 60 and 200
-    customers and would otherwise let the largest size dominate the mean.
+    defaults), because raw objectives differ by an order of magnitude between different sizes and
+    would otherwise let the largest size dominate the mean.
 
-  * The SELECTION parameters are what this searches now. They were previously excluded because
-    the statistics they consume ignored two things a score should account for -- how often an
-    operator's moves are accepted, and what its exploration costs. explore_reward fixed that:
-    score = max(explore_reward, improvement**1.5) / mean_cost floors the IMPROVEMENT term, so an
-    accepted uphill move is worth explore_reward / mean_cost. Acceptance rate enters because
-    score_sum accumulates per accept; cost enters through the division. The rest of TODO(rescore)
-    -- splitting proposal timing from accept timing -- is still open, so treat these as fitted to
-    an improved but not finished measurement.
+  * SEGMENT_LENGTH IS NOW A PURE SAMPLING RATE. In the old iteration-based schedule it silently
+    set both the weight EMA's memory length and the plateau reheat frequency, which forced a
+    reparameterisation (K/L independence) just to search it in isolation. The time-based schedule
+    removes both couplings: weight decay reads weight_time_constant directly, and plateau length
+    reads max_plateau_seconds directly. segment_length now controls only how often weights are
+    RECOMPUTED, nothing about what they converge to.
 
-  * K AND L ARE MADE INDEPENDENT, which is the whole point of the parameterisation. L
-    (segment_length) is purely a SAMPLING RATE: how often weights are recomputed. On its own,
-    changing L would silently change two other things, so both are normalised away:
-      - the weight EMA compounds (1 - reaction_factor) once per SEGMENT, so the per-ITERATION
-        retention K = (1 - p)**(1/L) is what must stay fixed. Hence p = 1 - K**L.
-      - curr_plateau_size counts SEGMENTS, so max_plateau_size = PLATEAU_ITERATIONS / L keeps
-        improvement-free iterations-to-reheat constant.
-    With both, L=100 reproduces the shipped solver exactly and L means only "bucket size".
-    Cooling needs no such treatment -- log_temperature is advanced once per ITERATION, above the
-    segment check, so the annealing schedule is already independent of L.
+  * BAYES_MAGNET is searched via 1 - Bayes_magnet, log-scaled, the same treatment one_minus_K
+    got previously -- the parameter itself lives in (0.9, 0.9999) across the useful range and has
+    no resolution on a linear or even a naive log scale there.
 
-  * cooling_factor is per-ITERATION, so its best value depends on how many iterations fit in the
-    budget. Results therefore transfer only to runs of a similar length; a longer run wants
-    slower cooling. Reparameterising it as a fraction of the expected budget would fix that and
-    SHOULD BE DONE BEFORE THE NEXT SEARCH -- the 704-trial run of 2026-08-11 was invalidated by
-    exactly this. It ran at 0.5s per solve, where the temperature collapsed within ~1000
-    iterations, so it tuned an annealing schedule that was already degenerate. Use
-    --seconds-per-run at the length you actually care about.
+  * cooling_rate_per_second and max_plateau_seconds and plateau_reheat_exponent were EXCLUDED from
+    every previous search (2026-08-11, 704 trials; 2026-08-16, 149 trials) on the argument that the
+    reheat equilibrium (gap = C x S x R) makes C and R self-damping through S, so only the plateau
+    quantity P is expected to resolve cleanly. That argument was derived for the ITERATION-based
+    schedule. Whether it still holds in seconds is UNTESTED, not assumed -- hence tuning all six
+    together tonight rather than re-excluding two of them on an argument that predates this code.
 
 Results are written to the output JSON after every trial, so an interrupted run keeps its work.
 """
@@ -79,54 +73,62 @@ from SimAnn_VRP_Solver import SimAnnVRPSolver
 from run_stamp import solver_stamp          # noqa: E402
 
 
-# Each entry: name -> (optuna suggest kind, low, high, log?). Extend this to widen the search;
-# nothing else needs to change.
-# Improvement-free ITERATIONS before a plateau reheat, held constant so segment_length does not
-# change reheat frequency. 2e5 is the shipped behaviour: segment_length 100 x max_plateau_size
-# 2000. Raising it makes reheat unreachable in a short run -- at n=500 a 30s solve is roughly
-# 950k iterations, so 2e6 would mean no trial ever reheats.
-PLATEAU_ITERATIONS = 2e5
-
 # Vehicle capacity for the tuning instance. 400 gives few long routes, which is the regime the
 # operator roster was last measured in; 25 gives many short ones and is a different problem.
+# This is the REFERENCE instance -- n=500, capacity=400 -- unless a caller overrides it.
 CAPACITY = 400
 
-# Per-ITERATION weight retention equivalent to the shipped (segment_length=100,
-# reaction_factor=0.01). Derived, not typed, so it cannot drift from those two.
-DEFAULT_ONE_MINUS_K = 1.0 - (1.0 - 0.01) ** (1.0 / 100)
-
+# Each entry: name -> (optuna suggest kind, low, high, log?). Extend this to widen the search;
+# nothing else needs to change. Every bound was set together with the repo author on 2026-08-23,
+# and every DEFAULTS value below falls inside its own bound so trial 0 (the enqueued status quo)
+# is a legal point, not an edge case.
 SEARCH_SPACE = {
-    # K is the per-ITERATION retention multiplier of the weight EMA; 1-K is searched because K
-    # itself lives in [0.997, 0.999999] across the useful range and has no resolution on a log
-    # scale. reaction_factor is DERIVED as 1 - K**segment_length, so this knob means the same
-    # thing at every segment_length. Bounds map to reaction_factor 1e-4 .. 0.25 at L=100.
-    "one_minus_K":     ("float", 1e-6, 3e-3, True),
-    # Pure sampling rate: how many iterations between weight recomputes. Both of its side effects
-    # are normalised away (see the module docstring), so this measures bucketing alone.
-    "segment_length":  ("int",   1, 1000, True),
-    # Floor on the improvement term of an accepted move's score, so an accepted UPHILL move is
-    # worth explore_reward / mean_cost instead of nothing. Spans nine orders of magnitude down
-    # from the default because the useful scale is genuinely unknown -- it competes against
-    # whatever weights operators settle at, which moves with temperature through a run.
-    "explore_reward":  ("float", 1e-9, 1e-3, True),
+    # Pure sampling rate: how often weights are recomputed. No schedule coupling any more -- see
+    # the module docstring.
+    "segment_length":            ("int",   1,    1000, True),
+    # log2-temperature halvings per SECOND. Default 4.47 derived from the shipped per-iteration
+    # cooling_factor at a measured ~31,000 itr/s. 1.0 is roughly the author's stated floor -- one
+    # halving per second is close to what the old segment-based schedule already ran at ("current
+    # segment-based is close to 5"). 50 gives an order of magnitude of faster cooling above that.
+    "cooling_rate_per_second":   ("float", 1.0,  50.0, True),
+    # Half-life, in SECONDS OF THE OPERATOR'S OWN TIME, of the weight EMA. Default 0.019 is
+    # calibrated to be neutral for an operator holding the roster's average clock share.
+    "weight_time_constant":      ("float", 2e-4, 2.0,  True),
+    # Seconds without an improving move before a plateau reheat fires. Floor 0.25s so a very fast
+    # trial cannot make this degenerate; author's floor of "5-50s, so a run gets at least some
+    # time to focus on exploitation, and 50s guarantees >=2 plateaus" was widened down to 0.25 to
+    # keep the derived default (4.84s) a legal enqueued point rather than moving the default.
+    "max_plateau_seconds":       ("float", 0.25, 50.0, True),
+    # Fractional exponent of "reheat to this factor of plateau start". NEW to any search -- held
+    # fixed at 0.2 in every previous run.
+    "plateau_reheat_exponent":   ("float", 0.001, 0.9, True),
+    # Bayes_magnet itself lives in (0.9, 0.9999); searched as 1 - Bayes_magnet for resolution, the
+    # same treatment one_minus_K got previously. Trajectory study measured stage-1 magnetism as
+    # the one negative signal in the whole rework (+12.25 units, 2.4 sigma, unresolved) -- this is
+    # the first time it has been searched rather than left at its hand-chosen default.
+    "one_minus_bayes_magnet":    ("float", 1e-4, 0.1,  True),
 }
 
-# Held constant. The annealing schedule was searched over 704 trials on 2026-08-11 and the
-# landscape was flat (3.6% best-to-worst); hand defaults then beat all 47 validation trials and
-# won a paired 240s comparison. Re-searching it here would spend trials re-deriving that while
-# diluting the three parameters actually under test.
+# Held constant. Per the author: these are either inactive under the current scoring (reaction_factor,
+# statistic_reaction_factor -- the weight EMA now reads weight_time_constant, not a per-segment
+# ratio) or measured much lower-impact than the six above (initial_temp_factor,
+# empty_route_cleanup_interval, explore_reward, cost_exponent).
 FIXED = {
     "initial_temp_factor": 1e-4,
-    "cooling_rate": 1e-4,
-    "plateau_reheat_exponent": 0.2,
+    "explore_reward": 1e-5,
 }
 
-# Must track SimAnnVRPSolver.__init__'s defaults: these are the reference the search normalizes
-# against, so a stale value silently shifts every score.
+# Must track SimAnnVRPSolver.__init__'s defaults for these six parameters -- these are the
+# reference the search normalizes against, so a stale value silently shifts every score. Every
+# value here must fall inside its own SEARCH_SPACE bound; the preflight check in main() asserts
+# this before spending any budget.
 DEFAULTS = {
-    "one_minus_K": DEFAULT_ONE_MINUS_K,
     "segment_length": 100,
-    "explore_reward": 1e-5,
+    "cooling_rate_per_second": 4.47,
+    "weight_time_constant": 0.019,
+    "max_plateau_seconds": 4.84,
+    "plateau_reheat_exponent": 0.2,
+    "one_minus_bayes_magnet": 0.003,          # 1 - 0.997
 }
 
 
@@ -147,19 +149,15 @@ def build_instance(num_customers: int, vehicles: int = 3) -> FullSolution:
 
 def solver_kwargs(params: dict) -> dict:
     params = {**FIXED, **params}
-    segment_length = max(1, int(params["segment_length"]))
-    retention = 1.0 - params["one_minus_K"]
-
     return {
-        "cooling_factor": 1.0 - params["cooling_rate"],
-        "initial_temp_factor": params["initial_temp_factor"],
+        "segment_length": max(1, int(params["segment_length"])),
+        "time_based_schedule": True,
+        "cooling_rate_per_second": params["cooling_rate_per_second"],
+        "max_plateau_seconds": params["max_plateau_seconds"],
         "plateau_reheat_exponent": params["plateau_reheat_exponent"],
-        "segment_length": segment_length,
-        # Both derived from segment_length so that it stays a pure sampling rate. See the module
-        # docstring; at segment_length=100 these reproduce reaction_factor=0.01 and
-        # max_plateau_size=2000, i.e. the shipped solver exactly.
-        "reaction_factor": 1.0 - retention ** segment_length,
-        "max_plateau_size": max(1, int(PLATEAU_ITERATIONS / segment_length)),
+        "weight_time_constant": params["weight_time_constant"],
+        "Bayes_magnet": 1.0 - params["one_minus_bayes_magnet"],
+        "initial_temp_factor": params["initial_temp_factor"],
         "explore_reward": params["explore_reward"],
     }
 
@@ -201,37 +199,46 @@ def score(params: dict, sizes, runs_per_size: int, seconds: float, reference: di
 
 
 def main() -> None:
-    # Both are read by build_instance/solver_kwargs, which take no config argument. Declared here
-    # so the CLI can override them; must precede the argparse defaults that read their values.
-    global CAPACITY, PLATEAU_ITERATIONS
+    global CAPACITY
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--budget-seconds", type=float, default=28_800)
     ap.add_argument("--sizes", type=int, nargs="+", default=[500])
     ap.add_argument("--capacity", type=int, default=CAPACITY)
-    ap.add_argument("--plateau-iterations", type=float, default=PLATEAU_ITERATIONS,
-                    help="Improvement-free iterations before a reheat, held constant across "
-                         "segment_length. 2e5 is the shipped behaviour.")
-    # 5 per size x 2 sizes = 10 runs per trial. The score is a mean of two size-means, so its
-    # variance is sigma^2/10 -- the same noise reduction as 10 runs at one size, while keeping
-    # both sizes in the normalization. At 60s/run that is 10 min per trial, ~48 trials in 8h.
+    # 5 runs/size x 1 size x 120s = 10 min/trial -> 6 trials/hour -> ~48 trials in 8h.
     ap.add_argument("--runs-per-size", type=int, default=5)
-    ap.add_argument("--seconds-per-run", type=float, default=60.0)
+    ap.add_argument("--seconds-per-run", type=float, default=120.0)
     ap.add_argument("--out", default=os.path.join(ROOT, "tools", "tune_results.json"))
     args = ap.parse_args()
 
     CAPACITY = args.capacity
-    PLATEAU_ITERATIONS = args.plateau_iterations
+
+    # Preflight: every DEFAULTS value must be a legal point in its own SEARCH_SPACE bound, or
+    # trial 0 (the enqueued status quo) is out of range and Optuna either clips or raises before
+    # anything useful runs.
+    for name, value in DEFAULTS.items():
+        kind, low, high, _log = SEARCH_SPACE[name]
+        assert low <= value <= high, (
+            f"DEFAULTS[{name!r}] = {value} is outside its own SEARCH_SPACE bound [{low}, {high}]")
+    assert set(DEFAULTS) == set(SEARCH_SPACE), (
+        f"DEFAULTS and SEARCH_SPACE must name the same parameters. "
+        f"DEFAULTS only: {set(DEFAULTS) - set(SEARCH_SPACE)}; "
+        f"SEARCH_SPACE only: {set(SEARCH_SPACE) - set(DEFAULTS)}")
 
     started = time.perf_counter()
     print(f"tuning {sorted(SEARCH_SPACE)} over sizes {args.sizes} at capacity {CAPACITY}; "
           f"{args.runs_per_size} runs/size x {args.seconds_per_run}s; "
-          f"plateau_iterations {PLATEAU_ITERATIONS:.0f}; "
           f"budget {args.budget_seconds:.0f}s", flush=True)
-    # Prove the derivation reproduces the shipped solver at L=100 before spending the budget.
-    check = solver_kwargs(DEFAULTS)
-    print(f"  defaults derive: reaction_factor {check['reaction_factor']:.6f} (want 0.010000), "
-          f"max_plateau_size {check['max_plateau_size']} (want 2000)", flush=True)
+
+    # Preflight: the derived kwargs must actually construct a solver before spending the budget.
+    try:
+        probe_sln = build_instance(args.sizes[0])
+        SimAnnVRPSolver(probe_sln, max_time=1.0, **solver_kwargs(DEFAULTS))
+        print(f"  defaults construct cleanly: {solver_kwargs(DEFAULTS)}", flush=True)
+    except Exception as exc:
+        print(f"\nABORT: DEFAULTS/solver_kwargs cannot construct a solver: "
+              f"{type(exc).__name__}: {exc}")
+        sys.exit(1)
 
     # Reference = current defaults, measured the same way, used to normalize each size.
     reference = {}
@@ -261,10 +268,11 @@ def main() -> None:
         "_solver": solver_stamp(),
         "config": {"sizes": args.sizes, "runs_per_size": args.runs_per_size,
                    "seconds_per_run": args.seconds_per_run,
-                   "budget_seconds": args.budget_seconds},
+                   "budget_seconds": args.budget_seconds, "capacity": CAPACITY},
         "reference": {str(k): v for k, v in reference.items()},
         "defaults": DEFAULTS,
         "fixed": FIXED,
+        "search_space": {k: list(v) for k, v in SEARCH_SPACE.items()},
         "trials": [],
     }
 

@@ -1,0 +1,8 @@
+{
+  "cooling_rate_per_second": 2.1258902258016654,
+  "max_plateau_seconds": 0.36985201509664045,
+  "one_minus_bayes_magnet": 0.0021951674589746986,
+  "plateau_reheat_exponent": 0.5560715314156229,
+  "segment_length": 169.0,
+  "weight_time_constant": 1.678228604574411
+}

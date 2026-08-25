@@ -1,0 +1,109 @@
+{
+ "commit": "19951fb",
+ "label": "tuned_2026-08-23_chosen_center",
+ "config": {
+  "size": 500,
+  "seconds": 300.0,
+  "runs": 15,
+  "params": {
+   "segment_length": 123,
+   "cooling_rate_per_second": 2.3223527887007878,
+   "weight_time_constant": 1.9367135166472722,
+   "max_plateau_seconds": 0.34346846383725366,
+   "plateau_reheat_exponent": 0.5560715314156229,
+   "one_minus_bayes_magnet": 0.0021562045651978114
+  }
+ },
+ "runs": [
+  {
+   "objective": 1879.0923449721083,
+   "final_overload": 0,
+   "plateau_reheats": 88,
+   "seed": 0
+  },
+  {
+   "objective": 1898.8355229316048,
+   "final_overload": 0,
+   "plateau_reheats": 88,
+   "seed": 1
+  },
+  {
+   "objective": 1888.9683363225156,
+   "final_overload": 0,
+   "plateau_reheats": 89,
+   "seed": 2
+  },
+  {
+   "objective": 1879.932661876835,
+   "final_overload": 0,
+   "plateau_reheats": 88,
+   "seed": 3
+  },
+  {
+   "objective": 1874.3913936219203,
+   "final_overload": 0,
+   "plateau_reheats": 89,
+   "seed": 4
+  },
+  {
+   "objective": 1877.9446978000988,
+   "final_overload": 0,
+   "plateau_reheats": 87,
+   "seed": 5
+  },
+  {
+   "objective": 1884.9248893087024,
+   "final_overload": 0,
+   "plateau_reheats": 89,
+   "seed": 6
+  },
+  {
+   "objective": 1878.0403537548468,
+   "final_overload": 0,
+   "plateau_reheats": 88,
+   "seed": 7
+  },
+  {
+   "objective": 1894.6677924098597,
+   "final_overload": 0,
+   "plateau_reheats": 88,
+   "seed": 8
+  },
+  {
+   "objective": 1882.1142041142925,
+   "final_overload": 0,
+   "plateau_reheats": 90,
+   "seed": 9
+  },
+  {
+   "objective": 1875.1066165557502,
+   "final_overload": 0,
+   "plateau_reheats": 88,
+   "seed": 10
+  },
+  {
+   "objective": 1848.0288663490164,
+   "final_overload": 0,
+   "plateau_reheats": 88,
+   "seed": 11
+  },
+  {
+   "objective": 1882.0085614203863,
+   "final_overload": 0,
+   "plateau_reheats": 87,
+   "seed": 12
+  },
+  {
+   "objective": 1881.2015537775062,
+   "final_overload": 0,
+   "plateau_reheats": 88,
+   "seed": 13
+  },
+  {
+   "objective": 1900.8322977806015,
+   "final_overload": 0,
+   "plateau_reheats": 90,
+   "seed": 14
+  }
+ ]
+}

@@ -84,10 +84,13 @@ def main() -> int:
     ax[0][0].set_title("Paired delta per seed  (negative = better)")
     ax[0][0].legend(fontsize=7)
 
-    ax[0][1].boxplot(deltas, tick_labels=[l.split(" (")[0] for l in labels])
-    ax[0][1].axhline(0, color="k", lw=1)
-    ax[0][1].set_ylabel(f"objective minus {base['label']}")
-    ax[0][1].set_title("Spread of paired deltas")
+    # Raw objectives per arm, base included, so all arms are visually comparable in one place --
+    # the delta panel above already covers the paired comparison against base.
+    raw_labels = [f"{arm['label']} ({arm['commit'][:7]})" for arm in arms]
+    raw_values = [finite(arm["runs"]) for arm in arms]
+    ax[0][1].boxplot(raw_values, tick_labels=[l.split(" (")[0] for l in raw_labels])
+    ax[0][1].set_ylabel("objective")
+    ax[0][1].set_title("Spread of objectives, all arms")
     ax[0][1].tick_params(axis="x", labelrotation=40, labelsize=7)
 
     for arm in arms:

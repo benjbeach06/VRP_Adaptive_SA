@@ -1,0 +1,29 @@
+3 arms: post_stage1 (c539a1e) vs tuned_2026-08-23_chosen_center, tuned_2026-08-23_computed_center (all 19951fb) -- 15 paired seeds x 300s, n=500
+  tuned_2026-08-23_chosen_center: {'segment_length': 123, 'cooling_rate_per_second': 2.3223527887007878, 'weight_time_constant': 1.9367135166472722, 'max_plateau_seconds': 0.34346846383725366, 'plateau_reheat_exponent': 0.5560715314156229, 'one_minus_bayes_magnet': 0.0021562045651978114}
+  tuned_2026-08-23_computed_center: {'cooling_rate_per_second': 2.1258902258016654, 'max_plateau_seconds': 0.36985201509664045, 'one_minus_bayes_magnet': 0.0021951674589746986, 'plateau_reheat_exponent': 0.5560715314156229, 'segment_length': 169.0, 'weight_time_constant': 1.678228604574411}
+estimated 3.75 h of solve time
+  seed   0     1956.67     1879.09     1871.05   [3/45, 0.25h]
+  seed   1     1943.55     1898.84     1899.77   [6/45, 0.50h]
+  seed   2     1912.34     1888.97     1893.44   [9/45, 0.75h]
+  seed   3     1938.86     1879.93     1866.11   [12/45, 1.00h]
+  seed   4     1905.32     1874.39     1870.79   [15/45, 1.25h]
+  seed   5     1943.10     1877.94     1885.07   [18/45, 1.50h]
+  seed   6     1938.14     1884.92     1890.26   [21/45, 1.75h]
+  seed   7     1915.26     1878.04     1874.25   [24/45, 2.00h]
+  seed   8     1946.25     1894.67     1883.56   [27/45, 2.25h]
+  seed   9     1931.42     1882.11     1890.18   [30/45, 2.50h]
+  seed  10     1935.54     1875.11     1901.33   [33/45, 2.75h]
+  seed  11     1972.32     1848.03     1891.40   [36/45, 3.01h]
+  seed  12     1962.40     1882.01     1888.05   [39/45, 3.26h]
+  seed  13     1967.41     1881.20     1870.11   [42/45, 3.51h]
+  seed  14     1952.02     1900.83     1882.90   [45/45, 3.76h]
+
+--- summary ---
+  post_stage1  mean   1941.37  n=15
+  tuned_2026-08-23_chosen_center mean   1881.74  n=15
+    tuned_2026-08-23_chosen_center minus post_stage1:   -59.63 +/-  6.48    -9.2 sigma   tuned_2026-08-23_chosen_center won 15/15
+  tuned_2026-08-23_computed_center mean   1883.89  n=15
+    tuned_2026-08-23_computed_center minus post_stage1:   -57.49 +/-  5.77   -10.0 sigma   tuned_2026-08-23_computed_center won 15/15
+
+written under C:\Users\Bben6\PycharmProjects\PythonProject\experiment_logs\ablations\2026-08-23_tuned_vs_stage1
+worktrees left in place for re-runs; remove with: git worktree remove <path> --force
