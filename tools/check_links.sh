@@ -34,7 +34,7 @@ cd "$ROOT" || exit 2
 # Docs that participate in the rule.
 in_scope() {
     case "$1" in
-        design/*.md|planning/*.md|RESULTS.md|METHODOLOGY.md) return 0 ;;
+        design/*.md|planning/*.md|retros/*.md|RESULTS.md|METHODOLOGY.md) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -74,7 +74,7 @@ note() { printf '%s\n' "$*"; problems=$((problems + 1)); }
 if [ "$#" -gt 0 ]; then
     targets=("$@")
 else
-    mapfile -t targets < <(find design planning -name '*.md' -not -path '*_worktrees*' | sort)
+    mapfile -t targets < <(find design planning retros -name '*.md' -not -path '*_worktrees*' | sort)
     targets+=(RESULTS.md METHODOLOGY.md)
 fi
 
@@ -97,16 +97,23 @@ for f in "${targets[@]}"; do
 
     in_scope "$f" || continue
 
-    # 1. References must equal the body's links.
-    while read -r t; do
-        [ -z "$t" ] && continue
-        printf '%s\n' "$listed_refs" | grep -qxF "$t" \
-            || note "REF MISSING    $f: body links $t, not in ## References"
-    done < <(printf '%s\n' "$body_links")
+    # 1. References must equal the body's links to DOCUMENTATION. A body link to an experiment
+    #    folder, a run log or a source file is NOT a reference -- those go under
+    #    "## Related experiments" or stay inline. Existence is still checked, above.
+    body_docs="$(printf '%s\n' "$body_links" | while read -r t; do
+                     [ -n "$t" ] && in_scope "$t" && printf '%s\n' "$t"
+                 done)"
 
     while read -r t; do
         [ -z "$t" ] && continue
-        printf '%s\n' "$body_links" | grep -qxF "$t" \
+        printf '%s\n' "$listed_refs" | grep -qxF "$t" \
+            || note "REF MISSING    $f: body links doc $t, not in ## References"
+    done < <(printf '%s\n' "$body_docs")
+
+    while read -r t; do
+        [ -z "$t" ] && continue
+        in_scope "$t" || { note "REF NOT A DOC  $f: ## References lists $t, not documentation"; continue; }
+        printf '%s\n' "$body_docs" | grep -qxF "$t" \
             || note "REF EXTRA      $f: ## References lists $t, body never links it"
     done < <(printf '%s\n' "$listed_refs")
 
@@ -118,7 +125,7 @@ for f in "${targets[@]}"; do
         back="$(section_of "$t" "Links to here" | links_in "$(dirname "$t")")"
         printf '%s\n' "$back" | grep -qxF "$f" \
             || note "BACKLINK GAP   $t: needs a '## Links to here' entry for $f"
-    done < <(printf '%s\n' "$body_links")
+    done < <(printf '%s\n' "$body_docs")
 done
 
 if [ "$problems" -eq 0 ]; then

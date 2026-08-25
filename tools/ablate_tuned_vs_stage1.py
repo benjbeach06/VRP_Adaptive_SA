@@ -25,6 +25,9 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from worktrees import ensure as ensure_worktree     # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 STAGE1_COMMIT = "c539a1e"
@@ -88,7 +91,6 @@ def main() -> int:
     ap.add_argument("--seconds", type=float, default=300.0)
     ap.add_argument("--size", type=int, default=500)
     ap.add_argument("--out", default=None)
-    ap.add_argument("--worktrees", default=None)
     args = ap.parse_args()
 
     tuned_params: dict[str, dict] = {}
@@ -104,18 +106,13 @@ def main() -> int:
     python = sys.executable
     out_root = args.out or os.path.join(
         ROOT, "experiment_logs", "ablations", "2026-08-23_tuned_vs_stage1")
-    wt_root = args.worktrees or os.path.join(out_root, "_worktrees")
     os.makedirs(out_root, exist_ok=True)
-    os.makedirs(wt_root, exist_ok=True)
 
     arms = [("post_stage1", STAGE1_COMMIT)] + [(label, tuned_commit) for label in tuned_params]
-    roots = {}
-    for label, commit in arms:
-        path = os.path.join(wt_root, label)
-        if not os.path.isdir(path):
-            subprocess.run(["git", "worktree", "add", "--detach", path, commit],
-                           cwd=ROOT, capture_output=True, text=True, check=True)
-        roots[label] = path
+    # Keyed by COMMIT, so arms differing only in runtime parameters share one checkout.
+    roots = {label: ensure_worktree(commit, note=f"{os.path.basename(out_root)} :: {label}")
+             for label, commit in arms}
+    for label, _ in arms:
         os.makedirs(os.path.join(out_root, label), exist_ok=True)
 
     results = {label: [] for label, _ in arms}
@@ -175,8 +172,8 @@ def main() -> int:
                   f"{m / sem if sem else 0:+5.1f} sigma   {label} won {won}/{len(deltas)}")
 
     print(f"\nwritten under {out_root}", flush=True)
-    print("worktrees left in place for re-runs; remove with: git worktree remove <path> --force",
-          flush=True)
+    print("worktrees left in place for re-runs; remove with: "
+          ".venv1/Scripts/python.exe tools/worktrees.py clean", flush=True)
     return 0
 
 

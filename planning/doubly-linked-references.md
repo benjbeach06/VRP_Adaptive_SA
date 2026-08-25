@@ -84,8 +84,8 @@ This is what makes the moves we already do routine:
 
 ## Scope
 
-**Design and planning documents.** `design/**`, `planning/**`, `RESULTS.md`, `METHODOLOGY.md`, and
-the folder `README.md` files.
+**Design, planning and retro documents.** `design/**`, `planning/**`, `retros/**`, `RESULTS.md`,
+`METHODOLOGY.md`, and the folder `README.md` files.
 
 **Not source comments.** A one-line design-doc reference in code stays one line. Source is covered by
 the existing rule: a design doc replaces long prose, and the code keeps a pointer.

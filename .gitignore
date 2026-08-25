@@ -11,4 +11,25 @@ design/_TODO_REVIEW.md
 
 # Session scratch: flags, deviations, hiccups. Consumed in post-discussion and retro.
 _session/
+
+# Temporary cross-commit checkouts, keyed by short commit. See tools/worktrees.py -- they live at
+# the repo ROOT to keep paths clear of the Windows 260-character limit.
+_worktrees/
 experiment_logs/ablations/*/_worktrees/
+
+
+# ---------------------------------------------------------------------------
+# RULE: anything intentionally untracked belongs HERE.
+#
+# If a file is meant to stay out of the repo, add it to this list rather than
+# leaving it to show up as untracked. An untracked file that is never ignored
+# has to be re-evaluated on every `git status`, and re-explained on every
+# commit. Listing it once settles it.
+# ---------------------------------------------------------------------------
+
+# Personal notes and informal framings, kept out of the published repo on purpose.
+_nine_days.md
+planning/_analogies.md
+
+# Third-party material. Not ours to commit, and not reviewed.
+_from_advisor/

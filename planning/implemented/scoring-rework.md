@@ -261,8 +261,13 @@ annealing schedule moved onto the same wall-clock unit. Both are covered in
 The rebuilt mechanism was then tuned and measured against this plan's own stage-1 commit:
 `experiment_logs/ablations/2026-08-23_tuned_vs_stage1/`.
 
+What this period taught us, and what changed about how we work, is in
+[retros/2026-08-25_time_based_scoring_and_schedule.md](../../retros/2026-08-25_time_based_scoring_and_schedule.md).
+
 ## References
 
+- [retros/2026-08-25_time_based_scoring_and_schedule.md](../../retros/2026-08-25_time_based_scoring_and_schedule.md)
+  -- the retro covering the period this plan landed in.
 - [design/operator_selection/dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md)
   -- the score, weight and penalty this plan became.
 - [design/schedule/time_based_schedule.md](../../design/schedule/time_based_schedule.md) -- the two
@@ -272,6 +277,10 @@ The rebuilt mechanism was then tuned and measured against this plan's own stage-
 
 ## Links to here
 
+- [retros/README.md](../../retros/README.md) -- cites this plan as an example of the plan-to-retro
+  pairing.
+- [retros/2026-08-25_time_based_scoring_and_schedule.md](../../retros/2026-08-25_time_based_scoring_and_schedule.md)
+  -- the retro covering the period this plan landed in.
 - [design/operator_selection/dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md)
   -- cites this plan for why its improvement-weighted penalty was abandoned.
 - [hierarchical-magnetism.md](hierarchical-magnetism.md) -- names this plan as what made the raw

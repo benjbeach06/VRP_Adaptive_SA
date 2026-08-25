@@ -108,8 +108,13 @@ raw weights apart by `1/penalty`, so a cheap operator's raw weight is pulled dow
 one's is pulled up -- backwards. Benjamin's framing, 2026-08-23, once the dynamic penalty
 ([scoring-rework.md](scoring-rework.md)) made the two differ enough to matter.
 
+What this period taught us, and what changed about how we work, is in
+[retros/2026-08-25_time_based_scoring_and_schedule.md](../../retros/2026-08-25_time_based_scoring_and_schedule.md).
+
 ## References
 
+- [retros/2026-08-25_time_based_scoring_and_schedule.md](../../retros/2026-08-25_time_based_scoring_and_schedule.md)
+  -- the retro covering the period this plan landed in.
 - [design/operator_selection/hierarchical_magnetism.md](../../design/operator_selection/hierarchical_magnetism.md)
   -- the design this plan became.
 - [scoring-rework.md](scoring-rework.md) -- the plan that lands after this one, and whose penalty
@@ -117,4 +122,6 @@ one's is pulled up -- backwards. Benjamin's framing, 2026-08-23, once the dynami
 
 ## Links to here
 
+- [retros/2026-08-25_time_based_scoring_and_schedule.md](../../retros/2026-08-25_time_based_scoring_and_schedule.md)
+  -- the retro covering the period this plan landed in.
 - [scoring-rework.md](scoring-rework.md) -- names this as the plan that landed first.

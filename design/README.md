@@ -15,7 +15,7 @@ belong here.
 
 Then write the DECISION it forced, not the incident.
 
-The other three homes do not overlap with this one:
+The other homes do not overlap with this one:
 
 | where | what |
 |---|---|
@@ -23,6 +23,7 @@ The other three homes do not overlap with this one:
 | [planning/](../planning/README.md) | planned features, and the gate for starting each |
 | [RESULTS.md](../RESULTS.md) | every measurement, including the withdrawn ones |
 | [METHODOLOGY.md](../METHODOLOGY.md) | how a measurement earns the right to be believed |
+| [retros/README.md](../retros/README.md) | how the work went, and what we changed about working |
 
 ## Contents
 
