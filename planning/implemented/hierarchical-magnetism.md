@@ -1,6 +1,6 @@
 # Hierarchical weight magnetism
 
-**IMPLEMENTED, commit `c539a1e`.** See
+**IMPLEMENTED, commit `c25a7a0`.** See
 [design/operator_selection/hierarchical_magnetism.md](../../design/operator_selection/hierarchical_magnetism.md)
 for what shipped. The plan as agreed follows; how it diverged, and why, is recorded at the end.
 
@@ -122,6 +122,7 @@ What this period taught us, and what changed about how we work, is in
 
 ## Links to here
 
+- [README.md](README.md) -- lists this in the implemented summary.
 - [retros/2026-08-25_time_based_scoring_and_schedule.md](../../retros/2026-08-25_time_based_scoring_and_schedule.md)
   -- the retro covering the period this plan landed in.
 - [scoring-rework.md](scoring-rework.md) -- names this as the plan that landed first.

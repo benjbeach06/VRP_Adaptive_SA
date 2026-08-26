@@ -1,6 +1,6 @@
 # Scoring rework
 
-**IMPLEMENTED, then PARTLY SUPERSEDED.** See
+**IMPLEMENTED, then PARTLY SUPERSEDED, commit `c25a7a0`.** See
 [design/operator_selection/dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md)
 for what shipped. The plan as agreed follows; how it diverged, and why, is recorded at the end.
 
@@ -277,6 +277,7 @@ What this period taught us, and what changed about how we work, is in
 
 ## Links to here
 
+- [README.md](README.md) -- lists this in the implemented summary.
 - [retros/README.md](../../retros/README.md) -- cites this plan as an example of the plan-to-retro
   pairing.
 - [retros/2026-08-25_time_based_scoring_and_schedule.md](../../retros/2026-08-25_time_based_scoring_and_schedule.md)

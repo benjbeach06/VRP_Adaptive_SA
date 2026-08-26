@@ -18,10 +18,7 @@ is worth doing, so the ordering is arguable from evidence rather than asserted.
 | [vehicle-time-limits](vehicle-time-limits.md) | blocked on the above | travel + service + loading time per vehicle; the largest step toward realistic dispatch |
 | [asymmetric-distances](asymmetric-distances.md) | gated on a real need | supplied distance oracle, directed by default; breaks O(1) chain reversal |
 | [operator-selection](operator-selection.md) | HUB | which operator gets chosen and how often; three coupled concerns and the mechanisms that attack them |
-| [implemented/scoring-rework](implemented/scoring-rework.md) | IMPLEMENTED, then partly superseded | replaced hand-set penalties with a dynamic one; the improvement-weighted version inverted its own ranking at plateau and was replaced again -- see [design/operator_selection/dynamic_penalty.md](../design/operator_selection/dynamic_penalty.md) |
-| [implemented/hierarchical-magnetism](implemented/hierarchical-magnetism.md) | IMPLEMENTED | the weight magnet pulls an unproposed operator toward its SIBLINGS, not the flat roster -- see [design/operator_selection/hierarchical_magnetism.md](../design/operator_selection/hierarchical_magnetism.md) |
 | [repeated-work-detection](repeated-work-detection.md) | designed, gated | route version stamps so a deterministic operator reports NO-OP instead of re-deriving a rejected move |
-| [forget-benefit-not-cost](forget-benefit-not-cost.md) | idea | decay an operator's remembered payoff but keep its remembered cost, so expensive operators run less even at plateau |
 | [family-generation](family-generation.md) | not started | one operator per parameter value, competing inside a family; online parameter learning |
 | [ablations](ablations.md) | not started | measurements that would settle questions already asked; currently scattered |
 | [determinism-import-branch](determinism-import-branch.md) | small, isolated | per-call attribute read on a hot path for a determinism-only decision |
@@ -56,3 +53,52 @@ The short version, for ordering purposes:
   accepts 1.09% of its proposals.
 - **Geometric guidance raises acceptance from 0.00% to 0.30%, but its objective effect sits at
   about 2 sigma.** That is why `inverted-view-refactor` is gated rather than scheduled.
+
+## Implemented features
+
+See [implemented/README.md](implemented/README.md) for features that have shipped.
+
+## References
+
+- [inverted-view-refactor.md](inverted-view-refactor.md) -- O(1) "where is customer j"; needs
+  ablation evidence for guidance, which currently sits at 2 sigma.
+- [kd-tree-neighbors.md](kd-tree-neighbors.md) -- neighbor table build is O(n^2); only matters above
+  ~50k customers.
+- [ruin-and-recreate.md](ruin-and-recreate.md) -- the real gap against modern VRP; primitives already
+  landed.
+- [end-depot-index.md](end-depot-index.md) -- the only operator whose cost grows with instance size.
+- [warm-start.md](warm-start.md) -- saved solutions cannot be loaded back.
+- [module-structure.md](module-structure.md) -- 4,662-line core model; a mechanical `self` ->
+  typed-parameter split into a static evaluator.
+- [route-distance-tracking.md](route-distance-tracking.md) -- no route knows its own length;
+  maintain it like load, with an oracle twin.
+- [vehicle-time-limits.md](vehicle-time-limits.md) -- travel + service + loading time per vehicle;
+  the largest step toward realistic dispatch.
+- [asymmetric-distances.md](asymmetric-distances.md) -- supplied distance oracle, directed by
+  default; breaks O(1) chain reversal.
+- [operator-selection.md](operator-selection.md) -- HUB; which operator gets chosen and how often.
+- [implemented/README.md](implemented/README.md) -- features that have shipped.
+- [repeated-work-detection.md](repeated-work-detection.md) -- route version stamps so a
+  deterministic operator reports NO-OP instead of re-deriving a rejected move.
+- [family-generation.md](family-generation.md) -- one operator per parameter value, competing inside
+  a family; online parameter learning.
+- [ablations.md](ablations.md) -- measurements that would settle questions already asked; currently
+  scattered.
+- [determinism-import-branch.md](determinism-import-branch.md) -- per-call attribute read on a hot
+  path for a determinism-only decision.
+- [plan-metrics.md](plan-metrics.md) -- rule agreed, scale not designed; bad estimates are worse than
+  none.
+- [heuristic-survey.md](heuristic-survey.md) -- the algorithm shortlist was four; DIMACS lists many
+  more, with fixed-endpoint variants unexamined.
+- [solver-progress-metric.md](solver-progress-metric.md) -- three plans each need "how converged is
+  this run" and none can ask.
+- [budget-gated-selection.md](budget-gated-selection.md) -- expensive operators can eat a small
+  budget in one call; weighting only learns AFTER they run.
+- [joint-parameter-search.md](joint-parameter-search.md) -- two flat searches held each other's
+  knobs fixed; needs many more runs per config, and iteration-gating is a trap.
+- [RESULTS.md](../RESULTS.md) -- the evidence these plans are gated on, and the withdrawn re-tune
+  result.
+
+## Links to here
+
+*(none yet -- nothing currently declares a formal ## References entry for this file)*

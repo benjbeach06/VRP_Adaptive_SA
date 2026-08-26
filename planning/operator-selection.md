@@ -77,6 +77,8 @@ Only safe inside families that ALSO hold optimizing operators -- discounting a r
 optimizing sibling removes the family's only move and leaves its share unspent. The family tree makes
 that condition expressible.
 
+"Cold" is not yet a question the solver can ask -- see [solver-progress-metric](solver-progress-metric.md).
+
 **This pulls AGAINST `explore_reward`,** whose stated risk is too little exploration at plateau. Both
 act at low temperature and in opposite directions. That tension is unresolved and is the clearest
 example of why these mechanisms cannot be tuned one at a time.
@@ -85,15 +87,13 @@ example of why these mechanisms cannot be tuned one at a time.
 
 ## B. Expensive against cheap operators
 
-### 1. Forget benefit, not average cost
+### 1. Forget benefit, not average cost -- implemented
 
-**Own file: [forget-benefit-not-cost](forget-benefit-not-cost.md).** Benefit decays over time; cost
-does not. Expensive operators then always run less, even at plateau.
-
-- **RISK:** expensive operators do not get enough share. May need `f(cost)` instead of `cost` as the
-  divider; `f` is TBD.
-- **BENEFIT:** one global ablation and tuning factor, and it adapts on its own.
-- Overlaps mechanism 3.
+**IMPLEMENTED, though not as its own deliberate step.** It fell out of the weight/penalty split:
+weight is a per-operator EMA that decays the benefit side every segment; the cost-ratio penalty
+carries no EMA and never decays. See
+[dynamic_penalty.md](../design/operator_selection/dynamic_penalty.md). Original idea:
+[forget-benefit-not-cost](implemented/forget-benefit-not-cost.md).
 
 ### 2. `explore_reward` -- implemented, ablation pending
 
@@ -189,8 +189,36 @@ while the search is working, and corrects itself when it is not.
 outright. Whether a gated operator should still resurface at plateau is part of what its gate
 condition has to decide.
 
-## Related
+## References
 
-- [ablations](ablations.md) -- measurements that would settle several of the above.
-- [solver-progress-metric](solver-progress-metric.md) -- "how cold is the search" is needed by A, and
-  by any gate keyed on run phase.
+- [implemented/scoring-rework.md](implemented/scoring-rework.md) -- resolved mechanisms 2, 3 and 4
+  below, though not as originally planned.
+- [implemented/hierarchical-magnetism.md](implemented/hierarchical-magnetism.md) -- supplies the
+  sibling-local machinery the rework reused.
+- [design/operator_selection/dynamic_penalty.md](../design/operator_selection/dynamic_penalty.md) --
+  the formula that shipped in place of the pre-rework one this file used to describe.
+- [design/operator_selection/exploitation_governance.md](../design/operator_selection/exploitation_governance.md)
+  -- `exploit_only` and the manual dividers mechanisms 1 and 4 discuss.
+- [implemented/forget-benefit-not-cost.md](implemented/forget-benefit-not-cost.md) -- mechanism 1's
+  original idea, incorporated into the shipped weight/penalty split.
+- [ablations.md](ablations.md) -- measurements that would settle several mechanisms here, including
+  `explore_reward`.
+- [repeated-work-detection.md](repeated-work-detection.md) -- route version stamps that would replace
+  mechanism 4's wasted-work half.
+- [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md) --
+  `EXACT_REORDER_MAX_SPAN`, mechanism 5's cap.
+- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md)
+  -- the family tree and floors, mechanism 6.
+- [budget-gated-selection.md](budget-gated-selection.md) -- the current plan for section C.
+- [solver-progress-metric.md](solver-progress-metric.md) -- "how cold is the search," needed by
+  section A and any phase-gated mechanism.
+
+## Links to here
+
+- [design/operator_selection/exploitation_governance.md](../design/operator_selection/exploitation_governance.md)
+  -- cites mechanism 4 as the open work it wants replaced by something adaptive.
+- [doubly-linked-references.md](doubly-linked-references.md) -- cites this as the hub whose entries
+  carry summaries, so a stale one shows here first.
+- [implemented/forget-benefit-not-cost.md](implemented/forget-benefit-not-cost.md) -- cites this as
+  the hub for mechanisms 3 and 4.
+- [README.md](README.md) -- lists this as the HUB entry in the roadmap table.
