@@ -1,0 +1,344 @@
+RAW-DELTA ACCOUNTING REFACTOR -- TOUCH LIST
+===========================================
+
+Companion to planning/raw-delta-accounting.md. TEMPORARY: delete once the refactor lands.
+
+Purpose: a starting inventory so the implementing session does not re-derive the surface. Line
+numbers are from SimAnn_VRP_Core_Model.py at commit 43e8a6a and will drift.
+
+CONFIDENCE. Every name below was read from a signature or a grep hit. Almost no bodies were read.
+Treat the LAYER a function is placed in as the prediction, and verify at implementation. Sections
+marked [VERIFIED] were read directly.
+
+
+-------------------------------------------------------------------------------
+0. THE LAYER MAP
+-------------------------------------------------------------------------------
+
+Four layers today. The refactor moves the boundary between 2 and 3.
+
+  L1  raw quantity computation      travel_delta_if_*, load deltas          STAYS AS IS
+  L2  derivation of accounting      activation / overload / depot usage     MOVES TO PROCESSOR
+  L3  per-mutation aggregation      cost_deltas_if_*, cost_deltas_for_*     BECOMES RAW PRODUCER
+  L4  mutation + inline bookkeeping core model mutators                     BOOKKEEPING STRIPPED
+
+Counts: L1 ~26 methods, L2 ~29 methods, L3 24 methods, L4 ~44 accounting call sites.
+
+The L2 methods are the duplicate work. Each L3 aggregator has to know which L2 methods its own
+mutation needs; that per-site knowledge is what the processor centralizes.
+
+
+-------------------------------------------------------------------------------
+1. THE PROTOTYPE THAT ALREADY EXISTS  [VERIFIED]
+-------------------------------------------------------------------------------
+
+Route.depot_activation_delta_from_depot_num_usage_deltas          (static, ~1605)
+
+    Signature: (depot_usage_deltas: defaultdict[Depot, int],
+                depot_route_starts: defaultdict[Depot, RouteSet]) -> int
+
+This is the refactor in miniature, for depots only: count deltas plus current state, resolved to
+an activation delta. It reads len(depot_route_starts[depot]) to decide whether a usage change
+crosses the zero boundary.
+
+The processor generalizes this one function to vehicles, routes, and overload. Start here; the
+signature shape (raw count deltas + current aggregate state -> resolved transitions) is the
+contract for the whole processor.
+
+Also verified nearby: the comment at ~601 distinguishing the USAGE-COUNT question from the
+ACTIVATION question, and warning that gating on the wrong one leaves depot_route_starts
+permanently too high. That distinction is exactly the num_use vs is_used split the refactor
+formalizes.
+
+
+-------------------------------------------------------------------------------
+2. L2 -- METHODS THE PROCESSOR ABSORBS  (~29)
+-------------------------------------------------------------------------------
+
+These stop existing as per-mutation methods. Their logic becomes response functions over tracked
+counts inside the processor. Expect most of them to delete outright rather than move.
+
+2a. Depot usage counts (7)
+    CustomerVisit.num_depot_usage_deltas_if_depot_swapped              ~732
+    LastRouteVisit.num_depot_usage_deltas_if_depot_swapped             ~949
+    Route.depot_num_usage_deltas_if_start_depot_changes                ~1524
+    Route.depot_num_usage_deltas_if_end_depot_changes                  ~1527
+    Route.depot_num_usage_deltas_if_removed                            ~1530
+    Route.depot_num_usage_deltas_if_inserted_before                    ~1561
+    Route.depot_num_usage_deltas_if_appended_to                        ~1600
+
+    NOTE: two of these return END-depot usage deltas. End-depot use is not an objective term
+    today and is not tracked. See the dead commented block at ~984 and planning/end-depot-index.md
+    before assuming these are symmetric with the start-depot ones.
+
+2b. Depot activation (9)
+    Route.depot_activation_delta_from_depot_num_usage_deltas           ~1605   -> processor core
+    Route.depot_activation_delta_if_end_depot_changes                  ~1641
+    Route.depot_activation_delta_if_removed                            ~1702
+    Route.depot_activation_delta_if_inserted_before                    ~1709
+    Route.depot_activation_delta_if_appended_to                        ~1713
+    Route.depot_activation_delta_if_customers_added                    ~1883
+    Route.depot_activation_delta_for_combine_with                      ~2582
+    Route.depot_activation_delta_for_combine_with_nonadjacent          ~2595
+    Route.depot_activation_delta_for_combine_with_next_route           ~2613
+
+2c. Vehicle activation (3)
+    Route.vehicle_activation_delta_if_added                            ~1730
+    Route.vehicle_activation_delta_if_customers_added                  ~1862
+    Route.vehicle_activation_delta_for_combine_with                    ~2644
+
+2d. Overload, route and vehicle (10)
+    Route.overload_delta_if_load_changes                               ~1464
+    Route.is_overloaded_delta_if_load_changes                          ~1471
+    Route.is_vehicle_overloaded_delta_if_load_changes                  ~1480
+    Route.is_vehicle_overloaded_delta_if_load_changes_from_other_route  ~1494
+    Route.overload_deltas_if_customer_removed                          ~1902
+    Route.overload_deltas_if_customer_popped                           ~1910
+    Route.overload_deltas_if_load_added                                ~1913
+    Route.total_overload_deltas_for_load_swap                          ~2183
+    Route.total_overload_deltas_for_customer_swap                      ~2199
+    Route.overload_related_deltas_for_combine_with                     ~2630
+
+    The _from_other_route and _for_load_swap variants exist because vehicle-level overload is an
+    aggregate over routes, so a two-route move cannot be priced route-locally. That is the
+    non-additivity the processor is meant to own. These four are the strongest evidence the split
+    is correct.
+
+2e. Activation predicates (4 + 2)
+    Route.is_active_after_start_depot_swap                             ~1398
+    Route.is_active_after_end_depot_swap                               ~1407
+    Route.is_active_after_customer_removal                             ~1416
+    Route.is_active_after_customer_add                                 ~1419
+    CustomerVisit.will_decrement_depot_usage_if_removed                (grep)
+    *.will_deactivate_depot_if_removed                                 (grep; see ~602 comment)
+
+    These answer "is this thing still active after my specific mutation" per mutation kind. Under
+    the refactor there is one answer derived from the count transition, so all six collapse.
+
+
+-------------------------------------------------------------------------------
+3. L3 -- AGGREGATORS THAT BECOME RAW PRODUCERS  (24)
+-------------------------------------------------------------------------------
+
+Each currently returns ObjectiveTermDelta by calling L1 and L2. After: returns the raw record
+only. Each one loses its L2 calls and keeps its L1 calls.
+
+3a. cost_deltas_if_* (13)
+    end_depot_changes ~1648 | removed ~1745 | inserted_before ~1772 | appended_to ~1819 |
+    customer_removed ~1933 | customer_popped ~1942 | customer_inserted_before ~1951 |
+    customer_appended ~1976 | customer_chain_removed ~2008 |
+    customer_chain_inserted_before ~2047 | customer_chain_moved ~2111 |
+    customer_chain_reversed ~2669 | swapped_with_next_route ~2693
+
+3b. cost_deltas_for_* (11)
+    adjacent_customer_swap_starting_with ~2158 | adjacent_customer_swap_starting_at ~2169 |
+    customer_swap ~2213 | intra_route_customer_swap_at ~2225 |
+    inter_route_customer_swap_at ~2231 | customer_chain_swap ~2245 | permutation ~2340 |
+    subpermutation ~2358 | split_at ~2404 | combine_with ~2651 |
+    FullSolution.cost_deltas_for_removing_empty_routes ~4364
+
+    permutation / subpermutation / customer_chain_reversed are intra-route: distance changes,
+    counts do not. They should reduce to a raw record with one populated field. If they do not,
+    the raw schema is wrong.
+
+    cost_deltas_for_removing_empty_routes is the batch case and is the natural first test of the
+    composition rule -- it already aggregates over a RouteSet.
+
+
+-------------------------------------------------------------------------------
+4. L1 -- RAW COMPUTATION THAT STAYS  (~26)
+-------------------------------------------------------------------------------
+
+Listed so the implementing session does not touch them by mistake.
+
+    travel_delta_if_*        ~407 417 466 471 493 747 753 761 943 967 1634 1661 1668 1697
+                             1829 1832 1838 1847 1996 2031 2087
+    travel_delta_for_*       ~2465 2480 2505 2529   (combine_with family)
+    current_route_load_delta_if_swapped_with                            ~521
+
+These already compute exactly the raw quantities the new record wants. This is the compute gain:
+the values they produce get carried into apply instead of being recomputed there.
+
+
+-------------------------------------------------------------------------------
+5. L4 -- MUTATORS TO STRIP BOOKKEEPING FROM
+-------------------------------------------------------------------------------
+
+44 accounting call sites, ALL inside SimAnn_VRP_Core_Model.py (2 more in
+tests/test_core_model_regressions.py). Verified by grep on the accounting primitives.
+
+5a. The accounting primitives (the sink side)
+    FirstRouteVisit.count_route_depot_use / uncount_route_depot_use    ~769 / ~772
+    Route.count_load_change                                            ~2770
+    Route.count_customers_in_vehicle / uncount_customers_from_vehicle   ~2807 / ~2810
+    Route.populate_derived_data                                        ~2929
+    Route.link_depot_uses / link_depot_uses_except_customers           ~3010 / ~3021
+    FullSolution.link_num_depot_uses_to_all                            ~4579
+    Depot-side add/discard on depot_route_starts                       ~434-437
+
+    After the refactor these are called ONLY by the processor and by initialization, never from
+    inside a mutation.
+
+5b. Mutators that currently call them
+    CustomerVisit    unlink_from_route ~592, unlink_from_route_no_depot_accounting ~620,
+                     swap_customers ~559, add_demand_to_route ~574,
+                     remove_demand_from_route ~579, swap_demand_from_route ~584
+    FirstRouteVisit  set_end_depot ~1108, set_start_depot ~1145
+    Route            set_values ~1190, link_visits ~2947, link_customer ~2973,
+                     unlink_customer ~3028, unlink_customer_at ~3032,
+                     set_end_depot ~3063, set_start_depot ~3068,
+                     insert_customer ~3075, remove_customer ~3100, pop_customer_at ~3114,
+                     swap_customers ~3165, swap_customers_with ~3176,
+                     split_at ~3227, combine_with ~3276,
+                     reverse_customer_chain ~3326, remove_customer_chain ~3379,
+                     insert_customer_chain ~3417, swap_customer_chains_with ~3441,
+                     unlink_from_vehicle ~2841, link_to_vehicle_before ~2890,
+                     link_to_vehicle_after ~2909
+    Vehicle          insert_route_before ~3970, insert_route_after ~3976, remove_route ~3982,
+                     split_route ~3991
+    FullSolution     add_vehicle ~4319, remove_vehicle ~4330, remove_routes ~4547,
+                     remove_trivial_routes ~4552, remove_empty_routes ~4555,
+                     add_route_to_vehicle ~4558, add_route_to_vehicle_with_id ~4567
+
+    SMOKING GUN: unlink_from_route_no_depot_accounting (~620) exists ONLY because accounting is
+    entangled with mutation, so one caller needed the mutation without the bookkeeping. Under the
+    refactor it merges back into unlink_from_route. If it does not, the extraction is incomplete.
+    Use its disappearance as a completion check.
+
+
+-------------------------------------------------------------------------------
+6. NEW CODE
+-------------------------------------------------------------------------------
+
+6a. The raw delta record
+    Fields, per the agreed design (transition form where a step function needs the base):
+      route travel distance        delta      (adds; no base needed)
+      route load                   (init, final)
+      route customer count         (init, final)
+      route start depot            (init, final)
+      route -> vehicle assignment  (init, final)   UNASSIGNED sentinel covers create and dispose
+
+    Composition: distance adds; the four transition fields chain on the route key and DROP when
+    init == final. One merge operator, not five.
+
+6b. The processor  (static, home undecided -- core_model for now is acceptable)
+    raw record + FullSolution aggregate state -> (ObjectiveTermDelta, accounting record)
+    Generalize depot_activation_delta_from_depot_num_usage_deltas (section 1) to all four
+    aggregates: depot uses, vehicle active routes, route activity, vehicle overload.
+
+6c. ObjectiveTermDelta  ~169  [VERIFIED]
+    Already a NamedTuple with __pos__, __neg__, __add__, __sub__, get_cost_delta. Extends
+    cleanly.
+
+    WARNING: all five fields have defaults (= 0). tests/_harness.py term_deltas() constructs it
+    with explicit keyword arguments, so a NEW FIELD WITH A DEFAULT is silently skipped by every
+    per-term assertion in the contract suite. Give new fields no default, or update term_deltas()
+    in the same commit.
+
+
+-------------------------------------------------------------------------------
+7. OPERATOR LAYER
+-------------------------------------------------------------------------------
+
+7a. OperatorBL  (SimAnn_VRP_BLOperators.py ~92)  [VERIFIED]
+    The base class already owns evaluate / apply / revert / commit with version gatekeeping. The
+    three bookkeeping calls go in the DRIVERS, once, covering all 11 subclasses:
+
+      evaluate ~160   raw record -> processor -> ObjectiveTermDelta; store both on the Move
+      apply    ~199   after _apply_impl, hand the accounting record to FullSolution
+      revert   ~229   after _revert_impl, hand back the inverse
+
+    Move (~47) is a frozen dataclass carrying `deltas: ObjectiveTermDelta`. It needs the raw
+    record too, or the accounting record. Only already_applied is mutable, via mark_applied().
+    Adding a field means extending the frozen dataclass, not mutating it later.
+
+    commit() ~252 has TODO(undo-stack) proposing to push (self, _revert_info, move.deltas). The
+    accounting record is what that stack actually wants. Worth resolving together.
+
+7b. Subclass hooks: _evaluate_impl returns raw, not ObjectiveTermDelta
+    11 subclasses, all in SimAnn_VRP_BLOperators.py:
+      ReassignRouteBefore ~270, ReassignCustomerChain ~305,
+      ReassignCustomerToNewRouteBefore ~365, SwapCustomerChains ~408,
+      ReverseCustomerChain ~472, PermuteChain ~502, ChangeEndDepot ~551,
+      DisposeOfEmptyRoutesBL ~574, SplitRoute ~627, CombineRoutes ~655,
+      _SequentialCombineRoutes ~704
+
+    Most _evaluate_impl bodies are one call into an L3 aggregator plus validity guards
+    (ReassignRouteBefore verified: guards, then cost_deltas_if_inserted_before). If that holds
+    across all 11, the subclass diff is small and mechanical.
+
+    _evaluates_by_applying operators mutate during evaluate. They read objective_terms() before
+    and after rather than pricing predictively, so they need explicit handling: the processor
+    contract assumes an unmutated base.
+
+    _SequentialCombineRoutes is the existing sequential case. It is the first real test of the
+    composition rule and should be converted early, not last.
+
+7c. SimAnn_VRP_Operators.py -- 20 operators over the lifecycle, plus operand selection.
+    NOT INVENTORIED. Predicted low impact: the accounting primitives grep found zero hits in this
+    file. Confirm before planning the diff.
+
+
+-------------------------------------------------------------------------------
+8. VERIFICATION SURFACE
+-------------------------------------------------------------------------------
+
+8a. Already there, no changes expected  [VERIFIED]
+    FullSolution.objective_terms ~4625        recomputes from scratch; the ground truth every
+                                              per-term contract assertion diffs against
+    FullSolution.depot_usage_breakdown ~4595  oracle for depot_route_starts
+    Route.recompute_current_load ~1365        oracle for cached load
+    FullSolution.recompute_depots_used ~4592
+    total_path_len / num_overloaded_routes / num_overloaded_vehicles / total_overload  ~4606-4616
+    Route.is_active / is_overloaded / amount_overloaded  ~1329 / ~1348 / ~1353
+        COMPUTED PROPERTIES, not cached. They read path_len, current_load, vehicle.capacity. So
+        route activity and overload need no oracle today -- but if the refactor caches any of
+        them, each needs an oracle twin added.
+
+8b. tests/_harness.py
+    term_deltas()                 must gain any new ObjectiveTermDelta field (see 6c)
+    all_problems()                add oracles for any newly cached aggregate
+    fingerprint()                 covers cost, chains, depot membership, all_routes order.
+                                  Does NOT cover cached aggregate counters. Extend if any are added.
+
+8c. tests/test_operator_contracts.py
+    assert_operator_contract already checks purity -> per-term delta -> oracles -> exact revert.
+    No structural change expected; it drives the real OperatorBL lifecycle via DirectOperator.
+
+8d. tools/stress.py
+    --inject-delta already corrupts a move's price and must produce findings. This is the
+    detector-fires check. Run it before and after.
+
+8e. New coverage the refactor needs
+    Composition: compose raw records for N moves, reconstruct once, assert equality against
+    applying the N moves one at a time with reconstruction after each. Existing implicit coverage
+    runs through _SequentialCombineRoutes and cost_deltas_for_removing_empty_routes.
+
+8f. Gate for the whole refactor
+    VRP_FULL_MATRIX=1 python -m unittest discover -s tests
+    NOTE: the README gives `discover -s tests`, but _session/context_carryover.md records that
+    discover does NOT work here and the six modules must be listed explicitly. Resolve which is
+    true before relying on either.
+    python tools/stress.py --budget-seconds 45  (and with --inject-delta)
+    .venv1/Scripts/python.exe -m pyright   -- 0 errors, 1 known warning at
+        SimAnn_VRP_Operators.py:713
+
+
+-------------------------------------------------------------------------------
+9. OPEN QUESTIONS FOR THE IMPLEMENTING SESSION
+-------------------------------------------------------------------------------
+
+1. End-depot usage. Two L2 methods return end-depot usage deltas, but end-depot use is not an
+   objective term and the code that wrote it into depot_route_starts is dead-commented (~984).
+   Decide whether the raw schema carries end-depot transitions before writing it.
+
+2. _evaluates_by_applying operators. They price by mutating, so there is no unmutated base for
+   the processor to read. Needs an explicit contract.
+
+3. Where the processor lives. Agreed as not a design question for this plan. core_model is fine
+   initially; module-structure.md is deliberately deferred and must not get dragged in.
+
+4. Does Move carry the raw record, the accounting record, or both? Interacts with
+   TODO(undo-stack) in commit().
+
+5. SimAnn_VRP_Operators.py (20 operators) is uninventoried. Confirm zero accounting there.

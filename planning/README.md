@@ -14,7 +14,8 @@ is worth doing, so the ordering is arguable from evidence rather than asserted.
 | [end-depot-index](end-depot-index.md) | measured, small | the only operator whose cost grows with instance size |
 | [warm-start](warm-start.md) | small, isolated | saved solutions cannot be loaded back |
 | [module-structure](module-structure.md) | deferred by timeboxing | 4,662-line core model; a mechanical `self` -> typed-parameter split into a static evaluator |
-| [route-distance-tracking](route-distance-tracking.md) | small, self-verifying | no route knows its own length; maintain it like load, with an oracle twin |
+| [raw-delta-accounting](raw-delta-accounting.md) | infrastructure, gate for others | accounting is derived twice and independently; one processor replaces ~29 per-mutation derivations |
+| [route-distance-tracking](route-distance-tracking.md) | blocked on the above | no route knows its own length; maintain it like load, with an oracle twin |
 | [vehicle-time-limits](vehicle-time-limits.md) | blocked on the above | travel + service + loading time per vehicle; the largest step toward realistic dispatch |
 | [asymmetric-distances](asymmetric-distances.md) | gated on a real need | supplied distance oracle, directed by default; breaks O(1) chain reversal |
 | [operator-selection](operator-selection.md) | HUB | which operator gets chosen and how often; three coupled concerns and the mechanisms that attack them |
@@ -98,6 +99,7 @@ See [implemented/README.md](implemented/README.md) for features that have shippe
   knobs fixed; needs many more runs per config, and iteration-gating is a trap.
 - [RESULTS.md](../RESULTS.md) -- the evidence these plans are gated on, and the withdrawn re-tune
   result.
+- [raw-delta-accounting.md](raw-delta-accounting.md) -- accounting is derived twice and independently; one processor replaces ~29 per-mutation derivations.
 
 ## Links to here
 

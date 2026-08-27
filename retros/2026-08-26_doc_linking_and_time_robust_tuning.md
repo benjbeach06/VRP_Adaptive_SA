@@ -126,12 +126,6 @@ right now is nothing surfaced.
 
 ## References
 
-- [planning/implemented/doubly-linked-references.md](../planning/implemented/doubly-linked-references.md)
-  — the plan whose rollout and bugfixes this retro covers.
-- [experiment_logs/tuning/2026-08-26_time_robust.md](../experiment_logs/tuning/2026-08-26_time_robust.md)
-  — the tuning run this retro summarizes.
-- [experiment_logs/tuning/2026-08-23_six_param_time_based.md](../experiment_logs/tuning/2026-08-23_six_param_time_based.md)
-  — the earlier search the time-robust run started from.
 
 ## Links to here
 

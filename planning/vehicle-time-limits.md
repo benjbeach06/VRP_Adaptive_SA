@@ -90,3 +90,4 @@ Worth doing **before** publication if there is time, and it pairs naturally with
 - [README.md](README.md)
 - [asymmetric-distances.md](asymmetric-distances.md)
 - [route-distance-tracking.md](route-distance-tracking.md)
+- [raw-delta-accounting.md](raw-delta-accounting.md)

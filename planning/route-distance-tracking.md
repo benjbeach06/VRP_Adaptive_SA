@@ -1,6 +1,7 @@
 # Track total distance on routes and vehicles
 
-**Status: not started. Prerequisite for [vehicle-time-limits](vehicle-time-limits.md).**
+**Status: not started. Blocked on [raw-delta-accounting](raw-delta-accounting.md). Prerequisite
+for [vehicle-time-limits](vehicle-time-limits.md).**
 
 ## The problem
 
@@ -16,13 +17,18 @@ walk.
 
 ## The shape
 
-**Mirror how load is handled.** Cached load already works this way: routes carry it, mutations
-update it, and an oracle recomputes it from scratch for verification. Distance gets the same
-treatment, from the same call sites, with the same reporting.
+**The distance delta already exists at every mutation site; this adds the field that receives it.**
+Under [raw-delta-accounting](raw-delta-accounting.md), every mutation reports a raw distance delta,
+and the processor threads it through reconstruction regardless of whether anything currently reads
+it. Adding per-route and per-vehicle distance is then a matter of giving the processor's accounting
+record a place to put that delta — not finding and instrumenting ~44 mutation sites by hand.
 
-That is the point of doing it this way rather than inventing a mechanism. The mutation sites that
-must update distance are exactly the ones that already update load, so the work is finding those
-sites and adding a second update — not designing a new maintenance scheme.
+The old plan was to mirror load: find every site that updates cached load and add a second update
+there for distance. That is exactly the per-mutation duplication `raw-delta-accounting` removes, so
+this plan no longer proposes it. Cached load itself is a candidate for the same treatment, but that
+is `raw-delta-accounting`'s scope, not this one's.
+
+An oracle twin recomputes from scratch for verification, same convention as load.
 
 | | today | after |
 |---|---|---|
@@ -51,7 +57,8 @@ catch, and there are enough mutation sites that at least one will be missed on t
 
 ## Gate
 
-None on its own — it is small, isolated, and self-verifying. Do it when
+[raw-delta-accounting](raw-delta-accounting.md) first — this plan's shape depends on the processor
+existing. Beyond that, small and self-verifying. Do it when
 [vehicle-time-limits](vehicle-time-limits.md) is wanted, since that plan cannot start without it.
 
 Sequence it **before** [inverted-view-refactor](inverted-view-refactor.md) if both are planned:
@@ -62,6 +69,7 @@ changes.
 
 - [vehicle-time-limits.md](vehicle-time-limits.md)
 - [inverted-view-refactor.md](inverted-view-refactor.md)
+- [raw-delta-accounting.md](raw-delta-accounting.md) -- blocking prerequisite; the processor gives this plan the field to write distance into instead of instrumenting mutation sites by hand
 
 ## Links to here
 
@@ -69,3 +77,4 @@ changes.
 - [README.md](README.md)
 - [repeated-work-detection.md](repeated-work-detection.md)
 - [vehicle-time-limits.md](vehicle-time-limits.md)
+- [raw-delta-accounting.md](raw-delta-accounting.md)
