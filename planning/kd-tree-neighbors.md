@@ -53,3 +53,11 @@ n=5000 it is 0.6 s of a run measured in minutes.
 what keeps `make_initial_solution` bit-identical to the linear scan it replaced. `cKDTree.query`
 makes no such guarantee, so a k-d tree path needs its own tie normalization and the construction
 signature test in `tools/` re-run before it is trusted.
+
+## References
+
+*(none yet)*
+
+## Links to here
+
+- [README.md](README.md)

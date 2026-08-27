@@ -95,9 +95,19 @@ The cascade case in the tests was found by search. Hand-built examples all clamp
 first pass, so they never exercise the loop -- which is worth knowing before trusting an example
 someone wrote by eye.
 
-## Related
-
 - [family_selection.md](family_selection.md) -- the tree these floors sit on top of.
 - [planning/operator-selection.md](../../planning/operator-selection.md) -- every discount in the
   selection machinery is a rate rather than an exclusion, and the floors are one of three mechanisms
   that guarantee it.
+
+## References
+
+- [planning/operator-selection.md](../../planning/operator-selection.md)
+- [family_selection.md](family_selection.md)
+- [planning/vehicle-time-limits.md](../../planning/vehicle-time-limits.md)
+
+## Links to here
+
+- [design/README.md](../README.md) -- design folder index
+- [README.md](README.md) -- reading guide for operator selection folder
+- [family_selection.md](family_selection.md) -- projection mechanism for this family tree

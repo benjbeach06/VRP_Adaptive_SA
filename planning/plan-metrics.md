@@ -35,3 +35,11 @@ Do this when there is time to design the scale properly. It is ironic that a rul
 effort is itself deferred for lack of it, and that is the honest reason.
 
 Apply it to every existing plan in one pass once the scale exists, so the numbers are comparable.
+
+## References
+
+*(none yet)*
+
+## Links to here
+
+- [README.md](README.md)

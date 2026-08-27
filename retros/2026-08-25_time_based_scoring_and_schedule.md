@@ -118,6 +118,7 @@ the end.
 - [planning/implemented/hierarchical-magnetism.md](../planning/implemented/hierarchical-magnetism.md)
   — the plan that landed first and supplied the magnet.
 - [README.md](README.md) — what belongs in a retro and what does not.
+- [experiment_logs/ablations/2026-08-23_tuned_vs_stage1/README.md](../experiment_logs/ablations/2026-08-23_tuned_vs_stage1/README.md) -- the grounding ablation's numbers this retro summarizes
 
 ## Links to here
 

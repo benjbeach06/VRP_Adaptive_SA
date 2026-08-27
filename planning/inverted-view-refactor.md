@@ -71,3 +71,14 @@ Do not start until all three hold:
 Keep the DLL and add `visit.index`, maintained on insert / remove / permute. Redundant state, but
 it gives O(1) position without touching `prev_visit` / `next_visit`, so the hot path is untouched.
 The oracle harness can assert that the index and the DLL agree, which is the usual pattern here.
+
+## References
+
+- [RESULTS.md](../RESULTS.md)
+
+## Links to here
+
+- [README.md](README.md)
+- [joint-parameter-search.md](joint-parameter-search.md)
+- [module-structure.md](module-structure.md)
+- [route-distance-tracking.md](route-distance-tracking.md)

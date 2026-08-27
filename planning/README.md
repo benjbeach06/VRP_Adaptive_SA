@@ -101,4 +101,4 @@ See [implemented/README.md](implemented/README.md) for features that have shippe
 
 ## Links to here
 
-*(none yet -- nothing currently declares a formal ## References entry for this file)*
+- [design/README.md](../design/README.md) -- index to design folder

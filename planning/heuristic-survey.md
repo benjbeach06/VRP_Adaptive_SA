@@ -33,3 +33,13 @@ DIMACS grouping contradicts. The primary tables settle it.
 None. Do it before writing another construction or reorder operator, not after.
 
 Design context: [design/span_reorder/farthest_insertion_order.md](../design/span_reorder/farthest_insertion_order.md).
+
+## References
+
+- [design/span_reorder/farthest_insertion_order.md](../design/span_reorder/farthest_insertion_order.md)
+
+## Links to here
+
+- [design/span_reorder/farthest_insertion_order.md](../design/span_reorder/farthest_insertion_order.md)
+- [README.md](README.md)
+- [joint-parameter-search.md](joint-parameter-search.md)

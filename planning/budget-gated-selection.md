@@ -67,3 +67,17 @@ gates its own operator creation on the same cost estimates. [module-structure](m
 [route-distance-tracking](route-distance-tracking.md), which removes one of the current
 per-proposal costs. Design context in
 [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md).
+
+## References
+
+- [family-generation.md](family-generation.md) -- dynamically gated family creation on the same cost estimates
+- [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md) -- design context for the span reorder operators
+- [module-structure.md](module-structure.md) -- where per-operator cost estimates would be stored
+- [route-distance-tracking.md](route-distance-tracking.md) -- removes one of the per-proposal costs this plan would gate
+
+## Links to here
+
+- [design/span_reorder/farthest_insertion_ops.md](../design/span_reorder/farthest_insertion_ops.md)
+- [README.md](README.md)
+- [operator-selection.md](operator-selection.md)
+- [solver-progress-metric.md](solver-progress-metric.md)

@@ -126,3 +126,4 @@ What this period taught us, and what changed about how we work, is in
 - [retros/2026-08-25_time_based_scoring_and_schedule.md](../../retros/2026-08-25_time_based_scoring_and_schedule.md)
   -- the retro covering the period this plan landed in.
 - [scoring-rework.md](scoring-rework.md) -- names this as the plan that landed first.
+- [planning/operator-selection.md](../operator-selection.md)

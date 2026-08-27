@@ -81,3 +81,13 @@ still identical?"
 Sequence it against [inverted-view-refactor](inverted-view-refactor.md). That refactor changes how
 position is represented, so doing it first would mean moving the same functions twice. Either do
 this one after it, or accept the rework.
+
+## References
+
+- [inverted-view-refactor.md](inverted-view-refactor.md)
+
+## Links to here
+
+- [budget-gated-selection.md](budget-gated-selection.md) -- proposes cost-estimate field placement for budget gating
+- [README.md](README.md)
+- [joint-parameter-search.md](joint-parameter-search.md)

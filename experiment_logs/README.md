@@ -89,3 +89,11 @@ The valid rerun is `tune_selection_v2.json`. Reasoning in [RESULTS.md](../RESULT
 | `withdrawn/validate_selection.json` | `tools/validate.py` -- paired validation of the void selection search. |
 | `withdrawn/validate_selection_log.txt` | stdout of the void validation. |
 | `withdrawn/confirm_L_log.txt` | Scratch isolation run: does `segment_length` alone explain the selection result? 4 configs x 12 seeds x 60s at n=500. |
+
+## References
+
+- [RESULTS.md](../RESULTS.md) -- reasoning for why the withdrawn reheat-affected reruns are invalid
+
+## Links to here
+
+*(none yet)*

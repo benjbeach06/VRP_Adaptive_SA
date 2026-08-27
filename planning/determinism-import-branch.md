@@ -66,3 +66,12 @@ default-fast build makes every bug report unreproducible, which costs more than 
 None. Do it when there is an hour to verify it properly.
 
 Memory: `feedback-determinism-costs-nothing`.
+
+## References
+
+*(none yet)*
+
+## Links to here
+
+- [README.md](README.md)
+- [family-generation.md](family-generation.md)

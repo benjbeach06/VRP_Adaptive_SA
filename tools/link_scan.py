@@ -7,7 +7,7 @@ Given File A, this script:
   1. Ensures File A has ## References and ## Links to here headings (empty if missing).
   2. Scans File A's body (everything before ## References, skipping fenced code blocks) for
      [text](path) links that resolve to in-scope documentation (design/**, planning/**,
-     retros/**, RESULTS.md, METHODOLOGY.md).
+     retros/**, experiment_logs/**, RESULTS.md, METHODOLOGY.md).
   3. Adds any such link not already in ## References (bare, no explanation).
   4. Removes any ## References entry whose target no longer appears in the body -- first
      deleting the reciprocal entry in that target's ## Links to here, then the entry itself.
@@ -27,7 +27,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LOG_PATH = REPO_ROOT / "_session" / "link_script_output.md"
 
-DOC_PREFIXES = ("design/", "planning/", "retros/")
+DOC_PREFIXES = ("design/", "planning/", "retros/", "experiment_logs/")
 DOC_EXACT = {"RESULTS.md", "METHODOLOGY.md"}
 
 LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)\s]+)\)")
@@ -86,19 +86,50 @@ def strip_fenced_code(lines: list[str]) -> list[str]:
     return out
 
 
+def _is_blank(line: str) -> bool:
+    return line.strip() == ""
+
+
 def find_heading(lines: list[str], name: str) -> tuple[int, int] | None:
-    """Return (start, end) line-index span of a `## name` section, end exclusive."""
+    """Return (start, end) line-index span of a `## name` section, end exclusive.
+
+    A real section heading has a blank line (or file boundary) on both sides -- this is
+    what distinguishes it from the same heading text appearing inside a fenced example
+    embedded in prose, which is indented into surrounding text instead. Fenced code blocks
+    are also skipped outright as a second, independent guard.
+    """
     start = None
+    in_fence = False
     for i, line in enumerate(lines):
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         m = HEADING_RE.match(line.rstrip("\n"))
-        if m and m.group(1).strip() == name:
+        if not m or m.group(1).strip() != name:
+            continue
+        before_ok = i == 0 or _is_blank(lines[i - 1])
+        after_ok = i + 1 >= len(lines) or _is_blank(lines[i + 1])
+        if before_ok and after_ok:
             start = i
             break
     if start is None:
         return None
     end = len(lines)
+    in_fence = False
     for j in range(start + 1, len(lines)):
-        if HEADING_RE.match(lines[j].rstrip("\n")):
+        line = lines[j]
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if not HEADING_RE.match(line.rstrip("\n")):
+            continue
+        before_ok = _is_blank(lines[j - 1])
+        after_ok = j + 1 >= len(lines) or _is_blank(lines[j + 1])
+        if before_ok and after_ok:
             end = j
             break
     return start, end
@@ -124,9 +155,20 @@ def parse_entries(lines: list[str], span: tuple[int, int]) -> list[dict]:
     return entries
 
 
-def body_links(lines: list[str], references_span: tuple[int, int] | None) -> list[str]:
-    boundary = references_span[0] if references_span else len(lines)
-    scan_lines = strip_fenced_code(lines[:boundary])
+def body_links(lines: list[str], excluded_spans: list[tuple[int, int] | None]) -> list[str]:
+    """Links in the body -- everything outside ## References, ## Links to here, and fences.
+
+    Masks out both structured sections by span rather than assuming ## References comes
+    first: a file with the sections in the other order would otherwise have its whole
+    ## Links to here section swept in as "body" and its existing backlinks misread as new
+    references.
+    """
+    masked = list(lines)
+    for span in excluded_spans:
+        if span is not None:
+            for i in range(span[0], span[1]):
+                masked[i] = ""
+    scan_lines = strip_fenced_code(masked)
     return [m.group(2) for line in scan_lines for m in LINK_RE.finditer(line)]
 
 
@@ -195,6 +237,7 @@ def process_file_a(file_a: Path) -> list[Path]:
     """Reconcile File A's References against its body. Returns final list of referenced files."""
     lines = ensure_headings(load(file_a))
     refs_span = find_heading(lines, REFERENCES)
+    links_span = find_heading(lines, LINKS_TO_HERE)
     existing = parse_entries(lines, refs_span)
 
     source_dir = file_a.parent
@@ -203,7 +246,7 @@ def process_file_a(file_a: Path) -> list[Path]:
         target = (source_dir / e["href"]).resolve()
         resolved_existing[e["href"]] = target
 
-    body = body_links(lines, refs_span)
+    body = body_links(lines, [refs_span, links_span])
     resolved_body = {}
     for href in body:
         target = (source_dir / href).resolve()

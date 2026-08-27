@@ -1,0 +1,1398 @@
+{
+  "_solver": {
+    "when": "2026-08-26T03:33:00",
+    "git_sha": "ed21de6",
+    "git_subject": "Add tooling for linking files. Design by Ben, implementation by Claude (various models).",
+    "solver_dirty": false,
+    "solver_dirty_files": [],
+    "roster_size": 24,
+    "roster": [
+      "RandomRouteReassignment",
+      "RandomCustomerReassignment",
+      "RandomCustomerChainReassignment",
+      "ReassignClosestChainWithRandomCustomer",
+      "ReassignClosestChainNextToNeighbor",
+      "ReassignChainNextToNeighbor",
+      "SwapChainsWithNeighbor",
+      "ReverseClosestPairTogether",
+      "RandomCustomerChainReversal",
+      "RandomCustomerSwap",
+      "RandomSameLengthChainSwap",
+      "RandomChainSwap",
+      "SwapRouteHeadsAtSharedDepot",
+      "SwapRouteTailsAtSharedDepot",
+      "CustomerBestOfkSwapInRandomRoute",
+      "CustomerBestOfkNeighborSwapInRandomRoute",
+      "RandomRoutePermutation",
+      "ReorderSpanByFarthestInsertion",
+      "ReorderRandomRouteByFarthestInsertion",
+      "ReorderLongRouteByFarthestInsertion",
+      "ReorderShortSpanExactly",
+      "ChangeRandomEndDepot",
+      "SplitRandomRoute",
+      "CombineRandomRoutes"
+    ],
+    "python": "3.14.6"
+  },
+  "_how_run": "tools/tune_time_robust.py -- 5 runtimes x 1 seed each per trial, starting from CHOSEN_CENTER (2026-08-23_chosen_center.json)",
+  "config": {
+    "size": 500,
+    "capacity": 400,
+    "runtimes_seconds": [
+      60.0,
+      120.0,
+      180.0,
+      240.0,
+      300.0
+    ],
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "reference_seeds_per_runtime": 5,
+    "budget_seconds": 64800.0
+  },
+  "reference": {
+    "60.0": 1897.3189905002957,
+    "120.0": 1895.7359108476169,
+    "180.0": 1875.0491138724312,
+    "240.0": 1885.8795780705157,
+    "300.0": 1874.871070181857
+  },
+  "chosen_center": {
+    "segment_length": 123,
+    "cooling_rate_per_second": 2.3223527887007878,
+    "weight_time_constant": 1.9367135166472722,
+    "max_plateau_seconds": 0.34346846383725366,
+    "plateau_reheat_exponent": 0.5560715314156229,
+    "one_minus_bayes_magnet": 0.0021562045651978114
+  },
+  "search_space": {
+    "segment_length": [
+      "int",
+      1,
+      1000,
+      true
+    ],
+    "cooling_rate_per_second": [
+      "float",
+      1.0,
+      50.0,
+      true
+    ],
+    "weight_time_constant": [
+      "float",
+      0.0002,
+      2.0,
+      true
+    ],
+    "max_plateau_seconds": [
+      "float",
+      0.25,
+      50.0,
+      true
+    ],
+    "plateau_reheat_exponent": [
+      "float",
+      0.001,
+      0.9,
+      true
+    ],
+    "one_minus_bayes_magnet": [
+      "float",
+      0.0001,
+      0.1,
+      true
+    ]
+  },
+  "trials": [
+    {
+      "number": 0,
+      "params": {
+        "segment_length": 123,
+        "cooling_rate_per_second": 2.3223527887007878,
+        "weight_time_constant": 1.9367135166472722,
+        "max_plateau_seconds": 0.34346846383725366,
+        "plateau_reheat_exponent": 0.5560715314156229,
+        "one_minus_bayes_magnet": 0.0021562045651978114
+      },
+      "value": 0.996447599282288,
+      "raw_by_runtime": {
+        "60.0": 1892.303090224369,
+        "120.0": 1877.97009648698,
+        "180.0": 1877.2814676205835,
+        "240.0": 1868.9997632583545,
+        "300.0": 1878.6455789673043
+      }
+    },
+    {
+      "number": 1,
+      "params": {
+        "segment_length": 586,
+        "cooling_rate_per_second": 3.4475659071553095,
+        "weight_time_constant": 0.001088191282303273,
+        "max_plateau_seconds": 0.7389913340028984,
+        "plateau_reheat_exponent": 0.047555134528485025,
+        "one_minus_bayes_magnet": 0.006118347066559997
+      },
+      "value": 1.0693358382059241,
+      "raw_by_runtime": {
+        "60.0": 2007.8662376525242,
+        "120.0": 2038.012498865541,
+        "180.0": 2016.1923840931702,
+        "240.0": 2013.457841205906,
+        "300.0": 2006.936458096876
+      }
+    },
+    {
+      "number": 2,
+      "params": {
+        "segment_length": 764,
+        "cooling_rate_per_second": 12.874438443765166,
+        "weight_time_constant": 0.1979960589266184,
+        "max_plateau_seconds": 7.976711516512368,
+        "plateau_reheat_exponent": 0.1617822512583202,
+        "one_minus_bayes_magnet": 0.07654559587835588
+      },
+      "value": 1.0232606792943169,
+      "raw_by_runtime": {
+        "60.0": 1937.6378645938134,
+        "120.0": 1947.479530115861,
+        "180.0": 1920.4756735138867,
+        "240.0": 1914.4536770050397,
+        "300.0": 1928.079430352576
+      }
+    },
+    {
+      "number": 3,
+      "params": {
+        "segment_length": 1,
+        "cooling_rate_per_second": 1.5165118322241593,
+        "weight_time_constant": 0.003132166575548315,
+        "max_plateau_seconds": 8.097702745620747,
+        "plateau_reheat_exponent": 0.24682131818366893,
+        "one_minus_bayes_magnet": 0.04135497295764642
+      },
+      "value": 1.0337662380587747,
+      "raw_by_runtime": {
+        "60.0": 1976.4864508473113,
+        "120.0": 1954.8133008642449,
+        "180.0": 1997.802028731854,
+        "240.0": 1923.9280261554445,
+        "300.0": 1894.1822070726614
+      }
+    },
+    {
+      "number": 4,
+      "params": {
+        "segment_length": 765,
+        "cooling_rate_per_second": 16.963665375334067,
+        "weight_time_constant": 0.07429016231787576,
+        "max_plateau_seconds": 11.189799649313526,
+        "plateau_reheat_exponent": 0.024065831106083756,
+        "one_minus_bayes_magnet": 0.0009478814683166395
+      },
+      "value": 1.0273078152400341,
+      "raw_by_runtime": {
+        "60.0": 1979.9308501490991,
+        "120.0": 1892.47895943495,
+        "180.0": 1934.0596011834962,
+        "240.0": 1916.8757041386766,
+        "300.0": 1962.630816955114
+      }
+    },
+    {
+      "number": 5,
+      "params": {
+        "segment_length": 14,
+        "cooling_rate_per_second": 17.36680244716498,
+        "weight_time_constant": 1.8927285768980429,
+        "max_plateau_seconds": 9.024989862331138,
+        "plateau_reheat_exponent": 0.216910961599127,
+        "one_minus_bayes_magnet": 0.00032564376956575896
+      },
+      "value": 1.0343442059885721,
+      "raw_by_runtime": {
+        "60.0": 1940.119306919302,
+        "120.0": 1946.6641156913174,
+        "180.0": 1968.4186321311652,
+        "240.0": 1958.8882233870813,
+        "300.0": 1938.221131171238
+      }
+    },
+    {
+      "number": 6,
+      "params": {
+        "segment_length": 1,
+        "cooling_rate_per_second": 22.898394686951963,
+        "weight_time_constant": 0.8239865989530462,
+        "max_plateau_seconds": 0.28491853922177196,
+        "plateau_reheat_exponent": 0.028362259877542765,
+        "one_minus_bayes_magnet": 0.0037911022856850396
+      },
+      "value": 1.1118287692464028,
+      "raw_by_runtime": {
+        "60.0": 2102.1073060109443,
+        "120.0": 2093.819039327544,
+        "180.0": 2121.4876431445578,
+        "240.0": 2096.702835205239,
+        "300.0": 2068.917579223968
+      }
+    },
+    {
+      "number": 7,
+      "params": {
+        "segment_length": 47,
+        "cooling_rate_per_second": 1.2253899400431183,
+        "weight_time_constant": 0.761006047289487,
+        "max_plateau_seconds": 11.849563003707333,
+        "plateau_reheat_exponent": 0.2615799131513052,
+        "one_minus_bayes_magnet": 0.003167147272118327
+      },
+      "value": 1.020678616976845,
+      "raw_by_runtime": {
+        "60.0": 1974.1722057646225,
+        "120.0": 1913.2568640141026,
+        "180.0": 1923.615477005049,
+        "240.0": 1920.8719124870693,
+        "300.0": 1892.0979007882552
+      }
+    },
+    {
+      "number": 8,
+      "params": {
+        "segment_length": 236,
+        "cooling_rate_per_second": 1.4556187682691735,
+        "weight_time_constant": 0.001502554282354447,
+        "max_plateau_seconds": 0.9846011300131984,
+        "plateau_reheat_exponent": 0.024148931368583197,
+        "one_minus_bayes_magnet": 0.002388468993805389
+      },
+      "value": 1.0575175471608609,
+      "raw_by_runtime": {
+        "60.0": 1988.29365805518,
+        "120.0": 1968.1055280466587,
+        "180.0": 1983.9168684071765,
+        "240.0": 1975.5749584078396,
+        "300.0": 2054.5603667618416
+      }
+    },
+    {
+      "number": 9,
+      "params": {
+        "segment_length": 110,
+        "cooling_rate_per_second": 2.006812124267475,
+        "weight_time_constant": 0.026719574206754214,
+        "max_plateau_seconds": 0.6080228610954096,
+        "plateau_reheat_exponent": 0.18675092413869565,
+        "one_minus_bayes_magnet": 0.06088518743440198
+      },
+      "value": 1.055985271399004,
+      "raw_by_runtime": {
+        "60.0": 1987.9558406876881,
+        "120.0": 1968.1785299194808,
+        "180.0": 2022.7365573328427,
+        "240.0": 1964.4505034652557,
+        "300.0": 2012.701406348045
+      }
+    },
+    {
+      "number": 10,
+      "params": {
+        "segment_length": 4,
+        "cooling_rate_per_second": 6.51212065879222,
+        "weight_time_constant": 0.00023251656557335325,
+        "max_plateau_seconds": 48.268879074415395,
+        "plateau_reheat_exponent": 0.0013127959358212522,
+        "one_minus_bayes_magnet": 0.0001179231558204225
+      },
+      "value": 1.0443445474401032,
+      "raw_by_runtime": {
+        "60.0": 1984.3936884524746,
+        "120.0": 1977.3146717302511,
+        "180.0": 1960.8729516159337,
+        "240.0": 1944.6591114458072,
+        "300.0": 1979.595137370891
+      }
+    },
+    {
+      "number": 11,
+      "params": {
+        "segment_length": 30,
+        "cooling_rate_per_second": 3.7259362706795467,
+        "weight_time_constant": 0.4625884955397873,
+        "max_plateau_seconds": 2.303299889713477,
+        "plateau_reheat_exponent": 0.8579991961555079,
+        "one_minus_bayes_magnet": 0.012427799674965996
+      },
+      "value": 1.0263055006458246,
+      "raw_by_runtime": {
+        "60.0": 1937.2778303576004,
+        "120.0": 1916.060997549527,
+        "180.0": 1943.886184841999,
+        "240.0": 1911.0793206462854,
+        "300.0": 1967.9975469695612
+      }
+    },
+    {
+      "number": 12,
+      "params": {
+        "segment_length": 56,
+        "cooling_rate_per_second": 1.07390411363537,
+        "weight_time_constant": 1.9697623261262314,
+        "max_plateau_seconds": 43.421470728862644,
+        "plateau_reheat_exponent": 0.60996482780426,
+        "one_minus_bayes_magnet": 0.001215056550522617
+      },
+      "value": 1.0246622365181428,
+      "raw_by_runtime": {
+        "60.0": 1977.8518909509507,
+        "120.0": 1937.4593414115016,
+        "180.0": 1926.4830178443342,
+        "240.0": 1905.7917406838642,
+        "300.0": 1913.9943916204336
+      }
+    },
+    {
+      "number": 13,
+      "params": {
+        "segment_length": 9,
+        "cooling_rate_per_second": 46.65776231977131,
+        "weight_time_constant": 0.11379314256677045,
+        "max_plateau_seconds": 2.0893675745415567,
+        "plateau_reheat_exponent": 0.0772153691359332,
+        "one_minus_bayes_magnet": 0.013238224095500848
+      },
+      "value": 1.0251433956048777,
+      "raw_by_runtime": {
+        "60.0": 1967.0538965864139,
+        "120.0": 1939.214173703266,
+        "180.0": 1922.8523101304352,
+        "240.0": 1914.3704744534596,
+        "300.0": 1922.5413748242481
+      }
+    },
+    {
+      "number": 14,
+      "params": {
+        "segment_length": 122,
+        "cooling_rate_per_second": 2.7099950772602535,
+        "weight_time_constant": 0.36518105832343745,
+        "max_plateau_seconds": 20.45526062660079,
+        "plateau_reheat_exponent": 0.004416908624346994,
+        "one_minus_bayes_magnet": 0.0008768100597812358
+      },
+      "value": 1.0170733495274855,
+      "raw_by_runtime": {
+        "60.0": 1922.8991157973526,
+        "120.0": 1928.595611640497,
+        "180.0": 1927.2628548962764,
+        "240.0": 1911.3322916941445,
+        "300.0": 1899.6342775645699
+      }
+    },
+    {
+      "number": 15,
+      "params": {
+        "segment_length": 183,
+        "cooling_rate_per_second": 3.100390806140076,
+        "weight_time_constant": 0.013346187245904596,
+        "max_plateau_seconds": 2.3786900765245345,
+        "plateau_reheat_exponent": 0.0034528945270765154,
+        "one_minus_bayes_magnet": 0.0005145767265065392
+      },
+      "value": 1.0495285517871658,
+      "raw_by_runtime": {
+        "60.0": 1982.669793777262,
+        "120.0": 1954.1891441456996,
+        "180.0": 2004.8579854420805,
+        "240.0": 1987.8983705916348,
+        "300.0": 1965.7986239278082
+      }
+    },
+    {
+      "number": 16,
+      "params": {
+        "segment_length": 246,
+        "cooling_rate_per_second": 5.363601594577194,
+        "weight_time_constant": 0.2828753956830651,
+        "max_plateau_seconds": 23.319738569241274,
+        "plateau_reheat_exponent": 0.0072782760883587155,
+        "one_minus_bayes_magnet": 0.0011221855146679443
+      },
+      "value": 1.03273313127827,
+      "raw_by_runtime": {
+        "60.0": 1933.4517286863215,
+        "120.0": 1963.7824301509438,
+        "180.0": 1959.3964093958734,
+        "240.0": 1939.049497411089,
+        "300.0": 1941.521415673851
+      }
+    },
+    {
+      "number": 17,
+      "params": {
+        "segment_length": 106,
+        "cooling_rate_per_second": 2.336450421266874,
+        "weight_time_constant": 0.05472318465976419,
+        "max_plateau_seconds": 4.004504730160739,
+        "plateau_reheat_exponent": 0.007656355997415095,
+        "one_minus_bayes_magnet": 0.00023246144157083697
+      },
+      "value": 1.035476456656066,
+      "raw_by_runtime": {
+        "60.0": 1960.7305560546777,
+        "120.0": 1980.771262809884,
+        "180.0": 1969.5727705594743,
+        "240.0": 1905.9729107217854,
+        "300.0": 1946.1885041852577
+      }
+    },
+    {
+      "number": 18,
+      "params": {
+        "segment_length": 20,
+        "cooling_rate_per_second": 7.8839459342471905,
+        "weight_time_constant": 0.7365700870939127,
+        "max_plateau_seconds": 0.29112332064837654,
+        "plateau_reheat_exponent": 0.0016495566582848313,
+        "one_minus_bayes_magnet": 0.0006110219286148595
+      },
+      "value": 1.064907885325138,
+      "raw_by_runtime": {
+        "60.0": 2017.852993145842,
+        "120.0": 2042.6360231947879,
+        "180.0": 2044.684850645515,
+        "240.0": 2000.159284113192,
+        "300.0": 1935.7171870092404
+      }
+    },
+    {
+      "number": 19,
+      "params": {
+        "segment_length": 3,
+        "cooling_rate_per_second": 2.2955920884724694,
+        "weight_time_constant": 0.23701336097869663,
+        "max_plateau_seconds": 23.395283908091702,
+        "plateau_reheat_exponent": 0.006852878446108738,
+        "one_minus_bayes_magnet": 0.0017449847582266009
+      },
+      "value": 1.0447711608442893,
+      "raw_by_runtime": {
+        "60.0": 1979.1441223965703,
+        "120.0": 1941.6534254353724,
+        "180.0": 1990.3820119522281,
+        "240.0": 1977.9295372030983,
+        "300.0": 1961.4680975305637
+      }
+    },
+    {
+      "number": 20,
+      "params": {
+        "segment_length": 81,
+        "cooling_rate_per_second": 4.432231244004059,
+        "weight_time_constant": 0.0154556121333628,
+        "max_plateau_seconds": 4.19293603567867,
+        "plateau_reheat_exponent": 0.08648813949896289,
+        "one_minus_bayes_magnet": 0.00748764094946549
+      },
+      "value": 1.040330354042347,
+      "raw_by_runtime": {
+        "60.0": 1966.947581950895,
+        "120.0": 1983.2281059959043,
+        "180.0": 1931.3219190113414,
+        "240.0": 1985.0832416877995,
+        "300.0": 1942.7160724760802
+      }
+    },
+    {
+      "number": 21,
+      "params": {
+        "segment_length": 36,
+        "cooling_rate_per_second": 1.3016557233807504,
+        "weight_time_constant": 0.9001074107788921,
+        "max_plateau_seconds": 18.64300077524009,
+        "plateau_reheat_exponent": 0.401567011308609,
+        "one_minus_bayes_magnet": 0.0026775090786207373
+      },
+      "value": 1.0353276601705337,
+      "raw_by_runtime": {
+        "60.0": 1990.4338462439014,
+        "120.0": 1957.507253515863,
+        "180.0": 1922.4652091615644,
+        "240.0": 1950.7613337357104,
+        "300.0": 1941.0258454028494
+      }
+    },
+    {
+      "number": 22,
+      "params": {
+        "segment_length": 351,
+        "cooling_rate_per_second": 1.0026384450335726,
+        "weight_time_constant": 0.44865922985000095,
+        "max_plateau_seconds": 18.161585421158474,
+        "plateau_reheat_exponent": 0.4555516287204698,
+        "one_minus_bayes_magnet": 0.005035185466885769
+      },
+      "value": 1.0299807564801255,
+      "raw_by_runtime": {
+        "60.0": 1937.904426303007,
+        "120.0": 1952.4555316528485,
+        "180.0": 1935.024586420892,
+        "240.0": 1923.2198404053015,
+        "300.0": 1962.628655465444
+      }
+    },
+    {
+      "number": 23,
+      "params": {
+        "segment_length": 56,
+        "cooling_rate_per_second": 2.0468200117415316,
+        "weight_time_constant": 1.2674992755911243,
+        "max_plateau_seconds": 5.049643040220691,
+        "plateau_reheat_exponent": 0.002923149305422623,
+        "one_minus_bayes_magnet": 0.018130111325950046
+      },
+      "value": 1.0501719433014496,
+      "raw_by_runtime": {
+        "60.0": 1976.928430619874,
+        "120.0": 1980.9904213194645,
+        "180.0": 2004.940384609116,
+        "240.0": 1957.084714329487,
+        "300.0": 1981.548537729946
+      }
+    },
+    {
+      "number": 24,
+      "params": {
+        "segment_length": 157,
+        "cooling_rate_per_second": 2.6036817869404283,
+        "weight_time_constant": 0.13483067806423227,
+        "max_plateau_seconds": 34.90495391173505,
+        "plateau_reheat_exponent": 0.012116512249371814,
+        "one_minus_bayes_magnet": 0.0024558243697445016
+      },
+      "value": 1.0247053780788793,
+      "raw_by_runtime": {
+        "60.0": 1954.1039309455098,
+        "120.0": 1952.7900668644522,
+        "180.0": 1936.2739024506768,
+        "240.0": 1894.739746702202,
+        "300.0": 1923.9013369778486
+      }
+    },
+    {
+      "number": 25,
+      "params": {
+        "segment_length": 371,
+        "cooling_rate_per_second": 1.7894832513155234,
+        "weight_time_constant": 0.5086122942105905,
+        "max_plateau_seconds": 13.446007732257415,
+        "plateau_reheat_exponent": 0.12746074786314843,
+        "one_minus_bayes_magnet": 0.0006673338302073108
+      },
+      "value": 1.0281806406805836,
+      "raw_by_runtime": {
+        "60.0": 2015.9532469902047,
+        "120.0": 1952.9259750079266,
+        "180.0": 1917.7005486193698,
+        "240.0": 1913.5508872306186,
+        "300.0": 1895.0979751320067
+      }
+    },
+    {
+      "number": 26,
+      "params": {
+        "segment_length": 46,
+        "cooling_rate_per_second": 4.515459509195441,
+        "weight_time_constant": 0.32961250875048714,
+        "max_plateau_seconds": 1.1777808208961353,
+        "plateau_reheat_exponent": 0.35685209745774094,
+        "one_minus_bayes_magnet": 0.000353661483019094
+      },
+      "value": 1.0105040366602656,
+      "raw_by_runtime": {
+        "60.0": 1942.072786123547,
+        "120.0": 1912.6364022369323,
+        "180.0": 1872.727612689865,
+        "240.0": 1890.988841967302,
+        "300.0": 1909.6427064814186
+      }
+    },
+    {
+      "number": 27,
+      "params": {
+        "segment_length": 8,
+        "cooling_rate_per_second": 8.833172608985311,
+        "weight_time_constant": 0.31020108243066086,
+        "max_plateau_seconds": 0.48317971892772626,
+        "plateau_reheat_exponent": 0.783094150629472,
+        "one_minus_bayes_magnet": 0.00010535485758616885
+      },
+      "value": 1.0289283728546799,
+      "raw_by_runtime": {
+        "60.0": 1920.2987398183536,
+        "120.0": 1941.2336587083485,
+        "180.0": 1944.4402779344293,
+        "240.0": 1955.4412011693355,
+        "300.0": 1939.8109155631605
+      }
+    },
+    {
+      "number": 28,
+      "params": {
+        "segment_length": 25,
+        "cooling_rate_per_second": 4.800412501135451,
+        "weight_time_constant": 0.043930247425971285,
+        "max_plateau_seconds": 1.2504598460576397,
+        "plateau_reheat_exponent": 0.3996979626292699,
+        "one_minus_bayes_magnet": 0.00017202985589543181
+      },
+      "value": 1.012907884528674,
+      "raw_by_runtime": {
+        "60.0": 1936.5784710126595,
+        "120.0": 1913.1661390057868,
+        "180.0": 1917.8225657740054,
+        "240.0": 1883.0673406327755,
+        "300.0": 1899.8672237137062
+      }
+    },
+    {
+      "number": 29,
+      "params": {
+        "segment_length": 20,
+        "cooling_rate_per_second": 4.731517931537163,
+        "weight_time_constant": 0.03921450251210719,
+        "max_plateau_seconds": 1.3006254757872995,
+        "plateau_reheat_exponent": 0.3888199008762897,
+        "one_minus_bayes_magnet": 0.00018085265402473355
+      },
+      "value": 1.0149258857695445,
+      "raw_by_runtime": {
+        "60.0": 1939.5565816131323,
+        "120.0": 1947.5936319041793,
+        "180.0": 1890.4666439798764,
+        "240.0": 1897.441300363341,
+        "300.0": 1894.8565019617765
+      }
+    },
+    {
+      "number": 30,
+      "params": {
+        "segment_length": 7,
+        "cooling_rate_per_second": 3.6399303890680925,
+        "weight_time_constant": 0.00783168739430179,
+        "max_plateau_seconds": 0.43129757217877507,
+        "plateau_reheat_exponent": 0.11339840995852049,
+        "one_minus_bayes_magnet": 0.0003893987260287977
+      },
+      "value": 1.073251231338483,
+      "raw_by_runtime": {
+        "60.0": 1991.7781210956214,
+        "120.0": 2019.2861244000105,
+        "180.0": 2022.4767022877102,
+        "240.0": 2044.6017455936756,
+        "300.0": 2040.8129562555305
+      }
+    },
+    {
+      "number": 31,
+      "params": {
+        "segment_length": 22,
+        "cooling_rate_per_second": 5.471311554693097,
+        "weight_time_constant": 0.03966399655585995,
+        "max_plateau_seconds": 1.0666108327889072,
+        "plateau_reheat_exponent": 0.33315678260507325,
+        "one_minus_bayes_magnet": 0.00018472301551861374
+      },
+      "value": 1.0163743009163821,
+      "raw_by_runtime": {
+        "60.0": 1929.856098535459,
+        "120.0": 1887.423657514269,
+        "180.0": 1926.5518693688377,
+        "240.0": 1943.3476126439352,
+        "300.0": 1895.8077642184019
+      }
+    },
+    {
+      "number": 32,
+      "params": {
+        "segment_length": 15,
+        "cooling_rate_per_second": 9.784477818963568,
+        "weight_time_constant": 0.005583595729014447,
+        "max_plateau_seconds": 1.3263297197883817,
+        "plateau_reheat_exponent": 0.43733232288006835,
+        "one_minus_bayes_magnet": 0.0001900387937630476
+      },
+      "value": 1.041645243921829,
+      "raw_by_runtime": {
+        "60.0": 1993.4931500834455,
+        "120.0": 1985.1069647095135,
+        "180.0": 1982.1052487158304,
+        "240.0": 1918.838057063783,
+        "300.0": 1942.032622432353
+      }
+    },
+    {
+      "number": 33,
+      "params": {
+        "segment_length": 66,
+        "cooling_rate_per_second": 4.261120010662708,
+        "weight_time_constant": 0.12005201010574938,
+        "max_plateau_seconds": 1.5693594805802138,
+        "plateau_reheat_exponent": 0.5450733903885439,
+        "one_minus_bayes_magnet": 0.00024852295370958677
+      },
+      "value": 1.0226432727556574,
+      "raw_by_runtime": {
+        "60.0": 1932.0268011641601,
+        "120.0": 1921.8561271162725,
+        "180.0": 1923.887497351972,
+        "240.0": 1926.2863221716327,
+        "300.0": 1938.002631680649
+      }
+    },
+    {
+      "number": 34,
+      "params": {
+        "segment_length": 30,
+        "cooling_rate_per_second": 6.127728994995069,
+        "weight_time_constant": 0.032209275741749525,
+        "max_plateau_seconds": 0.781615627230388,
+        "plateau_reheat_exponent": 0.31907975992958965,
+        "one_minus_bayes_magnet": 0.0001395581712534155
+      },
+      "value": 1.0201651355486736,
+      "raw_by_runtime": {
+        "60.0": 1871.4914814840465,
+        "120.0": 1966.5883556275596,
+        "180.0": 1916.0967023507606,
+        "240.0": 1930.2571420773934,
+        "300.0": 1934.1933131000762
+      }
+    },
+    {
+      "number": 35,
+      "params": {
+        "segment_length": 15,
+        "cooling_rate_per_second": 11.505674430373032,
+        "weight_time_constant": 0.07942217810584593,
+        "max_plateau_seconds": 1.4895195659177853,
+        "plateau_reheat_exponent": 0.1668348201081839,
+        "one_minus_bayes_magnet": 0.0003803791828289108
+      },
+      "value": 1.0392193649196022,
+      "raw_by_runtime": {
+        "60.0": 2021.3977762860754,
+        "120.0": 1980.9441688555953,
+        "180.0": 1915.706228531967,
+        "240.0": 1947.6259360307733,
+        "300.0": 1933.6069550410193
+      }
+    },
+    {
+      "number": 36,
+      "params": {
+        "segment_length": 4,
+        "cooling_rate_per_second": 3.123145162883529,
+        "weight_time_constant": 0.012282882334819336,
+        "max_plateau_seconds": 0.7476543453260487,
+        "plateau_reheat_exponent": 0.05328797112518788,
+        "one_minus_bayes_magnet": 0.0002678677399657043
+      },
+      "value": 1.0706815957851916,
+      "raw_by_runtime": {
+        "60.0": 1995.2861173613953,
+        "120.0": 2046.0380098906446,
+        "180.0": 2015.2402162081992,
+        "240.0": 2031.6484662157677,
+        "300.0": 2006.9138043738515
+      }
+    },
+    {
+      "number": 37,
+      "params": {
+        "segment_length": 40,
+        "cooling_rate_per_second": 4.6186606011603555,
+        "weight_time_constant": 0.18784158007042895,
+        "max_plateau_seconds": 0.39630050724026683,
+        "plateau_reheat_exponent": 0.27357540461886887,
+        "one_minus_bayes_magnet": 0.00018984707783201973
+      },
+      "value": 1.073838758862005,
+      "raw_by_runtime": {
+        "60.0": 1995.9472048555845,
+        "120.0": 2006.6956526038932,
+        "180.0": 2024.2049961642429,
+        "240.0": 2059.2159252208817,
+        "300.0": 2038.3957873761642
+      }
+    },
+    {
+      "number": 38,
+      "params": {
+        "segment_length": 2,
+        "cooling_rate_per_second": 7.5736625171406775,
+        "weight_time_constant": 0.07465661419415288,
+        "max_plateau_seconds": 2.8333153991933915,
+        "plateau_reheat_exponent": 0.5964181398205539,
+        "one_minus_bayes_magnet": 0.0015481113657154037
+      },
+      "value": 1.0388962152601398,
+      "raw_by_runtime": {
+        "60.0": 1982.8091509539695,
+        "120.0": 1955.795158681774,
+        "180.0": 1954.375635301753,
+        "240.0": 1948.5356296283717,
+        "300.0": 1954.011800451473
+      }
+    },
+    {
+      "number": 39,
+      "params": {
+        "segment_length": 82,
+        "cooling_rate_per_second": 1.66796286878543,
+        "weight_time_constant": 0.021872849182384267,
+        "max_plateau_seconds": 1.0703023206570443,
+        "plateau_reheat_exponent": 0.2109714934834232,
+        "one_minus_bayes_magnet": 0.0004684094991346422
+      },
+      "value": 1.0483593718380941,
+      "raw_by_runtime": {
+        "60.0": 1987.8189942037677,
+        "120.0": 1942.2607991314308,
+        "180.0": 1980.1766779428042,
+        "240.0": 1994.7898328718368,
+        "300.0": 1979.374826089144
+      }
+    },
+    {
+      "number": 40,
+      "params": {
+        "segment_length": 976,
+        "cooling_rate_per_second": 12.865479150816949,
+        "weight_time_constant": 0.004274446334433718,
+        "max_plateau_seconds": 0.6666811043618568,
+        "plateau_reheat_exponent": 0.886662820314317,
+        "one_minus_bayes_magnet": 0.0001338928572802797
+      },
+      "value": 1.0371637565137175,
+      "raw_by_runtime": {
+        "60.0": 1960.5460258579983,
+        "120.0": 1969.0334846920803,
+        "180.0": 1951.8919869992706,
+        "240.0": 1950.4526754008855,
+        "300.0": 1947.255772650014
+      }
+    },
+    {
+      "number": 41,
+      "params": {
+        "segment_length": 22,
+        "cooling_rate_per_second": 5.405046494116322,
+        "weight_time_constant": 0.04041728123722433,
+        "max_plateau_seconds": 1.08936191614865,
+        "plateau_reheat_exponent": 0.3402122789764767,
+        "one_minus_bayes_magnet": 0.00017264587294935313
+      },
+      "value": 1.021612119003165,
+      "raw_by_runtime": {
+        "60.0": 1952.7065699847408,
+        "120.0": 1926.7768954793,
+        "180.0": 1889.687417636997,
+        "240.0": 1921.3529697105878,
+        "300.0": 1942.1359092567122
+      }
+    },
+    {
+      "number": 42,
+      "params": {
+        "segment_length": 24,
+        "cooling_rate_per_second": 6.571162466039456,
+        "weight_time_constant": 0.0019601587931504455,
+        "max_plateau_seconds": 0.8816614507263608,
+        "plateau_reheat_exponent": 0.27300617730289906,
+        "one_minus_bayes_magnet": 0.000316896275210462
+      },
+      "value": 1.0563026141639211,
+      "raw_by_runtime": {
+        "60.0": 2008.7629146539111,
+        "120.0": 2033.4670216674942,
+        "180.0": 1965.7322473576448,
+        "240.0": 1996.7411759016647,
+        "300.0": 1955.4421951700717
+      }
+    },
+    {
+      "number": 43,
+      "params": {
+        "segment_length": 42,
+        "cooling_rate_per_second": 5.024442414862957,
+        "weight_time_constant": 0.047424075448436,
+        "max_plateau_seconds": 0.5404935691314526,
+        "plateau_reheat_exponent": 0.1326896442182735,
+        "one_minus_bayes_magnet": 0.00010457062027302589
+      },
+      "value": 1.0689691110023047,
+      "raw_by_runtime": {
+        "60.0": 2042.8915114886393,
+        "120.0": 2027.960154348903,
+        "180.0": 2005.339423958002,
+        "240.0": 2026.117849903574,
+        "300.0": 1977.0952788406848
+      }
+    },
+    {
+      "number": 44,
+      "params": {
+        "segment_length": 11,
+        "cooling_rate_per_second": 3.830834177114605,
+        "weight_time_constant": 0.02203840707263605,
+        "max_plateau_seconds": 1.735393340417497,
+        "plateau_reheat_exponent": 0.6292939812517105,
+        "one_minus_bayes_magnet": 0.030376614198651643
+      },
+      "value": 1.0282999058834554,
+      "raw_by_runtime": {
+        "60.0": 1932.9931339781697,
+        "120.0": 1968.1327309599044,
+        "180.0": 1952.3755395813562,
+        "240.0": 1931.4756685075,
+        "300.0": 1910.6633549140936
+      }
+    },
+    {
+      "number": 45,
+      "params": {
+        "segment_length": 18,
+        "cooling_rate_per_second": 19.485100797210304,
+        "weight_time_constant": 0.000710191500330653,
+        "max_plateau_seconds": 0.3698177518173101,
+        "plateau_reheat_exponent": 0.3733269399269164,
+        "one_minus_bayes_magnet": 0.0007349349452894278
+      },
+      "value": 1.0195443785902814,
+      "raw_by_runtime": {
+        "60.0": 1944.949171380576,
+        "120.0": 1923.8101256023206,
+        "180.0": 1934.3075160219528,
+        "240.0": 1913.7296788267815,
+        "300.0": 1896.314840349664
+      }
+    },
+    {
+      "number": 46,
+      "params": {
+        "segment_length": 33,
+        "cooling_rate_per_second": 2.9936586169637196,
+        "weight_time_constant": 0.17266292696805496,
+        "max_plateau_seconds": 1.240196713453557,
+        "plateau_reheat_exponent": 0.21183050261677192,
+        "one_minus_bayes_magnet": 0.00018188019985530062
+      },
+      "value": 1.0304847166597724,
+      "raw_by_runtime": {
+        "60.0": 1976.7935641869294,
+        "120.0": 1955.0797008547709,
+        "180.0": 1898.536683076811,
+        "240.0": 1994.7487800621768,
+        "300.0": 1891.7016821303969
+      }
+    },
+    {
+      "number": 47,
+      "params": {
+        "segment_length": 10,
+        "cooling_rate_per_second": 6.360369566676686,
+        "weight_time_constant": 1.4298580895144146,
+        "max_plateau_seconds": 3.1900205855398234,
+        "plateau_reheat_exponent": 0.4922850378718645,
+        "one_minus_bayes_magnet": 0.00030465701488733714
+      },
+      "value": 1.0312658409359892,
+      "raw_by_runtime": {
+        "60.0": 1898.4033519207085,
+        "120.0": 1937.9236236169997,
+        "180.0": 1981.0319724729516,
+        "240.0": 1952.0833128101176,
+        "300.0": 1953.383178446927
+      }
+    },
+    {
+      "number": 48,
+      "params": {
+        "segment_length": 26,
+        "cooling_rate_per_second": 30.461053099950046,
+        "weight_time_constant": 0.04752954756864167,
+        "max_plateau_seconds": 2.040318071058039,
+        "plateau_reheat_exponent": 0.18140745037126357,
+        "one_minus_bayes_magnet": 0.00014912468817025759
+      },
+      "value": 1.0310030322282677,
+      "raw_by_runtime": {
+        "60.0": 1924.9259154213175,
+        "120.0": 1909.0217890303604,
+        "180.0": 1979.8831093709027,
+        "240.0": 1930.5116447530356,
+        "300.0": 1975.8889879012615
+      }
+    },
+    {
+      "number": 49,
+      "params": {
+        "segment_length": 69,
+        "cooling_rate_per_second": 3.948233064796823,
+        "weight_time_constant": 0.09066546705696563,
+        "max_plateau_seconds": 0.9328513813648598,
+        "plateau_reheat_exponent": 0.27140906544631893,
+        "one_minus_bayes_magnet": 0.0004739346823853745
+      },
+      "value": 1.0329599089437678,
+      "raw_by_runtime": {
+        "60.0": 1917.8720554109545,
+        "120.0": 1965.9495929726029,
+        "180.0": 1923.427135702546,
+        "240.0": 1970.3867303144627,
+        "300.0": 1961.710894817588
+      }
+    },
+    {
+      "number": 50,
+      "params": {
+        "segment_length": 6,
+        "cooling_rate_per_second": 7.516577651360722,
+        "weight_time_constant": 0.007421009591612787,
+        "max_plateau_seconds": 6.6469668519949,
+        "plateau_reheat_exponent": 0.6588764528002546,
+        "one_minus_bayes_magnet": 0.0822121788902556
+      },
+      "value": 1.031933460199051,
+      "raw_by_runtime": {
+        "60.0": 1916.8373213360087,
+        "120.0": 1953.332383477788,
+        "180.0": 1955.9900715968556,
+        "240.0": 1956.8997025081808,
+        "300.0": 1946.437888904009
+      }
+    },
+    {
+      "number": 51,
+      "params": {
+        "segment_length": 129,
+        "cooling_rate_per_second": 2.606327245795308,
+        "weight_time_constant": 0.3529436490981475,
+        "max_plateau_seconds": 0.6069896913238102,
+        "plateau_reheat_exponent": 0.030711546111927585,
+        "one_minus_bayes_magnet": 0.0009438610484644808
+      },
+      "value": 1.0717953324717036,
+      "raw_by_runtime": {
+        "60.0": 2041.0991621655314,
+        "120.0": 2043.7877117516896,
+        "180.0": 1975.6387297252036,
+        "240.0": 2002.8843350767422,
+        "300.0": 2042.5028374113758
+      }
+    },
+    {
+      "number": 52,
+      "params": {
+        "segment_length": 212,
+        "cooling_rate_per_second": 3.1855300292460145,
+        "weight_time_constant": 1.355224893073844,
+        "max_plateau_seconds": 0.2939369435858548,
+        "plateau_reheat_exponent": 0.015062305148060291,
+        "one_minus_bayes_magnet": 0.0009197868319660044
+      },
+      "value": 1.0878837228512028,
+      "raw_by_runtime": {
+        "60.0": 2090.353102795169,
+        "120.0": 2000.8288963536004,
+        "180.0": 2029.2224824923294,
+        "240.0": 2076.8556679833796,
+        "300.0": 2060.0177277110497
+      }
+    },
+    {
+      "number": 53,
+      "params": {
+        "segment_length": 94,
+        "cooling_rate_per_second": 5.387362237013666,
+        "weight_time_constant": 0.7973493912048708,
+        "max_plateau_seconds": 1.829569196736843,
+        "plateau_reheat_exponent": 0.08570803985622961,
+        "one_minus_bayes_magnet": 0.0018838092390292389
+      },
+      "value": 1.045932871519911,
+      "raw_by_runtime": {
+        "60.0": 2000.5552007075023,
+        "120.0": 1983.0162344940493,
+        "180.0": 1958.9402044539008,
+        "240.0": 1949.856266504749,
+        "300.0": 1969.641288461784
+      }
+    },
+    {
+      "number": 54,
+      "params": {
+        "segment_length": 130,
+        "cooling_rate_per_second": 2.5150629603841907,
+        "weight_time_constant": 0.06270970223735707,
+        "max_plateau_seconds": 0.25710979280781576,
+        "plateau_reheat_exponent": 0.0010215633013695674,
+        "one_minus_bayes_magnet": 0.004423826839621079
+      },
+      "value": 1.082532940376709,
+      "raw_by_runtime": {
+        "60.0": 2057.7185791535967,
+        "120.0": 2031.7088989047156,
+        "180.0": 2038.5089983839832,
+        "240.0": 2050.6726440790394,
+        "300.0": 2028.310422834579
+      }
+    },
+    {
+      "number": 55,
+      "params": {
+        "segment_length": 49,
+        "cooling_rate_per_second": 3.473537959943179,
+        "weight_time_constant": 0.031477014978185704,
+        "max_plateau_seconds": 2.6595570423137382,
+        "plateau_reheat_exponent": 0.0459138437245795,
+        "one_minus_bayes_magnet": 0.00023711490361497632
+      },
+      "value": 1.0459340464988827,
+      "raw_by_runtime": {
+        "60.0": 1957.805730745375,
+        "120.0": 1968.4336670585128,
+        "180.0": 1976.6946233769572,
+        "240.0": 1987.1653965868331,
+        "300.0": 1971.4739789819355
+      }
+    },
+    {
+      "number": 56,
+      "params": {
+        "segment_length": 595,
+        "cooling_rate_per_second": 2.046320485924595,
+        "weight_time_constant": 0.5095445690574334,
+        "max_plateau_seconds": 6.631579751691003,
+        "plateau_reheat_exponent": 0.36321830364477453,
+        "one_minus_bayes_magnet": 0.0012427106453940494
+      },
+      "value": 1.0197106827089404,
+      "raw_by_runtime": {
+        "60.0": 1928.8175563308946,
+        "120.0": 1935.882837020089,
+        "180.0": 1920.8790395826961,
+        "240.0": 1913.3779657326813,
+        "300.0": 1915.651614465646
+      }
+    },
+    {
+      "number": 57,
+      "params": {
+        "segment_length": 12,
+        "cooling_rate_per_second": 4.641209916956421,
+        "weight_time_constant": 0.01677673496537494,
+        "max_plateau_seconds": 3.6480261640462732,
+        "plateau_reheat_exponent": 0.003319805639814044,
+        "one_minus_bayes_magnet": 0.0005743747418089452
+      },
+      "value": 1.05124394645267,
+      "raw_by_runtime": {
+        "60.0": 1978.4346843922253,
+        "120.0": 1974.1046128810347,
+        "180.0": 1977.430224626487,
+        "240.0": 1962.7206269761025,
+        "300.0": 2018.8239992255799
+      }
+    },
+    {
+      "number": 58,
+      "params": {
+        "segment_length": 56,
+        "cooling_rate_per_second": 1.4487685317857624,
+        "weight_time_constant": 0.16975335356062735,
+        "max_plateau_seconds": 1.2446259972570317,
+        "plateau_reheat_exponent": 0.7145803703530211,
+        "one_minus_bayes_magnet": 0.0003885887242331912
+      },
+      "value": 1.0216937695429325,
+      "raw_by_runtime": {
+        "60.0": 1913.0140688191805,
+        "120.0": 1919.275486049873,
+        "180.0": 1939.3281180747222,
+        "240.0": 1942.3684913266375,
+        "300.0": 1919.0142277396997
+      }
+    },
+    {
+      "number": 59,
+      "params": {
+        "segment_length": 279,
+        "cooling_rate_per_second": 5.8668263878246165,
+        "weight_time_constant": 0.24574012195611056,
+        "max_plateau_seconds": 0.5284175930408885,
+        "plateau_reheat_exponent": 0.47357719426440126,
+        "one_minus_bayes_magnet": 0.008377813585357285
+      },
+      "value": 0.999584930425699,
+      "raw_by_runtime": {
+        "60.0": 1946.745268770264,
+        "120.0": 1872.7060575257583,
+        "180.0": 1873.242440849778,
+        "240.0": 1867.1848105934512,
+        "300.0": 1865.3070873895706
+      }
+    },
+    {
+      "number": 60,
+      "params": {
+        "segment_length": 251,
+        "cooling_rate_per_second": 9.721938415426337,
+        "weight_time_constant": 0.2375585088551303,
+        "max_plateau_seconds": 0.4950470504462534,
+        "plateau_reheat_exponent": 0.23741690256080575,
+        "one_minus_bayes_magnet": 0.008459214656917314
+      },
+      "value": 1.0422006106115163,
+      "raw_by_runtime": {
+        "60.0": 1986.4887924672203,
+        "120.0": 1946.0156475719434,
+        "180.0": 1960.0719453258516,
+        "240.0": 1943.2963429001827,
+        "300.0": 1990.537080478858
+      }
+    },
+    {
+      "number": 61,
+      "params": {
+        "segment_length": 446,
+        "cooling_rate_per_second": 5.876984065071941,
+        "weight_time_constant": 0.5793006232540717,
+        "max_plateau_seconds": 0.33161439635605444,
+        "plateau_reheat_exponent": 0.5137667710386705,
+        "one_minus_bayes_magnet": 0.0035139084462216335
+      },
+      "value": 1.0034467091413648,
+      "raw_by_runtime": {
+        "60.0": 1941.083179652393,
+        "120.0": 1876.124824887754,
+        "180.0": 1861.5342893997952,
+        "240.0": 1872.570237458844,
+        "300.0": 1910.0757817322724
+      }
+    },
+    {
+      "number": 62,
+      "params": {
+        "segment_length": 355,
+        "cooling_rate_per_second": 5.933595004379829,
+        "weight_time_constant": 0.7041616775156198,
+        "max_plateau_seconds": 0.3214789672622289,
+        "plateau_reheat_exponent": 0.492224110341793,
+        "one_minus_bayes_magnet": 0.006866231367997769
+      },
+      "value": 1.0055274785754087,
+      "raw_by_runtime": {
+        "60.0": 1928.1344719544913,
+        "120.0": 1885.6846267143742,
+        "180.0": 1877.1047575559548,
+        "240.0": 1885.3289560860835,
+        "300.0": 1904.6693441177313
+      }
+    },
+    {
+      "number": 63,
+      "params": {
+        "segment_length": 366,
+        "cooling_rate_per_second": 7.064243304110822,
+        "weight_time_constant": 1.0176707562910574,
+        "max_plateau_seconds": 0.3419976022227744,
+        "plateau_reheat_exponent": 0.49128148094834295,
+        "one_minus_bayes_magnet": 0.003408649749920767
+      },
+      "value": 1.0174707909371974,
+      "raw_by_runtime": {
+        "60.0": 1941.4349411296084,
+        "120.0": 1923.6615165519001,
+        "180.0": 1918.308855991214,
+        "240.0": 1924.075787950881,
+        "300.0": 1886.2073437480358
+      }
+    },
+    {
+      "number": 64,
+      "params": {
+        "segment_length": 301,
+        "cooling_rate_per_second": 8.59570721150317,
+        "weight_time_constant": 1.998609876168084,
+        "max_plateau_seconds": 0.3290118920402002,
+        "plateau_reheat_exponent": 0.42209930635962173,
+        "one_minus_bayes_magnet": 0.006216786994802486
+      },
+      "value": 1.011521832718643,
+      "raw_by_runtime": {
+        "60.0": 1921.2583592893993,
+        "120.0": 1890.8563758251037,
+        "180.0": 1895.312179136377,
+        "240.0": 1925.16375199843,
+        "300.0": 1904.7345211879506
+      }
+    },
+    {
+      "number": 65,
+      "params": {
+        "segment_length": 501,
+        "cooling_rate_per_second": 8.772082410564202,
+        "weight_time_constant": 1.8745979337967806,
+        "max_plateau_seconds": 0.324105465946467,
+        "plateau_reheat_exponent": 0.8826345234313637,
+        "one_minus_bayes_magnet": 0.00658553115373308
+      },
+      "value": 1.0378319455584823,
+      "raw_by_runtime": {
+        "60.0": 1988.0311493793697,
+        "120.0": 1952.887759180239,
+        "180.0": 1945.3120407654008,
+        "240.0": 1961.23990837828,
+        "300.0": 1938.1827575165578
+      }
+    },
+    {
+      "number": 66,
+      "params": {
+        "segment_length": 288,
+        "cooling_rate_per_second": 11.243138832225563,
+        "weight_time_constant": 0.533838227585956,
+        "max_plateau_seconds": 0.4361513558375834,
+        "plateau_reheat_exponent": 0.517260764946463,
+        "one_minus_bayes_magnet": 0.011255273412477977
+      },
+      "value": 1.0155926488853357,
+      "raw_by_runtime": {
+        "60.0": 1931.781635410777,
+        "120.0": 1941.1209409564706,
+        "180.0": 1902.1308504346168,
+        "240.0": 1887.4444419448603,
+        "300.0": 1913.4667899046008
+      }
+    }
+  ],
+  "best": {
+    "params": {
+      "segment_length": 123,
+      "cooling_rate_per_second": 2.3223527887007878,
+      "weight_time_constant": 1.9367135166472722,
+      "max_plateau_seconds": 0.34346846383725366,
+      "plateau_reheat_exponent": 0.5560715314156229,
+      "one_minus_bayes_magnet": 0.0021562045651978114
+    },
+    "value": 0.996447599282288
+  },
+  "failures": {}
+}

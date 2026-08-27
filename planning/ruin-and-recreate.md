@@ -66,3 +66,11 @@ should be high and the do-then-undo cost is amortized over moves that land.
 ## Gate
 
 None. This is the next substantial piece of work.
+
+## References
+
+*(none yet)*
+
+## Links to here
+
+- [README.md](README.md)

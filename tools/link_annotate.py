@@ -24,18 +24,50 @@ BULLET_RE = re.compile(r"^- \[([^\]]*)\]\(([^)\s]+)\)")
 ALLOWED_SECTIONS = {"References", "Links to here"}
 
 
+def _is_blank(line: str) -> bool:
+    return line.strip() == ""
+
+
 def find_heading(lines: list[str], name: str) -> tuple[int, int] | None:
+    """Return (start, end) line-index span of a `## name` section, end exclusive.
+
+    A real section heading has a blank line (or file boundary) on both sides -- this is
+    what distinguishes it from the same heading text appearing inside a fenced example
+    embedded in prose, which is indented into surrounding text instead. Fenced code blocks
+    are also skipped outright as a second, independent guard.
+    """
     start = None
+    in_fence = False
     for i, line in enumerate(lines):
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         m = HEADING_RE.match(line.rstrip("\n"))
-        if m and m.group(1).strip() == name:
+        if not m or m.group(1).strip() != name:
+            continue
+        before_ok = i == 0 or _is_blank(lines[i - 1])
+        after_ok = i + 1 >= len(lines) or _is_blank(lines[i + 1])
+        if before_ok and after_ok:
             start = i
             break
     if start is None:
         return None
     end = len(lines)
+    in_fence = False
     for j in range(start + 1, len(lines)):
-        if HEADING_RE.match(lines[j].rstrip("\n")):
+        line = lines[j]
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if not HEADING_RE.match(line.rstrip("\n")):
+            continue
+        before_ok = _is_blank(lines[j - 1])
+        after_ok = j + 1 >= len(lines) or _is_blank(lines[j + 1])
+        if before_ok and after_ok:
             end = j
             break
     return start, end

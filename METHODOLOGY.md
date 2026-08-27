@@ -207,3 +207,12 @@ noticed.
 **The argmax of a search is not a result.** A 149-trial search produced an apparent 1.11% winner.
 Compared against the expected minimum of 149 pure-noise draws, it was *less* extreme than chance
 alone would give. Reading the argmax would have made it look adoptable.
+
+## References
+
+- [RESULTS.md](RESULTS.md) -- the measurements these rules govern
+
+## Links to here
+
+- [design/README.md](design/README.md) -- referenced in design folder index
+- [RESULTS.md](RESULTS.md) -- every measurement here is accepted or rejected by these rules

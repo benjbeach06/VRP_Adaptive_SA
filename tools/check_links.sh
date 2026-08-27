@@ -34,7 +34,7 @@ cd "$ROOT" || exit 2
 # Docs that participate in the rule.
 in_scope() {
     case "$1" in
-        design/*.md|planning/*.md|retros/*.md|RESULTS.md|METHODOLOGY.md) return 0 ;;
+        design/*.md|planning/*.md|retros/*.md|experiment_logs/*.md|RESULTS.md|METHODOLOGY.md) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -42,7 +42,7 @@ in_scope() {
 # Everything before the first back-matter heading, with fenced code stripped.
 body_of() {
     awk '/^```/ {fenced = !fenced; next} !fenced' "$1" \
-        | awk '/^## (References|Links to here|Related|Related experiments)[ \t]*$/ {exit} {print}'
+        | awk '/^## (References|Links to here|Related experiments)[ \t]*$/ {exit} {print}'
 }
 
 # One named section's contents, with fenced code stripped.
@@ -74,7 +74,7 @@ note() { printf '%s\n' "$*"; problems=$((problems + 1)); }
 if [ "$#" -gt 0 ]; then
     targets=("$@")
 else
-    mapfile -t targets < <(find design planning retros -name '*.md' -not -path '*_worktrees*' | sort)
+    mapfile -t targets < <(find design planning retros experiment_logs -name '*.md' -not -path '*_worktrees*' | sort)
     targets+=(RESULTS.md METHODOLOGY.md)
 fi
 
@@ -92,7 +92,6 @@ for f in "${targets[@]}"; do
     done < <(cat <(printf '%s\n' "$body_links") \
                  <(section_of "$f" References        | links_in "$dir") \
                  <(section_of "$f" "Links to here"   | links_in "$dir") \
-                 <(section_of "$f" Related           | links_in "$dir") \
                  <(section_of "$f" "Related experiments" | links_in "$dir") | sort -u)
 
     in_scope "$f" || continue

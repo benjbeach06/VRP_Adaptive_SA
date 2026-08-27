@@ -75,3 +75,19 @@ sigma. Numbers in `RESULTS.md`.
 
 **Superseded:** the earlier exact-only sweep, which removed the farthest-insertion operators and so
 compared K on a roster nobody ships.
+
+## References
+
+- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md)
+- [operator-selection.md](operator-selection.md)
+
+## Links to here
+
+- [design/operator_selection/README.md](../design/operator_selection/README.md) -- referenced in operator selection reading guide
+- [design/operator_selection/exploitation_governance.md](../design/operator_selection/exploitation_governance.md) -- mechanism proposed to be ablated to measure repeated-work cost
+- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md) -- mechanism whose tree effectiveness is proposed to ablate
+- [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md)
+- [README.md](README.md)
+- [family-generation.md](family-generation.md)
+- [planning/implemented/forget-benefit-not-cost.md](implemented/forget-benefit-not-cost.md)
+- [operator-selection.md](operator-selection.md)

@@ -278,3 +278,19 @@ is expensive guessing.
 ## Related
 
 [operator-selection](operator-selection.md) is the selection hub.
+
+## References
+
+- [joint-parameter-search.md](joint-parameter-search.md)
+- [ablations.md](ablations.md)
+- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md)
+- [determinism-import-branch.md](determinism-import-branch.md)
+- [operator-selection.md](operator-selection.md)
+
+## Links to here
+
+- [budget-gated-selection.md](budget-gated-selection.md) -- proposes budget gating as an alternative approach to dynamic family creation
+- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md) -- tree structure for dynamic family creation
+- [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md)
+- [README.md](README.md)
+- [RESULTS.md](../RESULTS.md) -- cites the K-sweep finding that motivates making K a learnable, dynamic quantity

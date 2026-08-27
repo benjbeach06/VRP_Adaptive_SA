@@ -1,7 +1,7 @@
 # Every reference is doubly linked
 
-**Status: rule agreed. Checker BUILT (`tools/check_links.sh`); rollout in progress.**
-Benjamin's, 2026-08-22.
+**Status: implemented at commit `e5262c3`.**
+Rule agreed 2026-08-22, Benjamin's. Rolled out repo-wide 2026-08-26.
 
 ## The problem it solves
 
@@ -18,17 +18,18 @@ summary goes stale silently.
 
 **Every reference between documents is recorded at both ends.**
 
-Each document carries two sections, at the bottom:
+Each document carries two sections, at the bottom. (`{...}` stands in for `[...]` below so this
+illustration is not itself parsed as a real reference by `tools/link_scan.py`.)
 
 ```markdown
 ## References
 
-- [share_floors.md](share_floors.md) -- the projection this doc's floors rely on.
+- {share_floors.md}(share_floors.md) -- the projection this doc's floors rely on.
 
 ## Links to here
 
-- [family_selection.md](family_selection.md) -- summarises the projection's guarantees.
-- [planning/implemented/scoring-rework.md](../../planning/implemented/scoring-rework.md) -- cites the floor ordering.
+- {family_selection.md}(family_selection.md) -- summarises the projection's guarantees.
+- {planning/implemented/scoring-rework.md}(../../planning/implemented/scoring-rework.md) -- cites the floor ordering.
 ```
 
 **`References`** is what this file points at. **`Links to here`** is what points at this file.
@@ -56,13 +57,14 @@ pass.**
 
 What a reader sees should locate the file from the repository root, so a path means the same thing
 in every document. The link target stays a normal relative path, because that is what resolves.
+(`{...}` stands in for `[...]` below for the same reason as above.)
 
 ```markdown
-[design/operator_selection/share_floors.md](share_floors.md)
-[planning/ablations.md](../../planning/ablations.md)
+{design/operator_selection/share_floors.md}(share_floors.md)
+{planning/ablations.md}(../../planning/ablations.md)
 ```
 
-Not `[share_floors.md](share_floors.md)`, which reads differently depending on which file it
+Not `{share_floors.md}(share_floors.md)`, which reads differently depending on which file it
 appears in, and gives a reader no idea where the target lives.
 
 Today some entries use the bare filename and some use the full path, including in docs written
@@ -84,8 +86,8 @@ This is what makes the moves we already do routine:
 
 ## Scope
 
-**Design, planning and retro documents.** `design/**`, `planning/**`, `retros/**`, `RESULTS.md`,
-`METHODOLOGY.md`, and the folder `README.md` files.
+**Design, planning, retro, and experiment documents.** `design/**`, `planning/**`, `retros/**`,
+`experiment_logs/**`, `RESULTS.md`, `METHODOLOGY.md`, and the folder `README.md` files.
 
 **Not source comments.** A one-line design-doc reference in code stays one line. Source is covered by
 the existing rule: a design doc replaces long prose, and the code keeps a pointer.
@@ -115,12 +117,8 @@ A pre-commit hook is the obvious home once the sections exist more widely.
 
 ## Rollout state
 
-As of 2026-08-23 the checker reports over 200 problems, almost all from the 32 docs that predate
-the rule and carry no `References` section at all. That is expected, not a regression: the sections
-are being added folder by folder, in the order below.
-
-**Done:** the five docs from the scoring rework and the time-based schedule, plus everything they
-link to. Verified with `bash tools/check_links.sh <those five>`.
+Complete. `bash tools/check_links.sh` reports zero problems across every in-scope folder --
+`design/**`, `planning/**`, `retros/**`, `experiment_logs/**`, `RESULTS.md`, `METHODOLOGY.md`.
 
 ## Cost, stated honestly
 
@@ -139,11 +137,45 @@ degenerates into what grep already gives.
    rule directly serves.
 3. Build `tools/check_links.py` once the sections exist in more than one folder.
 
+## How this diverged, and why
+
+**The tooling is bigger than a checker.** The plan specified reporting only, deliberately with no
+`--fix` -- a generated reason reads as verified, which is worse than a missing one. What shipped
+keeps that principle for the reason text, but adds mechanical maintenance around it:
+`tools/link_scan.py` adds and removes bare `## References`/`## Links to here` entries by diffing
+a file's body links against its existing section, and `tools/link_annotate.py` is the one
+sanctioned way to then set the reason text on an entry it added. `tools/update_linkages_for_move.py`
+rewrites every link a move breaks, using a file's own `## Links to here` as the complete referrer
+list -- no repo search. The `link_doc_file` and `move_doc_file` skills wrap these for one-file-at-a-
+time use. `check_links.sh` (bash, not the `check_links.py` this plan named) stays the read-only
+verifier underneath all of it.
+
+**Rollout went wider than planned.** The "Order of work" above stops at `planning/**`. Actual
+scope reached every documentation folder, including `experiment_logs/**`, added when a tuning run's
+summary doc needed to cite an ablation folder and vice versa.
+
+**The repo-root-relative display text question resolved itself as a side effect.** The plan left it
+"Unresolved... needs a cleanup pass" on 2026-08-25. `display_text()`, shared by all three scripts,
+now enforces it (bare filename for a sibling, repo-root path otherwise) for anything they touch.
+Entries written by hand before the tooling existed were never swept in bulk -- that remains a real,
+narrower gap than the plan anticipated, not a solved one.
+
+**No pre-commit hook was built.** The plan floated one as "the obvious home once the sections exist
+more widely." The three scripts plus two skills, run per-file through the skill, replaced the need
+for one so far.
+
+**A `find_heading` bug was found and fixed during rollout, not before it.** `find_heading` in all
+three scripts matched a `## References`/`## Links to here` heading anywhere in a file, including
+inside this file's own fenced illustrative examples -- which are literal text showing the section
+format. That silently pointed the reconciliation logic at the wrong span on this file specifically.
+Fixed by requiring a blank line on both sides of a real heading, plus a fence-skip as a second,
+independent guard. A related bug in `link_scan.py` alone -- `body_links()` assumed `## References`
+always precedes `## Links to here` in file order, which is false for at least one design doc --
+was fixed by masking out both sections by span rather than by a single boundary cut.
+
 ## References
 
-- [operator-selection.md](operator-selection.md) -- the hub whose entries carry summaries of the
-  files they link, and so is the first place a stale summary appears.
 
 ## Links to here
 
-*(none yet -- this file is new)*
+- [README.md](README.md) -- cites this feature in the implemented-features index

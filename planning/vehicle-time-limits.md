@@ -78,3 +78,15 @@ available — it is what separates a capacitated VRP from something a dispatcher
 
 Worth doing **before** publication if there is time, and it pairs naturally with
 [warm-start](warm-start.md) since a realistic instance is the one worth saving and reloading.
+
+## References
+
+- [route-distance-tracking.md](route-distance-tracking.md)
+- [warm-start.md](warm-start.md)
+
+## Links to here
+
+- [design/operator_selection/share_floors.md](../design/operator_selection/share_floors.md)
+- [README.md](README.md)
+- [asymmetric-distances.md](asymmetric-distances.md)
+- [route-distance-tracking.md](route-distance-tracking.md)

@@ -77,3 +77,5 @@ shapes.
   — the plan this became; points here for what shipped.
 - [README.md](README.md) — summarises this doc in the folder index.
 - [../README.md](../README.md) — summarises this doc in the top-level index.
+- [family_selection.md](family_selection.md) -- tree structure that magnetism applies to
+- [planning/implemented/README.md](../../planning/implemented/README.md)

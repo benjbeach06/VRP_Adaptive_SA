@@ -191,8 +191,6 @@ A node with no children cannot report a MAX, which is why an emptied parent goes
 **Dynamic ADD is the same capability and is not built.** The structure now permits it. See
 [planning/family-generation.md](../../planning/family-generation.md).
 
-## Related
-
 - [share_floors.md](share_floors.md) -- the projection that guarantees each root family a minimum
   share. Floors bind at level 0 only.
 - [exploitation_governance.md](exploitation_governance.md) -- the per-leaf penalty factor, which
@@ -211,3 +209,19 @@ A node with no children cannot report a MAX, which is why an emptied parent goes
   marks a family boundary this tree reads.
 - [README.md](README.md) -- summarises this doc in the folder index.
 - [../README.md](../README.md) -- summarises this doc in the top-level index.
+- [share_floors.md](share_floors.md)
+- [planning/ablations.md](../../planning/ablations.md)
+- [planning/family-generation.md](../../planning/family-generation.md)
+- [planning/operator-selection.md](../../planning/operator-selection.md)
+- [planning/repeated-work-detection.md](../../planning/repeated-work-detection.md)
+
+## References
+
+- [hierarchical_magnetism.md](hierarchical_magnetism.md) -- sibling-local magnet running on this tree
+- [share_floors.md](share_floors.md) -- projection guaranteeing minimum share per root family
+- [design/span_reorder/reorder_operators.md](../span_reorder/reorder_operators.md) -- inheritance marks family boundary
+- [exploitation_governance.md](exploitation_governance.md) -- per-leaf penalty factor feeding family max
+- [planning/operator-selection.md](../../planning/operator-selection.md) -- open selection work
+- [dynamic_penalty.md](dynamic_penalty.md) -- cost-adjusted competition
+- [planning/ablations.md](../../planning/ablations.md) -- family-level ablation to measure tree effectiveness
+- [planning/family-generation.md](../../planning/family-generation.md) -- dynamic family growth and member removal

@@ -56,3 +56,14 @@ without it, more crudely.
 
 Design it once and share it. Three consumers each inventing their own progress heuristic is the
 outcome to avoid.
+
+## References
+
+- [budget-gated-selection.md](budget-gated-selection.md)
+- [operator-selection.md](operator-selection.md)
+
+## Links to here
+
+- [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md)
+- [README.md](README.md)
+- [operator-selection.md](operator-selection.md)

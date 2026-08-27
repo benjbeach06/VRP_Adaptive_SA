@@ -86,3 +86,13 @@ caches its own length and `total_distance()` walks the path.
 Accepted for now rather than fixed. It measures whether weighting helps BEFORE paying for the
 infrastructure. `planning/route-distance-tracking.md` makes it O(1).
 
+## References
+
+- [farthest_insertion_order.md](farthest_insertion_order.md)
+- [planning/budget-gated-selection.md](../../planning/budget-gated-selection.md)
+- [design/operator_selection/exploitation_governance.md](../operator_selection/exploitation_governance.md)
+- [reorder_operators.md](reorder_operators.md)
+
+## Links to here
+
+- [design/README.md](../README.md) -- design folder index

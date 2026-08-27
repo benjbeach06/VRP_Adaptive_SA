@@ -98,3 +98,13 @@ a much larger one.
 The gate to start: a concrete instance that needs it. Directed distance is a feature with a
 customer, and building it speculatively means paying the reversal-operator cost above for a
 capability nobody is currently asking for.
+
+## References
+
+- [vehicle-time-limits.md](vehicle-time-limits.md)
+- [design/span_reorder/farthest_insertion_order.md](../design/span_reorder/farthest_insertion_order.md)
+- [RESULTS.md](../RESULTS.md)
+
+## Links to here
+
+- [README.md](README.md)

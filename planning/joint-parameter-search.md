@@ -113,3 +113,16 @@ Worth saying plainly: the prior is that this finds nothing. Two searches over di
 sets both landed on the hand-chosen values, which is evidence the solver is genuinely insensitive
 here. The interaction argument is real but it is a reason to keep the question open, not a reason to
 expect a different result.
+
+## References
+
+- [heuristic-survey.md](heuristic-survey.md)
+- [inverted-view-refactor.md](inverted-view-refactor.md)
+- [module-structure.md](module-structure.md)
+- [RESULTS.md](../RESULTS.md)
+
+## Links to here
+
+- [README.md](README.md)
+- [family-generation.md](family-generation.md)
+- [experiment_logs/tuning/2026-08-26_time_robust.md](../experiment_logs/tuning/2026-08-26_time_robust.md) -- empirical parameter-importance measurement consistent with this doc's reheat-equilibrium argument

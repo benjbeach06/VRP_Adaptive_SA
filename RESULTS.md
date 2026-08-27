@@ -346,3 +346,19 @@ A 120-run paired ablation found `1e-2` **costs 2.77%**, while `1e-5` and `1e-8` 
 from no floor at all. So too large a value demonstrably hurts, and no value demonstrably helps. That
 experiment could only resolve effects above ~3%, so it does not rule out a smaller benefit. See
 `planning/ablations.md`.
+
+## References
+
+- [METHODOLOGY.md](METHODOLOGY.md) -- the rules used to accept or reject every measurement here
+- [planning/family-generation.md](planning/family-generation.md) -- K is not yet learnable by the solver; this is the open plan for that
+- [design/operator_selection/dynamic_penalty.md](design/operator_selection/dynamic_penalty.md) -- the pricing mechanism now built to let the solver learn K itself
+
+## Links to here
+
+- [design/README.md](design/README.md) -- referenced in design folder index
+- [planning/README.md](planning/README.md)
+- [planning/asymmetric-distances.md](planning/asymmetric-distances.md)
+- [planning/inverted-view-refactor.md](planning/inverted-view-refactor.md)
+- [planning/joint-parameter-search.md](planning/joint-parameter-search.md)
+- [experiment_logs/README.md](experiment_logs/README.md) -- cites this file's reasoning to explain a withdrawn re-tune result
+- [METHODOLOGY.md](METHODOLOGY.md) -- states the rules these measurements are verified and accepted under

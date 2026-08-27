@@ -45,3 +45,23 @@ The other homes do not overlap with this one:
 One folder per **BL operator**, and inside it a folder per `Operator` class that uses it when there
 is more than one. The current folders predate that rule and are migrated toward it as more of the
 code gets covered, not restructured ahead of need.
+
+## References
+
+- [design/operator_selection/dynamic_penalty.md](operator_selection/dynamic_penalty.md) -- score, weight EMA, and cost-ratio penalty, plus the design defect that forced its current shape
+- [planning/README.md](../planning/README.md) -- planned features and entry gates
+- [retros/README.md](../retros/README.md) -- work narrative and changes to working methods
+- [design/operator_selection/README.md](operator_selection/README.md) -- reading order for the operator selection folder
+- [design/operator_selection/family_selection.md](operator_selection/family_selection.md) -- family tree, MAX aggregation, and descent strategy
+- [design/span_reorder/farthest_insertion_order.md](span_reorder/farthest_insertion_order.md) -- fixed-endpoint path helper and O(n^2) analysis
+- [design/operator_selection/share_floors.md](operator_selection/share_floors.md) -- minimum share guarantees and projection enforcement
+- [design/span_reorder/reorder_operators.md](span_reorder/reorder_operators.md) -- span reorder base seam, family tree, and optimizer
+- [design/operator_selection/exploitation_governance.md](operator_selection/exploitation_governance.md) -- exploit-only mode, cost amortization, and adjusted weights
+- [METHODOLOGY.md](../METHODOLOGY.md) -- measurement criteria and verification standards
+- [design/operator_selection/hierarchical_magnetism.md](operator_selection/hierarchical_magnetism.md) -- magnet pull toward siblings rather than flat roster
+- [design/schedule/time_based_schedule.md](schedule/time_based_schedule.md) -- unified clock for cooling and plateau, seconds or iteration fallback
+- [design/span_reorder/farthest_insertion_ops.md](span_reorder/farthest_insertion_ops.md) -- three heuristic insertion variants and their differences
+- [RESULTS.md](../RESULTS.md) -- all measurements, including withdrawn results
+
+## Links to here
+

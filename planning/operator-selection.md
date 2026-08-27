@@ -217,8 +217,13 @@ condition has to decide.
 
 - [design/operator_selection/exploitation_governance.md](../design/operator_selection/exploitation_governance.md)
   -- cites mechanism 4 as the open work it wants replaced by something adaptive.
-- [doubly-linked-references.md](doubly-linked-references.md) -- cites this as the hub whose entries
-  carry summaries, so a stale one shows here first.
 - [implemented/forget-benefit-not-cost.md](implemented/forget-benefit-not-cost.md) -- cites this as
   the hub for mechanisms 3 and 4.
 - [README.md](README.md) -- lists this as the HUB entry in the roadmap table.
+- [design/operator_selection/README.md](../design/operator_selection/README.md) -- design implementation of this plan
+- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md) -- design implementation of selection mechanism
+- [design/operator_selection/share_floors.md](../design/operator_selection/share_floors.md)
+- [ablations.md](ablations.md)
+- [family-generation.md](family-generation.md)
+- [repeated-work-detection.md](repeated-work-detection.md)
+- [solver-progress-metric.md](solver-progress-metric.md)

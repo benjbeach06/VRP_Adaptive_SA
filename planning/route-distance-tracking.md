@@ -57,3 +57,15 @@ None on its own — it is small, isolated, and self-verifying. Do it when
 Sequence it **before** [inverted-view-refactor](inverted-view-refactor.md) if both are planned:
 adding a cached field to routes is cheap now and would be rework after the position representation
 changes.
+
+## References
+
+- [vehicle-time-limits.md](vehicle-time-limits.md)
+- [inverted-view-refactor.md](inverted-view-refactor.md)
+
+## Links to here
+
+- [budget-gated-selection.md](budget-gated-selection.md) -- budget gating would complement distance-tracking cost reduction
+- [README.md](README.md)
+- [repeated-work-detection.md](repeated-work-detection.md)
+- [vehicle-time-limits.md](vehicle-time-limits.md)

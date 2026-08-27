@@ -1,0 +1,33 @@
+time-robust tuning ['cooling_rate_per_second', 'max_plateau_seconds', 'one_minus_bayes_magnet', 'plateau_reheat_exponent', 'segment_length', 'weight_time_constant'] at n=500 capacity=400; runtimes [60.0, 120.0, 180.0, 240.0, 300.0]s, seeds [1, 2, 3, 4, 5]; budget 64800s
+  starting point (CHOSEN_CENTER): {'segment_length': 123, 'cooling_rate_per_second': 2.3223527887007878, 'weight_time_constant': 1.9367135166472722, 'max_plateau_seconds': 0.34346846383725366, 'plateau_reheat_exponent': 0.5560715314156229, 'one_minus_bayes_magnet': 0.0021562045651978114}
+  CHOSEN_CENTER constructs cleanly
+  reference (CHOSEN_CENTER) 60s: 1897.32 (5 seeds)
+  reference (CHOSEN_CENTER) 120s: 1895.74 (5 seeds)
+  reference (CHOSEN_CENTER) 180s: 1875.05 (5 seeds)
+  reference (CHOSEN_CENTER) 240s: 1885.88 (5 seeds)
+  reference (CHOSEN_CENTER) 300s: 1874.87 (5 seeds)
+  trial    0  score 0.9964  (5401s elapsed)
+  trial    5  score 1.0343  (9901s elapsed)
+  trial   10  score 1.0443  (14402s elapsed)
+  trial   15  score 1.0495  (18902s elapsed)
+  trial   20  score 1.0403  (23403s elapsed)
+  trial   25  score 1.0282  (27904s elapsed)
+  trial   30  score 1.0733  (32405s elapsed)
+  trial   35  score 1.0392  (36905s elapsed)
+  trial   40  score 1.0372  (41406s elapsed)
+  trial   45  score 1.0195  (45907s elapsed)
+  trial   50  score 1.0319  (50406s elapsed)
+  trial   55  score 1.0459  (54907s elapsed)
+  trial   60  score 1.0422  (59408s elapsed)
+  trial   65  score 1.0378  (63909s elapsed)
+
+completed 67 trials in 64809s
+best score 0.9964  (1.0 == CHOSEN_CENTER)
+    segment_length                      123   (CHOSEN_CENTER 123)
+    cooling_rate_per_second  2.3223527887007878   (CHOSEN_CENTER 2.3223527887007878)
+    weight_time_constant     1.9367135166472722   (CHOSEN_CENTER 1.9367135166472722)
+    max_plateau_seconds      0.34346846383725366   (CHOSEN_CENTER 0.34346846383725366)
+    plateau_reheat_exponent  0.5560715314156229   (CHOSEN_CENTER 0.5560715314156229)
+    one_minus_bayes_magnet   0.0021562045651978114   (CHOSEN_CENTER 0.0021562045651978114)
+
+results written to tools/tune_time_robust_results.json

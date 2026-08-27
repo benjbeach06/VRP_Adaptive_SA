@@ -44,3 +44,12 @@ exactly on load, before any solving happens. That is the test.
 ## Gate
 
 None.
+
+## References
+
+*(none yet)*
+
+## Links to here
+
+- [README.md](README.md)
+- [vehicle-time-limits.md](vehicle-time-limits.md)

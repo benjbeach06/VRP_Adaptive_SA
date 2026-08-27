@@ -127,3 +127,21 @@ vehicle chains and depot membership perfectly intact -- correct by every value c
 
 The ordered variant restores positions exactly via `undo_remove`, unwound LIFO. It is a separate
 method so operators that do not need the guarantee do not pay for it.
+
+## References
+
+- [planning/solver-progress-metric.md](../../planning/solver-progress-metric.md)
+- [planning/family-generation.md](../../planning/family-generation.md)
+- [design/operator_selection/family_selection.md](../operator_selection/family_selection.md)
+- [design/operator_selection/exploitation_governance.md](../operator_selection/exploitation_governance.md)
+- [planning/ablations.md](../../planning/ablations.md)
+
+## Links to here
+
+- [planning/budget-gated-selection.md](../../planning/budget-gated-selection.md) -- applies budget gating to span reorder operator selection
+- [design/README.md](../README.md) -- design folder index
+- [design/operator_selection/exploitation_governance.md](../operator_selection/exploitation_governance.md) -- governs the cost-penalty applied to these operators
+- [design/operator_selection/family_selection.md](../operator_selection/family_selection.md) -- inheritance defines family boundary
+- [farthest_insertion_ops.md](farthest_insertion_ops.md)
+- [farthest_insertion_order.md](farthest_insertion_order.md)
+- [planning/operator-selection.md](../../planning/operator-selection.md)

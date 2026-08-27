@@ -46,3 +46,11 @@ to its successor.
 Instance sizes where 118 us per proposal matters. At n=500 with capacity 400 there are about 7
 routes and this operator costs 13.6 us — cheaper than at capacity 25, because there are fewer routes
 to scan. The problem only appears with many short routes.
+
+## References
+
+*(none yet)*
+
+## Links to here
+
+- [README.md](README.md)
