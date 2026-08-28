@@ -32,7 +32,7 @@ plateau reheating -- and no test asserts anything about it, which is exactly why
 green when a positive score floor silently broke it. `tools/preflight.py` checks it before a long
 run; that is a gate, not an oracle.
 
-The formula this ablates is quoted in [operator-selection](operator-selection.md).
+The formula this ablates is quoted in [operator-selection](../operator-selection/operator-selection.md).
 
 ## Does family-level selection improve the objective?
 
@@ -44,7 +44,7 @@ Paired on seed against flat selection, holding the roster fixed. **Holding the r
 whole difficulty:** the first hierarchical run also gained a new operator, so it measured two changes
 at once and settles nothing.
 
-Design in [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md).
+Design in [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md).
 
 ## Does a weight spike lift a whole family harmfully?
 
@@ -78,16 +78,16 @@ compared K on a roster nobody ships.
 
 ## References
 
-- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md)
-- [operator-selection.md](operator-selection.md)
+- [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md)
+- [planning/operator-selection/operator-selection.md](../operator-selection/operator-selection.md)
 
 ## Links to here
 
-- [design/operator_selection/README.md](../design/operator_selection/README.md) -- referenced in operator selection reading guide
-- [design/operator_selection/exploitation_governance.md](../design/operator_selection/exploitation_governance.md) -- mechanism proposed to be ablated to measure repeated-work cost
-- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md) -- mechanism whose tree effectiveness is proposed to ablate
-- [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md)
-- [README.md](README.md)
-- [family-generation.md](family-generation.md)
-- [planning/implemented/forget-benefit-not-cost.md](implemented/forget-benefit-not-cost.md)
-- [operator-selection.md](operator-selection.md)
+- [design/operator_selection/README.md](../../design/operator_selection/README.md) -- referenced in operator selection reading guide
+- [design/operator_selection/exploitation_governance.md](../../design/operator_selection/exploitation_governance.md) -- mechanism proposed to be ablated to measure repeated-work cost
+- [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md) -- mechanism whose tree effectiveness is proposed to ablate
+- [design/span_reorder/reorder_operators.md](../../design/span_reorder/reorder_operators.md)
+- [planning/README.md](../README.md)
+- [planning/operator-selection/family-generation.md](../operator-selection/family-generation.md)
+- [planning/implemented/forget-benefit-not-cost.md](../implemented/forget-benefit-not-cost.md)
+- [planning/operator-selection/operator-selection.md](../operator-selection/operator-selection.md)

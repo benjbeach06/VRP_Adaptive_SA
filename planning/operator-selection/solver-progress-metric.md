@@ -64,6 +64,6 @@ outcome to avoid.
 
 ## Links to here
 
-- [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md)
-- [README.md](README.md)
+- [design/span_reorder/reorder_operators.md](../../design/span_reorder/reorder_operators.md)
+- [planning/README.md](../README.md)
 - [operator-selection.md](operator-selection.md)

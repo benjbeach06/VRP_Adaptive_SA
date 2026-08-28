@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Move a doubly-linked doc, rewriting every link that has to change. No search involved --
-the move relies entirely on the source file's own ## Links to here section to know who
-references it. See planning/doubly-linked-references.md.
+the move relies entirely on <source>'s own back-matter sections to know who links to it.
+See planning/doubly-linked-references.md.
 
     python tools/update_linkages_for_move.py <source> <target>
 
@@ -9,15 +9,20 @@ Assumes both <source> and <target> stay within the documentation-approved folder
 planning/**, retros/**, experiment_logs/**, RESULTS.md, METHODOLOGY.md, folder README.md files)
 -- no scope check is performed here.
 
-1. Reads <source>'s ## Links to here section: that is the full, authoritative list of files
-   that link to it. Errors if the section does not exist -- a file that predates the rollout
-   has no reliable backlink list, and this script refuses to guess by searching.
+0. Runs `tools/check_links.sh <source>` and aborts the move if it reports anything. A move
+   trusts <source>'s back-matter sections, so those sections must be correct first.
+1. For every file <source> links to, in either direction, rewrites all links that point at
+   <source>'s old path so they point at <target> instead. That referrer set is the UNION of:
+     - <source>'s ## Links to here -- files whose body links to <source>.
+     - <source>'s ## References   -- files <source> links to; each carries a reciprocal
+       back-link to <source> in its own ## Links to here (guaranteed by check_links.sh).
+   ## Links to here alone is NOT the full set: it never names a file <source> points at.
+   Errors if the ## Links to here section is absent -- a file that predates the rollout has
+   no reliable back-link list, and this script refuses to guess by searching.
 2. Rewrites every relative link inside <source> itself -- body, References, Links to here,
    the whole file -- so each still resolves to the same target, now computed from <target>'s
    directory instead of <source>'s.
-3. For each file named in that Links to here list, rewrites only the link(s) that point at
-   <source>'s old path so they point at <target> instead. Nothing else in those files changes.
-4. Moves <source> to <target> -- `git mv` if <source> is tracked, a plain filesystem rename
+3. Moves <source> to <target> -- `git mv` if <source> is tracked, a plain filesystem rename
    otherwise.
 
 Display text follows the repo convention (see planning/doubly-linked-references.md): a link
@@ -35,6 +40,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+CHECK_LINKS = REPO_ROOT / "tools" / "check_links.sh"
 
 LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)\s]+)\)")
 HEADING_RE = re.compile(r"^## (.+)$")
@@ -217,6 +223,13 @@ def main() -> int:
         print(f"error: {target} already exists", file=sys.stderr)
         return 1
 
+    check = subprocess.run(["bash", str(CHECK_LINKS), rel_to_root(source)],
+                           cwd=REPO_ROOT, capture_output=True, text=True)
+    if check.returncode != 0:
+        print(f"error: {source} fails tools/check_links.sh -- fix its links before moving it:\n"
+              f"{check.stdout}{check.stderr}", file=sys.stderr)
+        return 1
+
     source_lines = load(source)
     span = find_heading(source_lines, LINKS_TO_HERE)
     if span is None:
@@ -225,15 +238,28 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    referrers = parse_entries(source_lines, span)
-    referrer_paths = []
-    for e in referrers:
-        p = (source.parent / e["href"]).resolve()
-        if not p.exists():
-            print(f"error: backlink target {p} (from {source}'s Links to here) does not exist",
-                  file=sys.stderr)
-            return 1
-        referrer_paths.append(p)
+    # The full set of files that link to <source> is the union of its two back-matter
+    # sections: ## Links to here names files whose body links here, ## References names
+    # files this file links to -- each of which carries a reciprocal back-link to <source>
+    # in its own ## Links to here. Neither section alone is complete.
+    referrer_paths: list[Path] = []
+    seen: set[Path] = set()
+    for section in (LINKS_TO_HERE, REFERENCES):
+        sec_span = span if section == LINKS_TO_HERE else find_heading(source_lines, section)
+        if sec_span is None:
+            continue
+        for e in parse_entries(source_lines, sec_span):
+            href = e["href"]
+            if href.startswith(("http://", "https://", "#")):
+                continue
+            p = (source.parent / href).resolve()
+            if not p.exists():
+                print(f"error: {section} target {p} (from {source}) does not exist",
+                      file=sys.stderr)
+                return 1
+            if p != source and p not in seen:
+                seen.add(p)
+                referrer_paths.append(p)
 
     try:
         new_source_lines = rewrite_own_links(source_lines, source.parent, target.parent)

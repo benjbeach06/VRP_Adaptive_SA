@@ -43,7 +43,7 @@ Turning an attribute read into anything more expensive there is measurable.
 
 **The payoff is still not proven, and the evidence that exists points both ways.** Geometric
 guidance had never been tried when this was designed. It has now been measured
-([RESULTS.md](../RESULTS.md)): acceptance went 0.00% -> 0.30% on relocate and 0.01% -> 0.46% on
+([RESULTS.md](../../RESULTS.md)): acceptance went 0.00% -> 0.30% on relocate and 0.01% -> 0.46% on
 cross-exchange, which is decisive. The **objective** effect is +15.56 +/- 7.42, about 2 sigma,
 under the bar.
 
@@ -74,12 +74,12 @@ The oracle harness can assert that the index and the DLL agree, which is the usu
 
 ## References
 
-- [RESULTS.md](../RESULTS.md)
+- [RESULTS.md](../../RESULTS.md)
 
 ## Links to here
 
-- [README.md](README.md)
-- [joint-parameter-search.md](joint-parameter-search.md)
+- [planning/README.md](../README.md)
+- [planning/experiments/joint-parameter-search.md](../experiments/joint-parameter-search.md)
 - [module-structure.md](module-structure.md)
 - [route-distance-tracking.md](route-distance-tracking.md)
 - [raw-delta-accounting.md](raw-delta-accounting.md)

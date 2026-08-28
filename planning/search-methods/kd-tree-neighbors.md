@@ -60,4 +60,4 @@ signature test in `tools/` re-run before it is trusted.
 
 ## Links to here
 
-- [README.md](README.md)
+- [planning/README.md](../README.md)

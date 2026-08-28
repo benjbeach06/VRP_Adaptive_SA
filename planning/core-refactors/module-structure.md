@@ -88,7 +88,7 @@ this one after it, or accept the rework.
 
 ## Links to here
 
-- [budget-gated-selection.md](budget-gated-selection.md) -- proposes cost-estimate field placement for budget gating
-- [README.md](README.md)
-- [joint-parameter-search.md](joint-parameter-search.md)
+- [planning/operator-selection/budget-gated-selection.md](../operator-selection/budget-gated-selection.md) -- proposes cost-estimate field placement for budget gating
+- [planning/README.md](../README.md)
+- [planning/experiments/joint-parameter-search.md](../experiments/joint-parameter-search.md)
 - [raw-delta-accounting.md](raw-delta-accounting.md)

@@ -52,16 +52,16 @@ linked DIMACS data tables that have not been opened.
 
 **The page lists many more algorithms than the six above** -- whole families this design never
 considered. The choice here was made from a shortlist, not from a survey. Surveying them is
-[planning/heuristic-survey.md](../../planning/heuristic-survey.md).
+[planning/heuristic-survey.md](../../planning/search-methods/heuristic-survey.md).
 
 ## References
 
 - [reorder_operators.md](reorder_operators.md)
-- [planning/heuristic-survey.md](../../planning/heuristic-survey.md)
+- [planning/search-methods/heuristic-survey.md](../../planning/search-methods/heuristic-survey.md)
 
 ## Links to here
 
 - [design/README.md](../README.md) -- design folder index
 - [farthest_insertion_ops.md](farthest_insertion_ops.md)
-- [planning/asymmetric-distances.md](../../planning/asymmetric-distances.md)
-- [planning/heuristic-survey.md](../../planning/heuristic-survey.md)
+- [planning/problem-model/asymmetric-distances.md](../../planning/problem-model/asymmetric-distances.md)
+- [planning/search-methods/heuristic-survey.md](../../planning/search-methods/heuristic-survey.md)

@@ -1,7 +1,7 @@
 # Track total distance on routes and vehicles
 
 **Status: not started. Blocked on [raw-delta-accounting](raw-delta-accounting.md). Prerequisite
-for [vehicle-time-limits](vehicle-time-limits.md).**
+for [vehicle-time-limits](../problem-model/vehicle-time-limits.md).**
 
 ## The problem
 
@@ -59,7 +59,7 @@ catch, and there are enough mutation sites that at least one will be missed on t
 
 [raw-delta-accounting](raw-delta-accounting.md) first — this plan's shape depends on the processor
 existing. Beyond that, small and self-verifying. Do it when
-[vehicle-time-limits](vehicle-time-limits.md) is wanted, since that plan cannot start without it.
+[vehicle-time-limits](../problem-model/vehicle-time-limits.md) is wanted, since that plan cannot start without it.
 
 Sequence it **before** [inverted-view-refactor](inverted-view-refactor.md) if both are planned:
 adding a cached field to routes is cheap now and would be rework after the position representation
@@ -67,14 +67,14 @@ changes.
 
 ## References
 
-- [vehicle-time-limits.md](vehicle-time-limits.md)
+- [planning/problem-model/vehicle-time-limits.md](../problem-model/vehicle-time-limits.md)
 - [inverted-view-refactor.md](inverted-view-refactor.md)
 - [raw-delta-accounting.md](raw-delta-accounting.md) -- blocking prerequisite; the processor gives this plan the field to write distance into instead of instrumenting mutation sites by hand
 
 ## Links to here
 
-- [budget-gated-selection.md](budget-gated-selection.md) -- budget gating would complement distance-tracking cost reduction
-- [README.md](README.md)
-- [repeated-work-detection.md](repeated-work-detection.md)
-- [vehicle-time-limits.md](vehicle-time-limits.md)
+- [planning/operator-selection/budget-gated-selection.md](../operator-selection/budget-gated-selection.md) -- budget gating would complement distance-tracking cost reduction
+- [planning/README.md](../README.md)
+- [planning/operator-selection/repeated-work-detection.md](../operator-selection/repeated-work-detection.md)
+- [planning/problem-model/vehicle-time-limits.md](../problem-model/vehicle-time-limits.md)
 - [raw-delta-accounting.md](raw-delta-accounting.md)

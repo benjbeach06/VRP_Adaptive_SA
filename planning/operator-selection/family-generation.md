@@ -62,7 +62,7 @@ each is a constant chosen once and searched offline, and each could instead be a
 whose members compete.
 
 **That is online parameter learning**, and it attacks the problem
-[joint-parameter-search](joint-parameter-search.md) says is unaffordable. Offline tuning of these
+[joint-parameter-search](../experiments/joint-parameter-search.md) says is unaffordable. Offline tuning of these
 values needs runs measured in days, per instance shape, and does not transfer. A generated family
 learns the value DURING the solve, on the instance actually being solved.
 
@@ -79,7 +79,7 @@ Two properties of the built tree make generation safe:
   inside one family and nothing to any other family. Flat selection would have charged the whole
   roster on every proposal.
 
-Both are in [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md).
+Both are in [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md).
 
 ## DYNAMIC generation: a family that owns its own roster
 
@@ -191,7 +191,7 @@ The shape, if it is ever built out:
 | **2** | Curated model-building code per supported solver, routing to Pyomo only when the chosen solver has no curated path. |
 
 **The solver is selected by environment, and only the active path is built.** Same import-time branch
-pattern as [determinism-import-branch](determinism-import-branch.md) -- decide once at import, pay
+pattern as [determinism-import-branch](../core-refactors/determinism-import-branch.md) -- decide once at import, pay
 nothing per call.
 
 Model selection and model building would likely earn their own classes and their own folder rather
@@ -258,7 +258,7 @@ often as a single operator would be. The family keeps its share; each member get
 **Learning cost.** Every member needs proposals before its weight means anything. Six members need
 roughly six times the samples before the family knows which is best, and until then the family spends
 real budget on members that will turn out useless. On a short run that may never converge -- the same
-power problem as [joint-parameter-search](joint-parameter-search.md), moved inside the solve.
+power problem as [joint-parameter-search](../experiments/joint-parameter-search.md), moved inside the solve.
 
 ## The open question
 
@@ -271,7 +271,7 @@ whole, appearing again one level down.
 
 ## Gate
 
-Family selection is built, so the blocker is gone. Do not start until [ablations](ablations.md) has
+Family selection is built, so the blocker is gone. Do not start until [ablations](../experiments/ablations.md) has
 priced `EXACT_REORDER_MAX_SPAN` -- generating six span sizes before knowing whether span size matters
 is expensive guessing.
 
@@ -281,16 +281,16 @@ is expensive guessing.
 
 ## References
 
-- [joint-parameter-search.md](joint-parameter-search.md)
-- [ablations.md](ablations.md)
-- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md)
-- [determinism-import-branch.md](determinism-import-branch.md)
+- [planning/experiments/joint-parameter-search.md](../experiments/joint-parameter-search.md)
+- [planning/experiments/ablations.md](../experiments/ablations.md)
+- [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md)
+- [planning/core-refactors/determinism-import-branch.md](../core-refactors/determinism-import-branch.md)
 - [operator-selection.md](operator-selection.md)
 
 ## Links to here
 
 - [budget-gated-selection.md](budget-gated-selection.md) -- proposes budget gating as an alternative approach to dynamic family creation
-- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md) -- tree structure for dynamic family creation
-- [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md)
-- [README.md](README.md)
-- [RESULTS.md](../RESULTS.md) -- cites the K-sweep finding that motivates making K a learnable, dynamic quantity
+- [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md) -- tree structure for dynamic family creation
+- [design/span_reorder/reorder_operators.md](../../design/span_reorder/reorder_operators.md)
+- [planning/README.md](../README.md)
+- [RESULTS.md](../../RESULTS.md) -- cites the K-sweep finding that motivates making K a learnable, dynamic quantity

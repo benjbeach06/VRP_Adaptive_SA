@@ -42,4 +42,4 @@ Apply it to every existing plan in one pass once the scale exists, so the number
 
 ## Links to here
 
-- [README.md](README.md)
+- [planning/README.md](../README.md)

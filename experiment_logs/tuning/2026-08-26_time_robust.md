@@ -24,7 +24,7 @@ aggregate score correctly penalized (net score 0.9996, just behind trial 0's 0.9
 **Parameter importance** (fANOVA and PED-ANOVA, both run against the 67 trials): `plateau_reheat_exponent`
 dominates (0.54-0.62 of explained variance), `max_plateau_seconds` a distant second (~0.12-0.16),
 the other four parameters roughly tied and minor. Consistent with the reheat-equilibrium argument
-in [planning/joint-parameter-search.md](../../planning/joint-parameter-search.md)
+in [planning/joint-parameter-search.md](../../planning/experiments/joint-parameter-search.md)
 (`gap = C x S x R`) that the plateau quantity is the one expected to resolve cleanly.
 
 Files: `2026-08-26_time_robust.json` (all 67 trials, params, scores, per-runtime raw objectives),
@@ -32,7 +32,7 @@ Files: `2026-08-26_time_robust.json` (all 67 trials, params, scores, per-runtime
 
 ## References
 
-- [planning/joint-parameter-search.md](../../planning/joint-parameter-search.md) -- reheat-equilibrium argument this run's importance finding is consistent with
+- [planning/experiments/joint-parameter-search.md](../../planning/experiments/joint-parameter-search.md) -- reheat-equilibrium argument this run's importance finding is consistent with
 
 ## Links to here
 

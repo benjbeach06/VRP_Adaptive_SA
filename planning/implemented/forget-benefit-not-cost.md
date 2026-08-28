@@ -22,7 +22,7 @@ expensive at capacity 400 and cheap at capacity 25 is priced correctly at both w
 deciding in advance.
 
 **It would replace the manual dividers** -- mechanism 4 in
-[operator-selection](../operator-selection.md) -- which are magic numbers today and add an ablation
+[operator-selection](../operator-selection/operator-selection.md) -- which are magic numbers today and add an ablation
 factor each.
 
 ## The risk
@@ -41,7 +41,7 @@ the extremes.
 **The improvement exponent.** It sets how long a newly rewarding operator keeps being repeated before
 it is forgotten, so it is already a decay-rate control on the benefit side. Adding a second one
 without exposing the first means tuning two coupled knobs, one of which is a literal in the source.
-Expose it first -- mechanism 3 in [operator-selection](../operator-selection.md).
+Expose it first -- mechanism 3 in [operator-selection](../operator-selection/operator-selection.md).
 
 **`reaction_factor`** sets how fast weights adapt at all, and shares that same surface.
 
@@ -50,7 +50,7 @@ Expose it first -- mechanism 3 in [operator-selection](../operator-selection.md)
 None on correctness -- this changes allocation, not answers.
 
 Do not start until the improvement exponent is an explicit parameter, and until
-[ablations](../ablations.md) can say whether `explore_reward` buys anything. Both attack this problem
+[ablations](../experiments/ablations.md) can say whether `explore_reward` buys anything. Both attack this problem
 from different directions, and measuring a third mechanism against two unmeasured ones produces a
 number that means nothing.
 
@@ -71,9 +71,9 @@ targeted -- see
 
 ## References
 
-- [operator-selection.md](../operator-selection.md) -- the hub; mechanisms 3 and 4 this idea
+- [planning/operator-selection/operator-selection.md](../operator-selection/operator-selection.md) -- the hub; mechanisms 3 and 4 this idea
   overlapped.
-- [ablations.md](../ablations.md) -- the ablation this plan was gated on.
+- [planning/experiments/ablations.md](../experiments/ablations.md) -- the ablation this plan was gated on.
 - [scoring-rework.md](scoring-rework.md) -- the plan this idea's mechanism shipped inside of.
 - [dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md) -- the weight/penalty
   split that incorporated this idea.
@@ -82,6 +82,6 @@ targeted -- see
 
 ## Links to here
 
-- [operator-selection.md](../operator-selection.md) -- cites this as the idea mechanism 1 targeted,
+- [planning/operator-selection/operator-selection.md](../operator-selection/operator-selection.md) -- cites this as the idea mechanism 1 targeted,
   now implemented.
 - [README.md](README.md) -- lists this in the implemented summary.

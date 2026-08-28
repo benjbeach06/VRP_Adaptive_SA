@@ -287,4 +287,4 @@ What this period taught us, and what changed about how we work, is in
 - [hierarchical-magnetism.md](hierarchical-magnetism.md) -- names this plan as what made the raw
   versus adjusted fold distinction matter.
 - [forget-benefit-not-cost.md](forget-benefit-not-cost.md)
-- [planning/operator-selection.md](../operator-selection.md)
+- [planning/operator-selection/operator-selection.md](../operator-selection/operator-selection.md)

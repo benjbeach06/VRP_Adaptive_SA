@@ -22,12 +22,12 @@ per-leaf adjustments, which now feed the family max as well. `hierarchical_magne
 ## Everything unbuilt
 
 Open selection work is in
-[planning/operator-selection.md](../../planning/operator-selection.md), which frames it as three
+[planning/operator-selection.md](../../planning/operator-selection/operator-selection.md), which frames it as three
 related concerns: exploit-only against exploratory operators, expensive against cheap ones, and
 running operators the solver has no time for.
 
 **Ablations.** Several decisions here were made structurally and are unmeasured. They are listed in
-[planning/ablations.md](../../planning/ablations.md).
+[planning/ablations.md](../../planning/experiments/ablations.md).
 
 ## Re-measuring
 
@@ -44,8 +44,8 @@ with:
 - [share_floors.md](share_floors.md) -- guaranteed minimum share and projection enforcement
 - [family_selection.md](family_selection.md) -- the family tree structure that other mechanisms attach to
 - [hierarchical_magnetism.md](hierarchical_magnetism.md) -- weight magnetism toward siblings instead of whole roster
-- [planning/ablations.md](../../planning/ablations.md) -- operator ablation experiments and results
-- [planning/operator-selection.md](../../planning/operator-selection.md) -- planning frame for the three mechanisms
+- [planning/experiments/ablations.md](../../planning/experiments/ablations.md) -- operator ablation experiments and results
+- [planning/operator-selection/operator-selection.md](../../planning/operator-selection/operator-selection.md) -- planning frame for the three mechanisms
 - [dynamic_penalty.md](dynamic_penalty.md) -- score, weight EMA, cost-ratio penalty, and design defect
 
 ## Links to here

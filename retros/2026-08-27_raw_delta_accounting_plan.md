@@ -17,7 +17,7 @@ Comprehensive rollout, not staged.
 **Sequencing changed.** `raw-delta-accounting` now precedes `route-distance-tracking`, which still
 blocks `vehicle-time-limits`.
 
-**Written.** [planning/raw-delta-accounting.md](../planning/raw-delta-accounting.md), and a
+**Written.** [planning/raw-delta-accounting.md](../planning/core-refactors/raw-delta-accounting.md), and a
 function-level touch list covering roughly 26 methods that stay, 29 the processor absorbs, 24 that
 become raw producers, 44 mutator call sites, and 5 open questions for the implementing session.
 
@@ -144,5 +144,5 @@ filtered rather than investigated again.
 
 ## References
 
-- [planning/raw-delta-accounting.md](../planning/raw-delta-accounting.md) -- the plan this session produced; the retro covers how it was arrived at, not what it says
+- [planning/core-refactors/raw-delta-accounting.md](../planning/core-refactors/raw-delta-accounting.md) -- the plan this session produced; the retro covers how it was arrived at, not what it says
 ## Links to here

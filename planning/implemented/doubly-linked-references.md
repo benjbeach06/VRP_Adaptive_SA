@@ -73,14 +73,18 @@ cleanup pass, not now.
 
 ## What it buys
 
-**Editing a file starts by reading its `Links to here`.** That list is the blast radius. Anything
-listed there may hold a summary that the edit invalidates.
+**Editing a file starts by reading both its `Links to here` and its `References`.** Together they
+are the blast radius. `Links to here` names the files whose body links here. `References` names the
+files this one links to -- and each of those carries a reciprocal `Links to here` entry that points
+back, so a move breaks that entry too. Either section alone is half the set.
+
+Any file in either list may hold a summary that the edit invalidates.
 
 This is what makes the moves we already do routine:
 
 | move | resolution |
 |---|---|
-| plan finished, move to `planning/implemented/` | every entry in `Links to here` needs its path updated |
+| plan finished, move to `planning/implemented/` | every entry in `Links to here` AND `References` needs its path updated |
 | mechanism superseded | every entry may carry a stale summary of it |
 | a core detail changes | entries whose reason mentions that detail are the ones to re-read |
 
@@ -145,8 +149,9 @@ keeps that principle for the reason text, but adds mechanical maintenance around
 `tools/link_scan.py` adds and removes bare `## References`/`## Links to here` entries by diffing
 a file's body links against its existing section, and `tools/link_annotate.py` is the one
 sanctioned way to then set the reason text on an entry it added. `tools/update_linkages_for_move.py`
-rewrites every link a move breaks, using a file's own `## Links to here` as the complete referrer
-list -- no repo search. The `link_doc_file` and `move_doc_file` skills wrap these for one-file-at-a-
+rewrites every link a move breaks, using the union of a file's `## Links to here` and its
+`## References` as the referrer list -- no repo search -- and refuses to run unless
+`check_links.sh` reports the file clean first. The `link_doc_file` and `move_doc_file` skills wrap these for one-file-at-a-
 time use. `check_links.sh` (bash, not the `check_links.py` this plan named) stays the read-only
 verifier underneath all of it.
 

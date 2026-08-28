@@ -141,7 +141,7 @@ variance, not only a better mean.
 **What the scoring still gets wrong.** The weighting had K=8 and never demoted it, across every run
 in both sweeps. A mechanism that priced improvement against cost correctly would have found this
 without an ablation. `K` is not yet a thing the solver can learn — that is
-[planning/family-generation.md](planning/family-generation.md) — and the pricing that would let it
+[planning/family-generation.md](planning/operator-selection/family-generation.md) — and the pricing that would let it
 is now built:
 [design/operator_selection/dynamic_penalty.md](design/operator_selection/dynamic_penalty.md).
 
@@ -350,15 +350,15 @@ experiment could only resolve effects above ~3%, so it does not rule out a small
 ## References
 
 - [METHODOLOGY.md](METHODOLOGY.md) -- the rules used to accept or reject every measurement here
-- [planning/family-generation.md](planning/family-generation.md) -- K is not yet learnable by the solver; this is the open plan for that
+- [planning/operator-selection/family-generation.md](planning/operator-selection/family-generation.md) -- K is not yet learnable by the solver; this is the open plan for that
 - [design/operator_selection/dynamic_penalty.md](design/operator_selection/dynamic_penalty.md) -- the pricing mechanism now built to let the solver learn K itself
 
 ## Links to here
 
 - [design/README.md](design/README.md) -- referenced in design folder index
 - [planning/README.md](planning/README.md)
-- [planning/asymmetric-distances.md](planning/asymmetric-distances.md)
-- [planning/inverted-view-refactor.md](planning/inverted-view-refactor.md)
-- [planning/joint-parameter-search.md](planning/joint-parameter-search.md)
+- [planning/problem-model/asymmetric-distances.md](planning/problem-model/asymmetric-distances.md)
+- [planning/core-refactors/inverted-view-refactor.md](planning/core-refactors/inverted-view-refactor.md)
+- [planning/experiments/joint-parameter-search.md](planning/experiments/joint-parameter-search.md)
 - [experiment_logs/README.md](experiment_logs/README.md) -- cites this file's reasoning to explain a withdrawn re-tune result
 - [METHODOLOGY.md](METHODOLOGY.md) -- states the rules these measurements are verified and accepted under

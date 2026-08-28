@@ -3,7 +3,7 @@
 **Status: not started. Infrastructure. Prerequisite for
 [route-distance-tracking](route-distance-tracking.md) and everything downstream of it.**
 
-Function-level touch list: [raw_delta_accounting_refactor_guide.txt](raw_delta_accounting_refactor_guide.txt).
+Function-level touch list: [raw_delta_accounting_refactor_guide.txt](../raw_delta_accounting_refactor_guide.txt).
 
 ## The problem
 
@@ -113,7 +113,7 @@ accounting structure itself is being replaced — there is no boundary to put a 
 on. Running old and new paths in parallel is also unavailable: core-model mutators do their
 accounting inline, so a parallel path means duplicating the mutators.
 
-Surface, from the [touch list](raw_delta_accounting_refactor_guide.txt):
+Surface, from the [touch list](../raw_delta_accounting_refactor_guide.txt):
 
 | layer | what happens | size |
 |---|---|---|
@@ -147,7 +147,7 @@ Run the full matrix, not the reduced default. A change to the accounting foundat
 None on its own. This is the gate for others.
 
 Sequence it **before** [route-distance-tracking](route-distance-tracking.md), which is in turn the
-blocker for [vehicle-time-limits](vehicle-time-limits.md). Doing distance tracking first would mean
+blocker for [vehicle-time-limits](../problem-model/vehicle-time-limits.md). Doing distance tracking first would mean
 adding a cached field at ~44 mutation sites by hand, then removing those updates again when the
 processor takes ownership.
 
@@ -158,12 +158,12 @@ concurrent large diffs there make "is the objective still identical?" unanswerab
 ## References
 
 - [route-distance-tracking.md](route-distance-tracking.md) -- sequenced after this; the full deltas make it cheap, but a new accounting field carries its own blast radius
-- [vehicle-time-limits.md](vehicle-time-limits.md) -- downstream of route-distance-tracking; its per-vehicle aggregates are what this infrastructure exists to make cheap
+- [planning/problem-model/vehicle-time-limits.md](../problem-model/vehicle-time-limits.md) -- downstream of route-distance-tracking; its per-vehicle aggregates are what this infrastructure exists to make cheap
 - [module-structure.md](module-structure.md) -- proposes the same static-class shape for the whole core model; deliberately NOT started by this plan
 - [inverted-view-refactor.md](inverted-view-refactor.md) -- also a broad core-model diff; must not run concurrently with this one
 
 ## Links to here
 
-- [README.md](README.md)
+- [planning/README.md](../README.md)
 - [route-distance-tracking.md](route-distance-tracking.md) -- downstream plan whose old per-site-update shape is replaced by this refactor's processor output
-- [retros/2026-08-27_raw_delta_accounting_plan.md](../retros/2026-08-27_raw_delta_accounting_plan.md) -- the session that produced this plan, including the design attribution
+- [retros/2026-08-27_raw_delta_accounting_plan.md](../../retros/2026-08-27_raw_delta_accounting_plan.md) -- the session that produced this plan, including the design attribution

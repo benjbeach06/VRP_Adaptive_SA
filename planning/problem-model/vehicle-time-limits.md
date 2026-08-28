@@ -1,7 +1,7 @@
 # Per-vehicle time limits
 
 **Status: not started. Blocked on
-[route-distance-tracking](route-distance-tracking.md).**
+[route-distance-tracking](../core-refactors/route-distance-tracking.md).**
 
 The single largest step this model could take toward resembling real delivery routing. Capacity is
 currently the only per-vehicle constraint, and in practice a working day runs out before a truck
@@ -25,7 +25,7 @@ The three inputs are all per-vehicle aggregates:
 
 | term | source |
 |---|---|
-| total distance | **[route-distance-tracking](route-distance-tracking.md)** — does not exist yet |
+| total distance | **[route-distance-tracking](../core-refactors/route-distance-tracking.md)** — does not exist yet |
 | customers served | sum of `num_customers` over the vehicle's routes |
 | routes run | length of the vehicle's route list |
 
@@ -81,13 +81,13 @@ Worth doing **before** publication if there is time, and it pairs naturally with
 
 ## References
 
-- [route-distance-tracking.md](route-distance-tracking.md)
+- [planning/core-refactors/route-distance-tracking.md](../core-refactors/route-distance-tracking.md)
 - [warm-start.md](warm-start.md)
 
 ## Links to here
 
-- [design/operator_selection/share_floors.md](../design/operator_selection/share_floors.md)
-- [README.md](README.md)
+- [design/operator_selection/share_floors.md](../../design/operator_selection/share_floors.md)
+- [planning/README.md](../README.md)
 - [asymmetric-distances.md](asymmetric-distances.md)
-- [route-distance-tracking.md](route-distance-tracking.md)
-- [raw-delta-accounting.md](raw-delta-accounting.md)
+- [planning/core-refactors/route-distance-tracking.md](../core-refactors/route-distance-tracking.md)
+- [planning/core-refactors/raw-delta-accounting.md](../core-refactors/raw-delta-accounting.md)

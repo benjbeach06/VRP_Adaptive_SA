@@ -118,5 +118,5 @@ Kept in place and commented rather than stashed -- a stash goes stale as the sur
 - [family_selection.md](family_selection.md) -- tree that cost-adjusted weights feed
 - [planning/implemented/README.md](../../planning/implemented/README.md)
 - [planning/implemented/forget-benefit-not-cost.md](../../planning/implemented/forget-benefit-not-cost.md)
-- [planning/operator-selection.md](../../planning/operator-selection.md)
+- [planning/operator-selection/operator-selection.md](../../planning/operator-selection/operator-selection.md)
 - [RESULTS.md](../../RESULTS.md) -- cites this as the pricing fix that would let K be learned rather than hand-swept

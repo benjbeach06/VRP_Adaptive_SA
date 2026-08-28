@@ -75,7 +75,7 @@ quarter. Full reasoning in
 **This is incomplete.** Weighting balances cost only after an operator has run. On a large instance
 with a small budget, one of these can consume the budget in a single proposal. Gating selection on
 the remaining budget is needed at some point -- see
-[planning/budget-gated-selection.md](../../planning/budget-gated-selection.md).
+[planning/budget-gated-selection.md](../../planning/operator-selection/budget-gated-selection.md).
 
 
 ## Known cost, accepted on purpose
@@ -89,7 +89,7 @@ infrastructure. `planning/route-distance-tracking.md` makes it O(1).
 ## References
 
 - [farthest_insertion_order.md](farthest_insertion_order.md)
-- [planning/budget-gated-selection.md](../../planning/budget-gated-selection.md)
+- [planning/operator-selection/budget-gated-selection.md](../../planning/operator-selection/budget-gated-selection.md)
 - [design/operator_selection/exploitation_governance.md](../operator_selection/exploitation_governance.md)
 - [reorder_operators.md](reorder_operators.md)
 

@@ -30,8 +30,8 @@ does not test it -- every arm ran under the scoring being replaced.
 
 ## The rework these mechanisms converged on
 
-[planning/implemented/scoring-rework.md](implemented/scoring-rework.md) and
-[planning/implemented/hierarchical-magnetism.md](implemented/hierarchical-magnetism.md) are both
+[planning/implemented/scoring-rework.md](../implemented/scoring-rework.md) and
+[planning/implemented/hierarchical-magnetism.md](../implemented/hierarchical-magnetism.md) are both
 built now. Between them they resolved mechanisms 2, 3 and 4 below, though not as originally
 planned -- see the implemented docs' own "what changed" notes. The entries here still record what
 each mechanism was FOR.
@@ -39,7 +39,7 @@ each mechanism was FOR.
 ## The formula every mechanism below acts on
 
 **Superseded.** The formula that shipped is
-[design/operator_selection/dynamic_penalty.md](../design/operator_selection/dynamic_penalty.md),
+[design/operator_selection/dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md),
 not the one this section used to quote. Read that doc instead of this one.
 
 **The table and the note below describe the PRE-REWORK formula.** Left as historical context for
@@ -64,7 +64,7 @@ exploration earn any weight at all -- and it is also why `record_accept` still c
 
 | mechanism | status |
 |---|---|
-| `exploit_only` -- restricts an optimizing operator to improving moves | implemented, see [design](../design/operator_selection/exploitation_governance.md) |
+| `exploit_only` -- restricts an optimizing operator to improving moves | implemented, see [design](../../design/operator_selection/exploitation_governance.md) |
 | `explore_reward` -- mechanism 2 below | implemented, ablation pending |
 | discount random operators once the search is cold | idea |
 
@@ -92,8 +92,8 @@ example of why these mechanisms cannot be tuned one at a time.
 **IMPLEMENTED, though not as its own deliberate step.** It fell out of the weight/penalty split:
 weight is a per-operator EMA that decays the benefit side every segment; the cost-ratio penalty
 carries no EMA and never decays. See
-[dynamic_penalty.md](../design/operator_selection/dynamic_penalty.md). Original idea:
-[forget-benefit-not-cost](implemented/forget-benefit-not-cost.md).
+[dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md). Original idea:
+[forget-benefit-not-cost](../implemented/forget-benefit-not-cost.md).
 
 ### 2. `explore_reward` -- implemented, ablation pending
 
@@ -102,7 +102,7 @@ the same problem mechanism 1 attacks directly.
 
 - **RISK:** no exploration at plateau. Expensive operators dominate the clock.
 - **BENEFIT:** simple, one global ablation and tuning factor.
-- Ablation in [ablations](ablations.md). No separate planning file.
+- Ablation in [ablations](../experiments/ablations.md). No separate planning file.
 
 ### 3. The improvement exponent should be an explicit solver parameter
 
@@ -115,7 +115,7 @@ share one tuning surface and cannot be searched independently.
 ### 4. Manual dividers on expensive deterministic operators -- implemented
 
 `exploit_selection_penalty_factor`, sized at solve start. See
-[design](../design/operator_selection/exploitation_governance.md).
+[design](../../design/operator_selection/exploitation_governance.md).
 
 - **RISK:** the values are non-adaptive magic numbers, or static functions of instance size. Each one
   adds an ablation factor.
@@ -128,14 +128,14 @@ share one tuning surface and cannot be searched independently.
 
 `EXACT_REORDER_MAX_SPAN` bounds an operator's cost so it never needs a discount. The rule already
 written down: **discount selection when cost scales with the problem; cap the scale when it does
-not.** See [design](../design/span_reorder/reorder_operators.md).
+not.** See [design](../../design/span_reorder/reorder_operators.md).
 
 Only available when cost has a bound that does not depend on instance size.
 
 ### 6. The family tree and its floors -- implemented
 
 Structural rather than tuned: descent bounds how much of the roster any one operator can capture,
-with no factor to set. See [design](../design/operator_selection/family_selection.md).
+with no factor to set. See [design](../../design/operator_selection/family_selection.md).
 
 ---
 
@@ -191,23 +191,23 @@ condition has to decide.
 
 ## References
 
-- [implemented/scoring-rework.md](implemented/scoring-rework.md) -- resolved mechanisms 2, 3 and 4
+- [planning/implemented/scoring-rework.md](../implemented/scoring-rework.md) -- resolved mechanisms 2, 3 and 4
   below, though not as originally planned.
-- [implemented/hierarchical-magnetism.md](implemented/hierarchical-magnetism.md) -- supplies the
+- [planning/implemented/hierarchical-magnetism.md](../implemented/hierarchical-magnetism.md) -- supplies the
   sibling-local machinery the rework reused.
-- [design/operator_selection/dynamic_penalty.md](../design/operator_selection/dynamic_penalty.md) --
+- [design/operator_selection/dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md) --
   the formula that shipped in place of the pre-rework one this file used to describe.
-- [design/operator_selection/exploitation_governance.md](../design/operator_selection/exploitation_governance.md)
+- [design/operator_selection/exploitation_governance.md](../../design/operator_selection/exploitation_governance.md)
   -- `exploit_only` and the manual dividers mechanisms 1 and 4 discuss.
-- [implemented/forget-benefit-not-cost.md](implemented/forget-benefit-not-cost.md) -- mechanism 1's
+- [planning/implemented/forget-benefit-not-cost.md](../implemented/forget-benefit-not-cost.md) -- mechanism 1's
   original idea, incorporated into the shipped weight/penalty split.
-- [ablations.md](ablations.md) -- measurements that would settle several mechanisms here, including
+- [planning/experiments/ablations.md](../experiments/ablations.md) -- measurements that would settle several mechanisms here, including
   `explore_reward`.
 - [repeated-work-detection.md](repeated-work-detection.md) -- route version stamps that would replace
   mechanism 4's wasted-work half.
-- [design/span_reorder/reorder_operators.md](../design/span_reorder/reorder_operators.md) --
+- [design/span_reorder/reorder_operators.md](../../design/span_reorder/reorder_operators.md) --
   `EXACT_REORDER_MAX_SPAN`, mechanism 5's cap.
-- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md)
+- [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md)
   -- the family tree and floors, mechanism 6.
 - [budget-gated-selection.md](budget-gated-selection.md) -- the current plan for section C.
 - [solver-progress-metric.md](solver-progress-metric.md) -- "how cold is the search," needed by
@@ -215,15 +215,15 @@ condition has to decide.
 
 ## Links to here
 
-- [design/operator_selection/exploitation_governance.md](../design/operator_selection/exploitation_governance.md)
+- [design/operator_selection/exploitation_governance.md](../../design/operator_selection/exploitation_governance.md)
   -- cites mechanism 4 as the open work it wants replaced by something adaptive.
-- [implemented/forget-benefit-not-cost.md](implemented/forget-benefit-not-cost.md) -- cites this as
+- [planning/implemented/forget-benefit-not-cost.md](../implemented/forget-benefit-not-cost.md) -- cites this as
   the hub for mechanisms 3 and 4.
-- [README.md](README.md) -- lists this as the HUB entry in the roadmap table.
-- [design/operator_selection/README.md](../design/operator_selection/README.md) -- design implementation of this plan
-- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md) -- design implementation of selection mechanism
-- [design/operator_selection/share_floors.md](../design/operator_selection/share_floors.md)
-- [ablations.md](ablations.md)
+- [planning/README.md](../README.md) -- lists this as the HUB entry in the roadmap table.
+- [design/operator_selection/README.md](../../design/operator_selection/README.md) -- design implementation of this plan
+- [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md) -- design implementation of selection mechanism
+- [design/operator_selection/share_floors.md](../../design/operator_selection/share_floors.md)
+- [planning/experiments/ablations.md](../experiments/ablations.md)
 - [family-generation.md](family-generation.md)
 - [repeated-work-detection.md](repeated-work-detection.md)
 - [solver-progress-metric.md](solver-progress-metric.md)

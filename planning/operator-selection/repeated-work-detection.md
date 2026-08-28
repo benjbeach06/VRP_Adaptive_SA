@@ -90,19 +90,19 @@ The measurement comes first. `tests/_harness.py` already detects mis-reported no
 here is the RATE of genuine repeats, which is a different number.
 
 - [operator-selection](operator-selection.md) -- mechanism 4 is what this replaces.
-- [route-distance-tracking](route-distance-tracking.md) -- another per-route quantity maintained
+- [route-distance-tracking](../core-refactors/route-distance-tracking.md) -- another per-route quantity maintained
   incrementally. Same shape of problem, and the same need for an oracle twin.
-- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md)
+- [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md)
   -- family weights depend on no-ops being reported correctly, so anything that changes what counts
   as a no-op touches allocation.
 
 ## References
 
-- [route-distance-tracking.md](route-distance-tracking.md)
+- [planning/core-refactors/route-distance-tracking.md](../core-refactors/route-distance-tracking.md)
 - [operator-selection.md](operator-selection.md)
-- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md)
+- [design/operator_selection/family_selection.md](../../design/operator_selection/family_selection.md)
 
 ## Links to here
 
-- [README.md](README.md)
+- [planning/README.md](../README.md)
 - [operator-selection.md](operator-selection.md)

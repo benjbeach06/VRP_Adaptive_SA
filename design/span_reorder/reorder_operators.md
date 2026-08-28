@@ -98,7 +98,7 @@ pays when the incumbent is poorly ordered.
 **It can cost more than it saves when pruning is already good, or when the span is small.** In both
 cases the O(K^2) pass approaches or exceeds the search it is meant to accelerate. Gating it needs a
 progress signal the solver does not expose -- adjust the activation rule per
-[planning/solver-progress-metric.md](../../planning/solver-progress-metric.md).
+[planning/solver-progress-metric.md](../../planning/operator-selection/solver-progress-metric.md).
 
 ### Choosing K
 
@@ -110,11 +110,11 @@ it does not.
 **`max_span` is per instance, not a module constant.** `EXACT_REORDER_MAX_SPAN` is the default an
 operator starts at, and each instance carries its own. That is what lets an ablation vary K without
 touching solver code, and it is what
-[planning/family-generation.md](../../planning/family-generation.md) needs to generate one operator
+[planning/family-generation.md](../../planning/operator-selection/family-generation.md) needs to generate one operator
 per K.
 
 **The value is measured.** See `RESULTS.md`, "Span size, on the FULL roster", and
-[planning/ablations.md](../../planning/ablations.md) for what remains open.
+[planning/ablations.md](../../planning/experiments/ablations.md) for what remains open.
 
 ## `choose_random_nonempty_route_ordered`
 
@@ -130,18 +130,18 @@ method so operators that do not need the guarantee do not pay for it.
 
 ## References
 
-- [planning/solver-progress-metric.md](../../planning/solver-progress-metric.md)
-- [planning/family-generation.md](../../planning/family-generation.md)
+- [planning/operator-selection/solver-progress-metric.md](../../planning/operator-selection/solver-progress-metric.md)
+- [planning/operator-selection/family-generation.md](../../planning/operator-selection/family-generation.md)
 - [design/operator_selection/family_selection.md](../operator_selection/family_selection.md)
 - [design/operator_selection/exploitation_governance.md](../operator_selection/exploitation_governance.md)
-- [planning/ablations.md](../../planning/ablations.md)
+- [planning/experiments/ablations.md](../../planning/experiments/ablations.md)
 
 ## Links to here
 
-- [planning/budget-gated-selection.md](../../planning/budget-gated-selection.md) -- applies budget gating to span reorder operator selection
+- [planning/operator-selection/budget-gated-selection.md](../../planning/operator-selection/budget-gated-selection.md) -- applies budget gating to span reorder operator selection
 - [design/README.md](../README.md) -- design folder index
 - [design/operator_selection/exploitation_governance.md](../operator_selection/exploitation_governance.md) -- governs the cost-penalty applied to these operators
 - [design/operator_selection/family_selection.md](../operator_selection/family_selection.md) -- inheritance defines family boundary
 - [farthest_insertion_ops.md](farthest_insertion_ops.md)
 - [farthest_insertion_order.md](farthest_insertion_order.md)
-- [planning/operator-selection.md](../../planning/operator-selection.md)
+- [planning/operator-selection/operator-selection.md](../../planning/operator-selection/operator-selection.md)

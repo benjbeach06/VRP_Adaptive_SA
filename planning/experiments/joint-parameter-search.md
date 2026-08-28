@@ -51,7 +51,7 @@ termination rule and leaves only one way to lower the noise floor -- more runs p
 (Iteration-count termination would also not deliver reproducibility on its own. Operator weighting
 is timing-based, so CPU load changes which operators are selected even at a fixed iteration count.
 Removing that too means `set_deterministic_weighting`, which forces mean cost to 1 and stops
-measuring the shipped solver. See Known Limitations in [RESULTS.md](../RESULTS.md).)
+measuring the shipped solver. See Known Limitations in [RESULTS.md](../../RESULTS.md).)
 
 So the order is: decide how many runs per configuration the noise floor demands, price that against
 the number of dimensions, and only then decide whether the search is affordable. There is no
@@ -65,8 +65,8 @@ without waiting longer. They are independent and they multiply.
 **1. Raise throughput.** Faster iterations mean shorter runs measure the same amount of search.
 Profiling found few easy wins: the time is spread across `[self]` attribute lookups in the operators'
 own frames rather than concentrated anywhere. That points at structural work --
-[module-structure](module-structure.md) turns `self` into a typed parameter, and
-[inverted-view-refactor](inverted-view-refactor.md) removes the lookup chain that feeds the hottest
+[module-structure](../core-refactors/module-structure.md) turns `self` into a typed parameter, and
+[inverted-view-refactor](../core-refactors/inverted-view-refactor.md) removes the lookup chain that feeds the hottest
 delta path.
 
 **2. Parallelize -- primarily on remote HPC or cloud, not locally.** Runs are independent: different
@@ -89,7 +89,7 @@ mix before trusting a parallel search.
 Steeper descent means plateaus arrive sooner, so a shorter run still exercises the reheat behavior
 that the schedule parameters exist to control. This one is different in kind: it does not just buy
 more runs, it makes each run need less time to measure the same thing.
-[heuristic-survey](heuristic-survey.md) is the cheap first step.
+[heuristic-survey](../search-methods/heuristic-survey.md) is the cheap first step.
 
 ## If it does get run
 
@@ -116,13 +116,13 @@ expect a different result.
 
 ## References
 
-- [heuristic-survey.md](heuristic-survey.md)
-- [inverted-view-refactor.md](inverted-view-refactor.md)
-- [module-structure.md](module-structure.md)
-- [RESULTS.md](../RESULTS.md)
+- [planning/search-methods/heuristic-survey.md](../search-methods/heuristic-survey.md)
+- [planning/core-refactors/inverted-view-refactor.md](../core-refactors/inverted-view-refactor.md)
+- [planning/core-refactors/module-structure.md](../core-refactors/module-structure.md)
+- [RESULTS.md](../../RESULTS.md)
 
 ## Links to here
 
-- [README.md](README.md)
-- [family-generation.md](family-generation.md)
-- [experiment_logs/tuning/2026-08-26_time_robust.md](../experiment_logs/tuning/2026-08-26_time_robust.md) -- empirical parameter-importance measurement consistent with this doc's reheat-equilibrium argument
+- [planning/README.md](../README.md)
+- [planning/operator-selection/family-generation.md](../operator-selection/family-generation.md)
+- [experiment_logs/tuning/2026-08-26_time_robust.md](../../experiment_logs/tuning/2026-08-26_time_robust.md) -- empirical parameter-importance measurement consistent with this doc's reheat-equilibrium argument

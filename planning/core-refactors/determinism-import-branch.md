@@ -73,5 +73,5 @@ Memory: `feedback-determinism-costs-nothing`.
 
 ## Links to here
 
-- [README.md](README.md)
-- [family-generation.md](family-generation.md)
+- [planning/README.md](../README.md)
+- [planning/operator-selection/family-generation.md](../operator-selection/family-generation.md)
