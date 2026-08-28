@@ -31,7 +31,8 @@ holds a reciprocal backlink in its own `## Links to here`. Two changes: stage 0 
 `check_links.sh <source>` and aborts on any report; stage 1 referrer set widened to
 `## Links to here` ∪ `## References`.
 
-**Updated `planning/implemented/doubly-linked-references.md`.** The doctrine said the blast radius
+**Updated [planning/implemented/doubly-linked-references.md](../planning/implemented/doubly-linked-references.md).**
+The doctrine said the blast radius
 of a file is its `## Links to here`. Corrected to the union with `## References`.
 
 **Numbers.** First run: 2 of 20 moves applied, then crash, then surgical rollback to HEAD. Second
@@ -121,6 +122,7 @@ the measurement." `doubly-linked-references.md` and `check_links.sh`'s header we
 
 ## References
 
+- [planning/implemented/doubly-linked-references.md](../planning/implemented/doubly-linked-references.md) -- the doctrine this session corrected: blast radius is Links to here union References
 
 ## Links to here
 

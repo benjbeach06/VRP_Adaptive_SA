@@ -214,6 +214,7 @@ A node with no children cannot report a MAX, which is why an emptied parent goes
 - [planning/operator-selection/family-generation.md](../../planning/operator-selection/family-generation.md)
 - [planning/operator-selection/operator-selection.md](../../planning/operator-selection/operator-selection.md)
 - [planning/operator-selection/repeated-work-detection.md](../../planning/operator-selection/repeated-work-detection.md)
+- [retros/2026-08-26_doc_linking_and_time_robust_tuning.md](../../retros/2026-08-26_doc_linking_and_time_robust_tuning.md) -- retro; the body_links() reversed-section bug was found on this file
 
 ## References
 

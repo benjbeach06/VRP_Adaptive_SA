@@ -15,18 +15,22 @@ planning/design/retros files, `RESULTS.md`, `METHODOLOGY.md`. Found and fixed tw
 process:
 
 - `find_heading` matched `## References`/`## Links to here` text anywhere, including inside a
-  fenced illustrative example in `planning/doubly-linked-references.md` itself — silently pointing
+  fenced illustrative example in
+  [planning/implemented/doubly-linked-references.md](../planning/implemented/doubly-linked-references.md)
+  itself — silently pointing
   reconciliation at the wrong span on that file. Fixed by requiring a blank line on both sides of a
   real heading, plus a fence-skip as a second guard.
 - `link_scan.py`'s `body_links()` assumed `## References` always precedes `## Links to here`.
-  False for `design/operator_selection/family_selection.md`, which had them reversed — its whole
+  False for [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md), which had them reversed — its whole
   backlink section was swept in as "body" and misread as new references. Fixed by masking both
   sections by span.
 
 Removed three now-redundant `## Related` headings (pre-rollout duplicates of the new
 `## References`). Extended scope to `experiment_logs/**` across all three scripts,
 `check_links.sh`, and the rule doc, on Benjamin's observation that experiment docs needed the same
-treatment. Moved `planning/doubly-linked-references.md` to `planning/implemented/` with the
+treatment. Moved the rule doc to
+[planning/implemented/doubly-linked-references.md](../planning/implemented/doubly-linked-references.md)
+with the
 divergence recorded; commit column left `TBD` pending this retro. `bash tools/check_links.sh`
 reports 0 problems across 50 files.
 
@@ -52,7 +56,7 @@ precisely ("only remove headings that aren't doing something different from Refe
 **Mine:** the `body_links()` reordering fix; the rollout across 41+ files; `tune_time_robust.py`,
 its smoke test, preflight, and the launch; the fANOVA/PED-ANOVA importance analysis; the two
 experiment summary docs; the `doubly-linked-references.md` move and divergence writeup; catching
-and correcting my own hand-edit of `## References` in `planning/implemented/README.md` before it
+and correcting my own hand-edit of `## References` in [planning/implemented/README.md](../planning/implemented/README.md) before it
 went unnoticed.
 
 ## What went well
@@ -75,7 +79,7 @@ fenced heading being matched, which grounded the discussion in what the code act
 `run_once` from `tune.py` directly instead of copying them — the two searches stay comparable and
 a bound change happens once.
 
-**Self-caught process violation.** Hand-edited `## References` in `planning/implemented/README.md`
+**Self-caught process violation.** Hand-edited `## References` in [planning/implemented/README.md](../planning/implemented/README.md)
 directly instead of letting `link_scan.py` detect it. Caught it before moving on, verified the
 content was correct anyway, and let the tool fill the one real gap (the backlink) rather than
 leaving the shortcut in place.
@@ -126,6 +130,9 @@ right now is nothing surfaced.
 
 ## References
 
+- [planning/implemented/doubly-linked-references.md](../planning/implemented/doubly-linked-references.md) -- the rule doc this session rolled out repo-wide and moved into implemented/
+- [design/operator_selection/family_selection.md](../design/operator_selection/family_selection.md) -- the body_links() reversed-section bug was found on this file
+- [planning/implemented/README.md](../planning/implemented/README.md) -- a hand-edit of its ## References was caught and corrected here
 
 ## Links to here
 

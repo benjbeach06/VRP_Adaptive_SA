@@ -26,3 +26,4 @@ Features planned and built. Each file records the plan as agreed, then how it di
 ## Links to here
 
 - [../README.md](../README.md) -- cites this folder in the "Implemented features" section.
+- [retros/2026-08-26_doc_linking_and_time_robust_tuning.md](../../retros/2026-08-26_doc_linking_and_time_robust_tuning.md) -- retro; notes the caught hand-edit of this file's ## References

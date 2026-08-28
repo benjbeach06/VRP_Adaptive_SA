@@ -184,3 +184,5 @@ was fixed by masking out both sections by span rather than by a single boundary 
 ## Links to here
 
 - [README.md](README.md) -- cites this feature in the implemented-features index
+- [retros/2026-08-26_doc_linking_and_time_robust_tuning.md](../../retros/2026-08-26_doc_linking_and_time_robust_tuning.md) -- retro for the rollout, the find_heading and body_links bugs, and the move here
+- [retros/2026-08-27_planning_reorg_and_move_script_fix.md](../../retros/2026-08-27_planning_reorg_and_move_script_fix.md) -- retro for the session that corrected this doc and fixed update_linkages_for_move.py
