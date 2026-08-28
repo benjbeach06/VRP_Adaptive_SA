@@ -171,7 +171,7 @@ Surface, from the [touch list](../raw_delta_accounting_refactor_guide.txt):
 | raw computation (`travel_delta_if_*`) | unchanged | ~26 methods |
 | accounting derivation | absorbed into the processor | ~29 methods |
 | per-mutation aggregation (`cost_deltas_*`) | returns raw instead of objective terms | 24 methods |
-| mutators | inline bookkeeping stripped | ~44 core-model call sites, plus 2 in `SimAnn_VRP_BLOperators.py` |
+| core-model mutators | inline bookkeeping stripped | ~44 call sites, all in the core model |
 | processor (new file) | resolves raw + state into terms and an accounting record | 1 class |
 | `OperatorBL` | prices: unpacks the dual return, calls the processor | 1 class, 11 subclasses |
 | `Operator` | applies: accounting top-up and undo | 1 class, 4 methods, no overrides |

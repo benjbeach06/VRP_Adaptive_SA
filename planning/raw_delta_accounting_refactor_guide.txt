@@ -200,14 +200,15 @@ the values they produce get carried into apply instead of being recomputed there
 44 accounting call sites inside SimAnn_VRP_Core_Model.py (2 more in
 tests/test_core_model_regressions.py). Verified by grep on the accounting primitives.
 
-CORRECTION [VERIFIED 2026-08-27]: they are NOT all in the core model. Two more live in the
-operator layer:
+CORRECTION [VERIFIED 2026-08-27], THEN RESOLVED [2026-08-28]: two accounting calls had leaked into
+the operator layer, both `link_depot_uses_except_customers(...)` inside
+ReassignCustomerToNewRouteBefore, needed only to make its throwaway route priceable.
 
-    SimAnn_VRP_BLOperators.py:378   link_depot_uses_except_customers(self.sln.depot_route_starts)
-    SimAnn_VRP_BLOperators.py:390   link_depot_uses_except_customers(sln.depot_route_starts)
+That operator was stale and known-broken (see TODO(known-bug) in SimAnn_VRP_Solver.py) and is now
+COMMENTED OUT, along with its two wrapper operators. Both leak sites went with it.
 
-Both are in ReassignCustomerToNewRouteBefore, on the route-creation path. Accounting has already
-leaked out of the core model once. Strip these in step 3 with the rest.
+So the original claim now holds again: ACCOUNTING LIVES ENTIRELY IN THE CORE MODEL. Nothing to strip
+outside it in step 3. Verify with a grep on the accounting primitives before relying on this.
 
 ALSO: depot_route_starts has a SECOND consumer that is not accounting at all.
 
@@ -447,8 +448,12 @@ accounting logic; they only pass up what their L3 aggregator now returns.
     changed" is the correct result: a bit-identical deterministic run against the pre-change
     commit in a worktree. Same seed, same trajectory, same final objective, same fingerprint.
     python tools/stress.py --budget-seconds 45  (and with --inject-delta)
-    .venv1/Scripts/python.exe -m pyright   -- 0 errors, 1 known warning at
-        SimAnn_VRP_Operators.py:713
+    .venv1/Scripts/python.exe -m pyright   -- 0 errors, 1 known pre-existing warning.
+        Identify it by RULE AND SYMBOL, never by line: reportIncompatibleMethodOverride on
+        `_operand_selection_impl`, where _ChainReassignmentBase's override returns `Chain | None`
+        against a base declaring `Chain`. (It sits at :727 as of 2026-08-28. An earlier note in
+        _session recorded ":713", which is the @abstractmethod decorator -- that was wrong, and is
+        why the rule name is the durable identifier.)
 
 
 -------------------------------------------------------------------------------

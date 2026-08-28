@@ -386,6 +386,12 @@ class SimAnnVRPSolver:
         # new-route case (it prices a "swap" from a VirtualDepot placeholder start, but a brand
         # new route never had a real old start to swap from). Needs a purpose-built Core delta
         # function rather than reusing cost_deltas_if_inserted_before. Disabled until fixed.
+        #
+        # 2026-08-28: the operator classes themselves are now commented out too, in
+        # SimAnn_VRP_BLOperators.py and SimAnn_VRP_Operators.py, rather than being converted for
+        # the raw-delta accounting refactor -- a conversion of code that does not work cannot be
+        # verified. Resurrecting it means re-implementing, not uncommenting; the header on the BL
+        # class records the design to build against.
         # self.operators.append(ReassignWorstCustomerOutOfRandomKToNewRoute(sln, explore_reward, k=10))
         # self.operators.append(RandomCustomerReassignmentToNewRoute(sln, explore_reward))
 

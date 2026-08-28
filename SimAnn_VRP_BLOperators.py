@@ -31,7 +31,8 @@ class MoveKind(Enum):
 type ReassignRouteBeforeOps           = tuple[Route, Route | LastRoute]
 # Trailing bool is the reverse decision, filled in by evaluate() -- see _evaluates_in_batch.
 type ReassignCustomerChainOps         = tuple[Route, Chain, Route, int, bool]
-type ReassignCustomerToNewRouteOps    = tuple[Route, int, Route | LastRoute, Depot]
+# DISABLED 2026-08-28 with ReassignCustomerToNewRouteBefore, its only consumer. See that class.
+# type ReassignCustomerToNewRouteOps    = tuple[Route, int, Route | LastRoute, Depot]
 # Trailing bools are the two reverse decisions, filled by evaluate() -- see _evaluates_in_batch.
 type SwapCustomerChainsOps            = tuple[Route, Chain, Route, Chain, bool, bool]
 type ReverseCustomerChainOps          = tuple[Route, Chain]
@@ -362,47 +363,68 @@ class ReassignCustomerChain(OperatorBL[ReassignCustomerChainOps]):
             src_route.insert_customer_chain(visits, rng.start)
 
 
-class ReassignCustomerToNewRouteBefore(OperatorBL[ReassignCustomerToNewRouteOps]):
-    def _evaluate_impl(self, operands: ReassignCustomerToNewRouteOps):
-        src_route, src_index, dest_route, end_depot = operands
-        if not 0 <= src_index < src_route.num_customers or dest_route.vehicle is None:
-            return None, MoveKind.INVALID
-
-        remove_delta = src_route.cost_deltas_if_customer_popped(src_index)
-
-        # Gotta coppy customer sans linkages: Otherwise adding it to the new src_route will overwrite its linkages
-        customer = copy.copy(src_route.path[src_index])
-        new_route = Route([customer], end_depot)
-        # New mid-solve route needs its depot-usage dict linked before pricing against it -
-        # otherwise depot-activation deltas below would touch an unlinked route.
-        new_route.link_depot_uses_except_customers(self.sln.depot_route_starts)
-
-        add_delta = new_route.cost_deltas_if_inserted_before(dest_route)
-
-        return add_delta + remove_delta, MoveKind.VALID
-
-    def _apply_impl(self, operands: ReassignCustomerToNewRouteOps) -> tuple[Route, int, Route]:
-        src_route, src_index, dest_route, end_depot = operands
-        sln = self.sln
-
-        customer = src_route.pop_customer_at(src_index)
-        new_route = Route([customer], end_depot)
-        new_route.link_depot_uses_except_customers(sln.depot_route_starts)
-        new_route.link_to_vehicle_before(dest_route)
-        sln.all_routes.add(new_route)
-        return src_route, src_index, new_route
-
-    def _revert_impl(self, move, revert_info):
-        sln = self.sln
-
-        src_route, src_index, new_route = revert_info
-        new_route.unlink_from_vehicle()
-
-        src_route.insert_customer(new_route.path[0], src_index)
-
-        # (Obsolete bug funny comment from when all_routes was an array):
-        # The new src_route was most recently appended on the end. So we pop it! Like a balloon
-        sln.all_routes.remove(new_route)
+# DISABLED 2026-08-28. Stale, and its pricing is known-wrong: see TODO(known-bug) in
+# SimAnn_VRP_Solver.py. It prices a "swap" from a VirtualDepot placeholder start, but a brand new
+# route never had a real old start to swap from. Both wrapper operators
+# (RandomCustomerReassignmentToNewRoute, ReassignWorstCustomerOutOfRandomKToNewRoute) were already
+# commented out of the roster, and nothing tests this class.
+#
+# COMMENTED OUT RATHER THAN CONVERTED for the raw-delta accounting refactor. Converting code that
+# does not work cannot be verified, and a broken conversion would be indistinguishable from a
+# conversion defect in the operators that do work. If this is resurrected it will be
+# re-implemented, not restored.
+#
+# THE DESIGN TO RE-IMPLEMENT AGAINST, decided 2026-08-28: evaluate builds the REAL route once and
+# hands it forward, so apply links that same object instead of constructing a second one. The two
+# constructions below are two objects for one logical route -- the object priced at _evaluate_impl
+# is discarded, and a different one is created in _apply_impl. That is why the raw delta record
+# cannot key a transition on the route this operator prices.
+#
+# It was also the ONLY site in the operator layer that called an accounting primitive
+# (link_depot_uses_except_customers, twice below, needed only to make the throwaway route
+# priceable). With it disabled, accounting lives entirely in the core model.
+#
+# class ReassignCustomerToNewRouteBefore(OperatorBL[ReassignCustomerToNewRouteOps]):
+#     def _evaluate_impl(self, operands: ReassignCustomerToNewRouteOps):
+#         src_route, src_index, dest_route, end_depot = operands
+#         if not 0 <= src_index < src_route.num_customers or dest_route.vehicle is None:
+#             return None, MoveKind.INVALID
+#
+#         remove_delta = src_route.cost_deltas_if_customer_popped(src_index)
+#
+#         # Gotta coppy customer sans linkages: Otherwise adding it to the new src_route will overwrite its linkages
+#         customer = copy.copy(src_route.path[src_index])
+#         new_route = Route([customer], end_depot)
+#         # New mid-solve route needs its depot-usage dict linked before pricing against it -
+#         # otherwise depot-activation deltas below would touch an unlinked route.
+#         new_route.link_depot_uses_except_customers(self.sln.depot_route_starts)
+#
+#         add_delta = new_route.cost_deltas_if_inserted_before(dest_route)
+#
+#         return add_delta + remove_delta, MoveKind.VALID
+#
+#     def _apply_impl(self, operands: ReassignCustomerToNewRouteOps) -> tuple[Route, int, Route]:
+#         src_route, src_index, dest_route, end_depot = operands
+#         sln = self.sln
+#
+#         customer = src_route.pop_customer_at(src_index)
+#         new_route = Route([customer], end_depot)
+#         new_route.link_depot_uses_except_customers(sln.depot_route_starts)
+#         new_route.link_to_vehicle_before(dest_route)
+#         sln.all_routes.add(new_route)
+#         return src_route, src_index, new_route
+#
+#     def _revert_impl(self, move, revert_info):
+#         sln = self.sln
+#
+#         src_route, src_index, new_route = revert_info
+#         new_route.unlink_from_vehicle()
+#
+#         src_route.insert_customer(new_route.path[0], src_index)
+#
+#         # (Obsolete bug funny comment from when all_routes was an array):
+#         # The new src_route was most recently appended on the end. So we pop it! Like a balloon
+#         sln.all_routes.remove(new_route)
 
 
 class SwapCustomerChains(OperatorBL[SwapCustomerChainsOps]):

@@ -881,57 +881,62 @@ class ReverseClosestPairTogether(BestOfCandidates[ReverseCustomerChainOps]):
     def __init__(self, sln: FullSolution, explore_reward: Num):
         super().__init__(sln, explore_reward, ReverseCustomerChain(sln), closest_pair_reversals, k=2)
 
-class RandomCustomerReassignmentToNewRoute(Operator[ReassignCustomerToNewRouteOps]):
-    def __init__(self, sln: FullSolution, explore_reward: Num):
-        super().__init__(sln, explore_reward, ReassignCustomerToNewRouteBefore(sln))
-
-    def _operand_selection_impl(self):
-        sln = self.sln
-
-        src_route = rand_choice(sln.all_routes)
-        dest_route = sln.choose_random_route_insertion_destination()
-        depot = rand_choice(sln.depots)
-
-        if len(src_route.path) == 0 or dest_route is None:
-            return src_route, 0, dest_route if dest_route is not None else src_route, depot
-
-        customer_id = rand_int_inclusive(0, len(src_route.path) - 1)
-        return src_route, customer_id, dest_route, depot
-
-class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator[ReassignCustomerToNewRouteOps]):
-    def __init__(self, sln: FullSolution, explore_reward: Num, k):
-        super().__init__(sln, explore_reward, ReassignCustomerToNewRouteBefore(sln))
-        self.k = k
-
-    # TODO(future-operator): this always relocates the worst customer to a brand-new route.
-    # Worth generalizing later to also try reassigning/swapping it into an existing route.
-    def _operand_selection_impl(self):
-        sln = self.sln
-
-        route, customer_id = None, -1
-        best_removal_improvement = -float('inf')
-
-        for _ in range(self.k):
-            src_route = rand_choice(sln.all_routes)
-            if len(src_route.path) == 0:
-                continue
-
-            src_customer_id = rand_int_inclusive(0, len(src_route.path) - 1)
-            # "Worst" = highest cost-delta-if-removed among sampled customers, i.e. the most
-            # problematic customer currently in place -- not accounting for where it'd go next.
-            removal_improvement = self.base_operator.improvement_from_deltas(
-                src_route.cost_deltas_if_customer_popped(src_customer_id))
-            if removal_improvement > best_removal_improvement:
-                best_removal_improvement = removal_improvement
-                route, customer_id = src_route, src_customer_id
-
-        dest_route = sln.choose_random_route_insertion_destination()
-        depot = rand_choice(sln.depots)
-
-        if route is None or dest_route is None:
-            return sln.all_routes[0], -1, sln.all_routes[0], depot
-
-        return route, customer_id, dest_route, depot
+# DISABLED 2026-08-28 with their shared base, ReassignCustomerToNewRouteBefore. Both were already
+# commented out of the roster in SimAnn_VRP_Solver.py; see the TODO(known-bug) there, and the
+# header on the BL class in SimAnn_VRP_BLOperators.py for the defect and the re-implementation
+# design.
+#
+# class RandomCustomerReassignmentToNewRoute(Operator[ReassignCustomerToNewRouteOps]):
+#     def __init__(self, sln: FullSolution, explore_reward: Num):
+#         super().__init__(sln, explore_reward, ReassignCustomerToNewRouteBefore(sln))
+#
+#     def _operand_selection_impl(self):
+#         sln = self.sln
+#
+#         src_route = rand_choice(sln.all_routes)
+#         dest_route = sln.choose_random_route_insertion_destination()
+#         depot = rand_choice(sln.depots)
+#
+#         if len(src_route.path) == 0 or dest_route is None:
+#             return src_route, 0, dest_route if dest_route is not None else src_route, depot
+#
+#         customer_id = rand_int_inclusive(0, len(src_route.path) - 1)
+#         return src_route, customer_id, dest_route, depot
+#
+# class ReassignWorstCustomerOutOfRandomKToNewRoute(Operator[ReassignCustomerToNewRouteOps]):
+#     def __init__(self, sln: FullSolution, explore_reward: Num, k):
+#         super().__init__(sln, explore_reward, ReassignCustomerToNewRouteBefore(sln))
+#         self.k = k
+#
+#     # TODO(future-operator): this always relocates the worst customer to a brand-new route.
+#     # Worth generalizing later to also try reassigning/swapping it into an existing route.
+#     def _operand_selection_impl(self):
+#         sln = self.sln
+#
+#         route, customer_id = None, -1
+#         best_removal_improvement = -float('inf')
+#
+#         for _ in range(self.k):
+#             src_route = rand_choice(sln.all_routes)
+#             if len(src_route.path) == 0:
+#                 continue
+#
+#             src_customer_id = rand_int_inclusive(0, len(src_route.path) - 1)
+#             # "Worst" = highest cost-delta-if-removed among sampled customers, i.e. the most
+#             # problematic customer currently in place -- not accounting for where it'd go next.
+#             removal_improvement = self.base_operator.improvement_from_deltas(
+#                 src_route.cost_deltas_if_customer_popped(src_customer_id))
+#             if removal_improvement > best_removal_improvement:
+#                 best_removal_improvement = removal_improvement
+#                 route, customer_id = src_route, src_customer_id
+#
+#         dest_route = sln.choose_random_route_insertion_destination()
+#         depot = rand_choice(sln.depots)
+#
+#         if route is None or dest_route is None:
+#             return sln.all_routes[0], -1, sln.all_routes[0], depot
+#
+#         return route, customer_id, dest_route, depot
 
 def geometric_chain_length(max_length: int) -> int:
     # +1e-50 guards rand_unit() == 0 (random() draws from [0, 1)); it is lost to double precision
