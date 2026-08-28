@@ -1,7 +1,8 @@
 RAW-DELTA ACCOUNTING REFACTOR -- TOUCH LIST
 ===========================================
 
-Companion to planning/raw-delta-accounting.md. TEMPORARY: delete once the refactor lands.
+Companion to planning/core-refactors/raw-delta-accounting.md. TEMPORARY: delete once the refactor
+lands.
 
 Purpose: a starting inventory so the implementing session does not re-derive the surface. Line
 numbers are from SimAnn_VRP_Core_Model.py at commit 43e8a6a and will drift.
@@ -9,6 +10,38 @@ numbers are from SimAnn_VRP_Core_Model.py at commit 43e8a6a and will drift.
 CONFIDENCE. Every name below was read from a signature or a grep hit. Almost no bodies were read.
 Treat the LAYER a function is placed in as the prediction, and verify at implementation. Sections
 marked [VERIFIED] were read directly.
+
+
+-------------------------------------------------------------------------------
+0-BIS. WHICH STEP TOUCHES WHAT
+-------------------------------------------------------------------------------
+
+The rollout is staged PER OBJECTIVE TERM. ObjectiveTermDelta is a 5-field NamedTuple that adds
+componentwise, so a term can be produced by the old path or the new one and the sum stays correct,
+as long as exactly one side produces each term. The L3 aggregators return both delta types side by
+side until the last term has moved.
+
+  step 0  plumbing        record + stub processor + dual return + the two missing oracles (8a-bis)
+                          NO BEHAVIOR CHANGE. Gate is a bit-identical deterministic run.
+  step 1  travel_distance identity derivation. Strips no cache. Proves the processor path.
+  step 2  total_route_overload   hinge over the load transition. Strips no cache.
+  step 3  depots_activated + vehicles_activated + vehicles_overloaded
+                          THE BULK. All cache stripping happens here. Sections 2, 3, 5 apply.
+  step 4  end-depot usage tracking   (question 1)
+  step 5  cleanup         delete the dual return and every now-dead L2 method. Measure perf here.
+
+WHY STEPS 1 AND 2 ARE FIRST: only 2 of the 5 terms have an incrementally-maintained DERIVED cache
+-- depots_activated (depot_route_starts) and vehicles_overloaded (num_routes_overloaded).
+travel_distance and total_route_overload are backed by RAW caches whose step functions are already
+evaluated at read time, so only the derivation moves.
+
+WHY STEP 3 IS INDIVISIBLE: its three terms all read the same two transitions -- route activity
+(is_active = assigned AND path_len > 0) and route-to-vehicle assignment. One mutation updates all
+three caches in a single body (unlink_from_vehicle ~2841, link_to_vehicle_before/_after
+~2890/~2909). Converting one alone means deriving those transitions in the processor and in the
+mutator at the same time: a temporary patch with no place in the final code.
+
+Commit per step while working, then SQUASH. The side-by-side state is scaffolding, not history.
 
 
 -------------------------------------------------------------------------------
@@ -164,8 +197,24 @@ the values they produce get carried into apply instead of being recomputed there
 5. L4 -- MUTATORS TO STRIP BOOKKEEPING FROM
 -------------------------------------------------------------------------------
 
-44 accounting call sites, ALL inside SimAnn_VRP_Core_Model.py (2 more in
+44 accounting call sites inside SimAnn_VRP_Core_Model.py (2 more in
 tests/test_core_model_regressions.py). Verified by grep on the accounting primitives.
+
+CORRECTION [VERIFIED 2026-08-27]: they are NOT all in the core model. Two more live in the
+operator layer:
+
+    SimAnn_VRP_BLOperators.py:378   link_depot_uses_except_customers(self.sln.depot_route_starts)
+    SimAnn_VRP_BLOperators.py:390   link_depot_uses_except_customers(sln.depot_route_starts)
+
+Both are in ReassignCustomerToNewRouteBefore, on the route-creation path. Accounting has already
+leaked out of the core model once. Strip these in step 3 with the rest.
+
+ALSO: depot_route_starts has a SECOND consumer that is not accounting at all.
+
+    SimAnn_VRP_Operators.py:976   `return sln.depot_route_starts[depot]`
+
+It is read as an O(1) operand-selection index ("routes starting at this depot"). It must remain a
+correct live index after the processor owns it -- it cannot become derive-on-demand.
 
 5a. The accounting primitives (the sink side)
     FirstRouteVisit.count_route_depot_use / uncount_route_depot_use    ~769 / ~772
@@ -221,10 +270,13 @@ tests/test_core_model_regressions.py). Verified by grep on the accounting primit
     Composition: distance adds; the four transition fields chain on the route key and DROP when
     init == final. One merge operator, not five.
 
-6b. The processor  (static, home undecided -- core_model for now is acceptable)
+6b. The processor  (static, in its OWN FILE: SimAnn_VRP_Accounting.py -- see question 3)
     raw record + FullSolution aggregate state -> (ObjectiveTermDelta, accounting record)
     Generalize depot_activation_delta_from_depot_num_usage_deltas (section 1) to all four
     aggregates: depot uses, vehicle active routes, route activity, vehicle overload.
+
+    STARTS AS A STUB in step 0: accepts the record, returns a zero ObjectiveTermDelta and an empty
+    accounting record. That is what lets the plumbing land with behavior unchanged.
 
 6c. ObjectiveTermDelta  ~169  [VERIFIED]
     Already a NamedTuple with __pos__, __neg__, __add__, __sub__, get_cost_delta. Extends
@@ -240,20 +292,53 @@ tests/test_core_model_regressions.py). Verified by grep on the accounting primit
 7. OPERATOR LAYER
 -------------------------------------------------------------------------------
 
-7a. OperatorBL  (SimAnn_VRP_BLOperators.py ~92)  [VERIFIED]
-    The base class already owns evaluate / apply / revert / commit with version gatekeeping. The
-    three bookkeeping calls go in the DRIVERS, once, covering all 11 subclasses:
+FOUR JOBS, FOUR HOMES, NO OVERLAP. This is the payoff of applying accounting in the wrapper:
 
-      evaluate ~160   raw record -> processor -> ObjectiveTermDelta; store both on the Move
-      apply    ~199   after _apply_impl, hand the accounting record to FullSolution
-      revert   ~229   after _revert_impl, hand back the inverse
+    core model      REPORTS RAW. Structural transitions only. No step function, ever.
+    processor       RESOLVES.    Raw record + current state -> ObjectiveTermDelta + accounting
+                                 record. A DEDICATED CLASS IN ITS OWN FILE. THE ONLY PLACE A STEP
+                                 FUNCTION IS EVALUATED. Reads state, writes nothing.
+    Operator        APPLIES.     Drives the two Move bits and calls the sink. Four methods.
+    FullSolution    IS THE SINK. The one call that writes a derived cache. Takes ALREADY-PROCESSED
+                                 numbers and DECIDES NOTHING.
 
-    Move (~47) is a frozen dataclass carrying `deltas: ObjectiveTermDelta`. It needs the raw
-    record too, or the accounting record. Only already_applied is mutable, via mark_applied().
-    Adding a field means extending the frozen dataclass, not mutating it later.
+    (OperatorBL sits between core model and processor: it passes raw deltas up and runs the
+    processor in evaluate. It no longer knows anything about accounting beyond carrying the
+    record.)
 
-    commit() ~252 has TODO(undo-stack) proposing to push (self, _revert_info, move.deltas). The
-    accounting record is what that stack actually wants. Worth resolving together.
+DO NOT COLLAPSE THE PROCESSOR INTO FullSolution. It is tempting -- FullSolution already holds the
+state the processor reads, so folding the resolution in looks like it saves a hop. It does not. It
+puts step-function evaluation back INSIDE THE CORE MODEL, which is the dual truth this whole
+refactor exists to remove, and it breaks the "core model must never import the processor" check by
+making the processor part of the core model.
+
+    THE CHECK: if the FullSolution apply call contains a threshold comparison or a zero-crossing
+    test, the processing has leaked into the sink. It should be doing arithmetic on numbers that
+    arrived already resolved.
+
+Nothing in the 34 Operator subclasses changes. Nothing in the 11 OperatorBL subclasses gains
+accounting logic; they only pass up what their L3 aggregator now returns.
+
+7a. OperatorBL -- PRICING ONLY  (SimAnn_VRP_BLOperators.py:92 `class OperatorBL[Ops: tuple](ABC):`)
+    The base class owns evaluate / apply / revert / commit with version gatekeeping. Exactly ONE
+    driver changes, and it covers all 11 subclasses:
+
+      evaluate  :160 `def evaluate(self, operands: Ops) -> Move[Ops]:`
+                     unpack the dual return, run the processor, store both records on the Move.
+
+    apply :199 and revert :229 do NOT touch accounting. See question 2 -- accounting is applied by
+    the Operator WRAPPER, because OperatorBL.apply is unreachable for a by-applying move.
+
+    Move :47 `class Move[Ops: tuple]:` is a frozen dataclass carrying `deltas: ObjectiveTermDelta`.
+    It gains the raw record, the accounting record, and the accounting_applied bit. Only
+    already_applied is mutable today, via mark_applied() :82; the new bit needs a parallel
+    mark_accounting_applied(). Adding a field means extending the frozen dataclass, never mutating
+    it later.
+
+    commit() :252 `TODO(undo-stack)` proposes pushing (self, _revert_info, move.deltas). LEAVE IT
+    OPEN. That feature wants the full information to revert a CHAIN of moves; the accounting record
+    is accounting-undo information only -- better than the bare ObjectiveTermDelta the TODO names,
+    but not what the undo stack needs. Out of scope for this refactor.
 
 7b. Subclass hooks: _evaluate_impl returns raw, not ObjectiveTermDelta
     11 subclasses, all in SimAnn_VRP_BLOperators.py:
@@ -267,9 +352,13 @@ tests/test_core_model_regressions.py). Verified by grep on the accounting primit
     (ReassignRouteBefore verified: guards, then cost_deltas_if_inserted_before). If that holds
     across all 11, the subclass diff is small and mechanical.
 
-    _evaluates_by_applying operators mutate during evaluate. They read objective_terms() before
-    and after rather than pricing predictively, so they need explicit handling: the processor
-    contract assumes an unmutated base.
+    NO SUBCLASS GAINS ACCOUNTING LOGIC. Each one only passes up what its L3 aggregator now returns.
+    That is the whole subclass diff.
+
+    CORRECTION [2026-08-27]: this section previously said by-applying operators "read
+    objective_terms() before and after rather than pricing predictively". NEITHER OF THEM DOES.
+    PermuteChain measures route.total_distance() route-locally; _SequentialCombineRoutes composes
+    L3 aggregators. See question 2.
 
     _SequentialCombineRoutes is the existing sequential case. It is the first real test of the
     composition rule and should be converted early, not last.
@@ -295,15 +384,47 @@ tests/test_core_model_regressions.py). Verified by grep on the accounting primit
         route activity and overload need no oracle today -- but if the refactor caches any of
         them, each needs an oracle twin added.
 
+8a-bis. TWO ORACLES ARE MISSING TODAY  [VERIFIED 2026-08-27]
+
+    all_problems() = visit_link_problems + depot_usage_problems + chain_problems + load_problems.
+    So depot_route_starts and route.current_load are checked. NOTHING checks:
+
+        vehicle.num_routes_overloaded     backs vehicles_overloaded
+        vehicle.num_customers             backs vehicles_activated
+        vehicle.num_routes_with_customers used by the activation predicates
+
+    This is a live gap, not a refactor consequence. objective_terms() READS these counters, and the
+    per-term contract assertion compares move.deltas against a diff of two objective_terms() calls.
+    So a corrupt counter makes both sides wrong by the same amount and the assertion PASSES. That
+    is exactly the silent-persistent corruption this refactor exists to prevent, currently
+    undetectable for two of the five terms.
+
+    Add both oracles in step 0, and PROVE EACH FIRES by deliberate corruption before any term
+    moves. Do not write the detector in the same step as the change it polices.
+
 8b. tests/_harness.py
     term_deltas()                 must gain any new ObjectiveTermDelta field (see 6c)
-    all_problems()                add oracles for any newly cached aggregate
+    all_problems()                add the two missing oracles above, plus any newly cached aggregate
     fingerprint()                 covers cost, chains, depot membership, all_routes order.
                                   Does NOT cover cached aggregate counters. Extend if any are added.
 
+8b-bis. RAW-RECORD ORACLE (new, step 0)
+    Read each route's load, customer count, start depot and vehicle before and after apply, and
+    assert the raw record's (initial, final) transitions match. Checks the record independently of
+    any objective term, so steps 1-4 only have to get the DERIVATION right, not the record.
+
 8c. tests/test_operator_contracts.py
-    assert_operator_contract already checks purity -> per-term delta -> oracles -> exact revert.
-    No structural change expected; it drives the real OperatorBL lifecycle via DirectOperator.
+    assert_operator_contract (def at :49) already checks purity -> per-term delta -> oracles ->
+    exact revert. It drives the real lifecycle through DirectOperator, which extends the Operator
+    WRAPPER -- so it goes through the same already_applied gates production does. That is the point
+    of DirectOperator and must not be worked around.
+
+    STRUCTURAL CHANGE IS NEEDED, contrary to an earlier draft of this line. Two gates must be
+    re-read against the two-bit model in question 2, and all_problems() must not run while a move
+    is applied but unaccounted:
+
+        tests/test_operator_contracts.py:61   `if not move.already_applied:`
+        tests/test_operator_contracts.py:221  `if not move.already_applied:`
 
 8d. tools/stress.py
     --inject-delta already corrupts a move's price and must produce findings. This is the
@@ -314,31 +435,135 @@ tests/test_core_model_regressions.py). Verified by grep on the accounting primit
     applying the N moves one at a time with reconstruction after each. Existing implicit coverage
     runs through _SequentialCombineRoutes and cost_deltas_for_removing_empty_routes.
 
-8f. Gate for the whole refactor
+8f. Gate for EACH STEP
     VRP_FULL_MATRIX=1 python -m unittest discover -s tests
-    NOTE: the README gives `discover -s tests`, but _session/context_carryover.md records that
-    discover does NOT work here and the six modules must be listed explicitly. Resolve which is
-    true before relying on either.
+    RESOLVED 2026-08-27: `discover -s tests` WORKS. Verified twice -- 55 tests, 1 skipped, ~18s.
+    The carryover note claiming it fails was wrong and has been purged. The README is right.
+
+    Full matrix on steps 0, 3 and 4 -- the three that can break silently. Reduced default is
+    enough for steps 1, 2 and 5.
+
+    Step 0 gets a STRONGER gate than the others, because it is the only step where "nothing
+    changed" is the correct result: a bit-identical deterministic run against the pre-change
+    commit in a worktree. Same seed, same trajectory, same final objective, same fingerprint.
     python tools/stress.py --budget-seconds 45  (and with --inject-delta)
     .venv1/Scripts/python.exe -m pyright   -- 0 errors, 1 known warning at
         SimAnn_VRP_Operators.py:713
 
 
 -------------------------------------------------------------------------------
-9. OPEN QUESTIONS FOR THE IMPLEMENTING SESSION
+9. THE FIVE OPEN QUESTIONS -- ALL ANSWERED 2026-08-27
 -------------------------------------------------------------------------------
 
-1. End-depot usage. Two L2 methods return end-depot usage deltas, but end-depot use is not an
-   objective term and the code that wrote it into depot_route_starts is dead-commented (~984).
-   Decide whether the raw schema carries end-depot transitions before writing it.
+1. END-DEPOT USAGE -> CARRY IT, AS STEP 4.
+   End-depot usage is fully derivative from route changes, so the processor can carry it once
+   route transitions are trusted. The work is emitting the explicit end-depot changeset.
+   Only three operators change an existing route's end depot:
 
-2. _evaluates_by_applying operators. They price by mutating, so there is no unmutated base for
-   the processor to read. Needs an explicit contract.
+       ChangeEndDepot   SimAnn_VRP_BLOperators.py:566  `route.set_end_depot(new_end_depot)`
+       SplitRoute       SimAnn_VRP_BLOperators.py:645  `new_route = route.split_at(split_index, intermediate_end_depot)`
+       CombineRoutes    SimAnn_VRP_BLOperators.py:808  `route1.set_end_depot(route2.end_depot)`
 
-3. Where the processor lives. Agreed as not a design question for this plan. core_model is fine
-   initially; module-structure.md is deliberately deferred and must not get dragged in.
+   Route creation and disposal are the fourth path: ReassignCustomerToNewRouteBefore builds a route
+   with an end depot at two sites, both reading exactly
+       SimAnn_VRP_BLOperators.py:375 and :389  `new_route = Route([customer], end_depot)`
 
-4. Does Move carry the raw record, the accounting record, or both? Interacts with
-   TODO(undo-stack) in commit().
+   Hard in the old shape, easy in this one. Sequenced LAST, after the extraction is vetted: it is
+   a new accounting field with its own blast radius.
 
-5. SimAnn_VRP_Operators.py (20 operators) is uninventoried. Confirm zero accounting there.
+   The dead block to revive or replace is in SimAnn_VRP_Core_Model.py, opening at :991
+   `# def count_route_in_depot(self):`. Its header comment explains why it is dead: it wrote
+   END-depot usage into depot_route_starts, which counts route STARTS only, so calling it corrupts
+   the map. Grep `TODO(end-depot-index)` -- it marks this block at :989 and two live sites in
+   SimAnn_VRP_Operators.py (:966, :1197) that keep an O(n) scan for want of the index.
+
+2. _evaluates_by_applying -> NOT A BLOCKER, BUT ONE REAL CAVEAT.  [VERIFIED]
+   Exactly two operators set it, and both are benign:
+
+       PermuteChain              SimAnn_VRP_BLOperators.py:518  `_evaluates_by_applying = True`
+                                       Measures route.total_distance() before/after, ROUTE-LOCAL.
+                                       Emits travel_distance only. Intra-route, so no load,
+                                       vehicle, depot or activity transition occurs and no derived
+                                       cache moves.
+       _SequentialCombineRoutes  SimAnn_VRP_BLOperators.py:743  `_evaluates_by_applying = True`
+                                       REFERENCE ONLY, not in the roster. Prices by composing L3
+                                       aggregators against the state each step left. It is the
+                                       composition test, not a special case. Convert it early.
+
+   NEITHER reads objective_terms(). Neither depends on a derived cache being current mid-evaluate.
+
+   THE CAVEAT, AND THE DESIGN THAT ANSWERS IT.
+
+   A by-applying operator mutates during _evaluate_impl, so the structure moves before any apply
+   call happens. Mutation and accounting are therefore SEPARATE EVENTS and need separate state.
+
+   CORRECTION [2026-08-27]: an earlier draft of this section said the record is applied in
+   OperatorBL.apply, and that stress.py and the solver already call apply() unconditionally so only
+   the contract test needed changing. BOTH CLAIMS WERE WRONG. Callers drive the Operator WRAPPER,
+   and the wrapper is what no-ops -- OperatorBL.apply is UNREACHABLE for a by-applying move through
+   every caller, production and tests alike. Do not reinstate that design.
+
+   THE DESIGN:
+     * The PROCESSOR (dedicated class, own file) resolves the raw record against current state into
+       an ObjectiveTermDelta plus an accounting record. Only it evaluates a step function.
+     * FullSolution owns ONE central call that applies that ALREADY-PROCESSED record, propagating
+       update handles down to its vehicles and routes. NOTHING ELSE WRITES A DERIVED CACHE, and
+       this call resolves nothing. See section 7 for why the two must not merge.
+     * Move carries TWO INDEPENDENT BITS:
+           already_applied      the structural mutation is in the solution
+           accounting_applied   the accounting record is in the caches
+       Move is a frozen dataclass whose only sanctioned mutation is mark_applied(). The second bit
+       needs a parallel mark_accounting_applied() -- one named method, trivial to grep, for the
+       same reason the first one exists.
+     * Operator.apply   : not applied      -> mutate, then apply accounting
+                          applied, unaccounted -> apply accounting only
+                          both             -> no-op
+     * Operator.revert  : undo accounting if accounted, THEN undo the move if applied.
+
+   THE ORACLE RULE THAT FOLLOWS: while a move is applied but NOT yet accounted, ACCOUNTING ORACLES
+   CANNOT RUN. The derived caches are legitimately behind the structure. That window exists only
+   for by-applying operators, between their evaluate() and the next apply().
+
+   CALL SITES -- four methods on ONE class, and NO subclass overrides any of them across all 34
+   operator classes (verified: only propose and evaluate_dispose_all are ever overridden). Each
+   gate below returns outright today, which is why the top-up has to happen here:
+
+       SimAnn_VRP_Operators.py:282  `if move.already_applied or not move.is_actionable:`  apply_for_acceptance
+       SimAnn_VRP_Operators.py:325  `if move.already_applied:`                            apply
+       SimAnn_VRP_Operators.py:336  `if not move.already_applied:`                        revert_and_reject
+       SimAnn_VRP_Operators.py:357  `if not move.already_applied:`                        revert
+
+   OperatorBL keeps PRICING only: it unpacks the dual return and calls the processor in evaluate.
+   OperatorBL.apply and .revert do NOT touch accounting.
+
+   TEST SITES that gate on the same flag and must be re-read against the two-bit model:
+
+       tests/test_operator_contracts.py:61   `if not move.already_applied:`   assert_operator_contract (def at :49)
+       tests/test_operator_contracts.py:221  `if not move.already_applied:`   second contract driver
+
+3. WHERE THE PROCESSOR LIVES -> ITS OWN FILE.
+   SimAnn_VRP_Accounting.py, matching the existing SimAnn_VRP_* naming.
+
+   RawDeltaRecord stays in SimAnn_VRP_Core_Model.py beside ObjectiveTermDelta. The core model
+   PRODUCES the record, so housing it with the processor would make the core model import the
+   processor and close a cycle.
+
+   Import direction: Core_Model <- Accounting <- BLOperators. This gives a structural completion
+   check for step 3: THE CORE MODEL MUST NEVER IMPORT THE PROCESSOR. If it has to, accounting is
+   still entangled with mutation.
+
+   One file, not a reorganization. module-structure.md stays deferred and must not get dragged in.
+
+4. WHAT Move CARRIES -> BOTH RECORDS.
+   Move gains the raw record and the accounting record. It is a frozen dataclass, so this is a
+   field addition, not a mutation.
+
+   TODO(undo-stack) in commit() (:252) STAYS OPEN AND OUT OF SCOPE. That feature wants the full
+   information needed to revert a CHAIN of moves. The accounting record is accounting-undo
+   information only -- better than the bare ObjectiveTermDelta the TODO names, but not by much,
+   and not what the undo stack actually needs. Do not resolve it here.
+
+5. SimAnn_VRP_Operators.py -> NO ACCOUNTING WRITES.  [VERIFIED]
+   Grep on every accounting primitive found zero writes across all 20 operators. One READ:
+   :976 returns sln.depot_route_starts[depot] as an operand-selection index. See the note in
+   section 5 -- that index must stay live and correct after the processor owns the map.
