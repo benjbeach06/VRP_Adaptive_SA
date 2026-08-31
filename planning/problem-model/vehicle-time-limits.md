@@ -90,4 +90,4 @@ Worth doing **before** publication if there is time, and it pairs naturally with
 - [planning/README.md](../README.md)
 - [asymmetric-distances.md](asymmetric-distances.md)
 - [planning/core-refactors/route-distance-tracking.md](../core-refactors/route-distance-tracking.md)
-- [planning/core-refactors/raw-delta-accounting.md](../core-refactors/raw-delta-accounting.md)
+- [planning/implemented/raw-delta-accounting.md](../implemented/raw-delta-accounting.md)

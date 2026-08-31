@@ -295,7 +295,9 @@ class NoOpDetection(SeededTestCase):
             if result[1] == BL.MoveKind.NOOP and is_identity:
                 # Pre-fix behaviour: price a no-op as a real move worth nothing.
                 self._revert_info = self._apply_impl(operands)
-                return BL.ObjectiveTermDelta(travel_distance=0.0), BL.MoveKind.VALID
+                # A zero record IS "worth nothing" now that the processor derives every term
+                # from it; there is no separate ObjectiveTermDelta to pair with it.
+                return BL.RawDeltaRecord(), BL.MoveKind.VALID
             return result
 
         ReorderShortSpanExactly._reorder = lambda self, points, left, right: list(range(len(points)))

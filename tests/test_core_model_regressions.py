@@ -25,81 +25,14 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from _harness import (
     Customer, CustomerVisit, Depot, DirectOperator, FullSolution, Route, Vehicle,
     SeededTestCase,
-    depot_usage_problems, make_depots, make_solution, route_of, term_deltas, visit_link_problems,
+    chain_problems, make_depots, make_solution, route_of, term_deltas,
+    vehicle_counter_problems, visit_link_problems,
 )
 from SimAnn_VRP_BLOperators import CombineRoutes, ReassignCustomerChain, SplitRoute
 
 
 def simple_customers(n=12, demand=1):
     return [Customer(i, (11 * i % 70, (17 * i) % 61 + 3), demand) for i in range(n)]
-
-
-class DepotUsageAccounting(SeededTestCase):
-    """depot_route_starts is incremental; it must match a fresh count at all times."""
-
-    def test_decrement_happens_even_when_depot_has_other_users(self):
-        """
-        Removing a route's last customer makes it inactive, so its start depot loses a use --
-        ALWAYS, not only when that depot drops to zero accepts.
-
-        The decrement used to be gated on will_deactivate_depot_if_removed(), which additionally
-        requires num_routes_starting_here == 1. That is the depot-ACTIVATION question, not the
-        usage-COUNT question, so with 2+ routes sharing a depot the decrement was skipped and
-        depot_route_starts drifted permanently upward.
-        """
-        depots, customers = make_depots(), simple_customers()
-        sln = make_solution(depots, customers, [100])
-        vehicle = sln.vehicles[0]
-        # Both routes start at depot 0 (the vehicle's initial depot, and route1's end depot).
-        route1 = route_of(customers, [0], depots[0])
-        sln.add_route_to_vehicle(route1, vehicle)
-        route2 = route_of(customers, [1], depots[0])
-        sln.add_route_to_vehicle(route2, vehicle)
-        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 2)
-
-        route1.pop_customer_at(0)
-
-        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 1,
-                         "depot usage did not decrement when another route still used the depot")
-        self.assertEqual(depot_usage_problems(sln), [])
-
-    def test_popping_only_customer_when_depot_has_one_user_does_not_raise(self):
-        """
-        The decrement path called uncount_route_in_depot(), which exists only on LastRouteVisit --
-        FirstRouteVisit spells it uncount_route_depot_use. It never fired only because the
-        (buggy) guard above was almost always false, so fixing that guard would otherwise have
-        converted a silent drift into an AttributeError.
-        """
-        depots, customers = make_depots(), simple_customers()
-        sln = make_solution(depots, customers, [100])
-        route = route_of(customers, [0], depots[1])
-        sln.add_route_to_vehicle(route, sln.vehicles[0])
-        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 1)
-
-        route.pop_customer_at(0)   # must not raise
-
-        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 0)
-        self.assertEqual(depot_usage_problems(sln), [])
-
-    def test_increment_for_empty_route_whose_start_and_end_differ(self):
-        """
-        A route "accepts" its depot when it is ACTIVE (has customers and is assigned). Insertion
-        used to gate the increment on is_trivial (empty AND start == end), so inserting into an
-        empty route whose start != end never incremented -- drift in the opposite direction.
-        """
-        depots, customers = make_depots(), simple_customers()
-        sln = make_solution(depots, customers, [100])
-        route = route_of(customers, [0], depots[1])          # starts at depot 0, ends at depot 1
-        sln.add_route_to_vehicle(route, sln.vehicles[0])
-        route.pop_customer_at(0)
-        self.assertTrue(route.is_empty and not route.is_trivial)
-        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 0)
-
-        route.insert_customer(CustomerVisit(customers[2]), 0)
-
-        self.assertEqual(len(sln.depot_route_starts[depots[0]]), 1,
-                         "insertion into an empty non-cycle route did not re-count its depot")
-        self.assertEqual(depot_usage_problems(sln), [])
 
 
 class RouteLinkage(SeededTestCase):
@@ -117,8 +50,10 @@ class RouteLinkage(SeededTestCase):
                 vehicle = sln.vehicles[0]
                 route1 = route_of(customers, [0], depots[1])
                 sln.add_route_to_vehicle(route1, vehicle)
+                sln.initialize_accounting()
                 route2 = route_of(customers, range(6, 6 + absorbed_count), depots[2])
                 sln.add_route_to_vehicle(route2, vehicle)
+                sln.initialize_accounting()
 
                 route1.combine_with(route2)
 
@@ -141,8 +76,10 @@ class RouteLinkage(SeededTestCase):
         vehicle = sln.vehicles[0]
         route1 = route_of(customers, [0, 1], depots[1])
         sln.add_route_to_vehicle(route1, vehicle)
+        sln.initialize_accounting()
         route2 = route_of(customers, [2, 3], depots[1])
         sln.add_route_to_vehicle(route2, vehicle)
+        sln.initialize_accounting()
         self.assertIs(vehicle.last_route.start_depot, route2.end_depot)
 
         route2.set_end_depot(depots[2])
@@ -168,8 +105,10 @@ class DeltaArithmetic(SeededTestCase):
         vehicle = sln.vehicles[0]
         route1 = route_of(customers, [0, 1], depots[1])
         sln.add_route_to_vehicle(route1, vehicle)
+        sln.initialize_accounting()
         route2 = route_of(customers, [6, 7], depots[1])
         sln.add_route_to_vehicle(route2, vehicle)
+        sln.initialize_accounting()
         self.assertIs(route1.next_route, route2)
 
         before = sln.objective_terms()
@@ -180,6 +119,10 @@ class DeltaArithmetic(SeededTestCase):
                                   msg="adjacent combine priced its travel delta as exactly zero")
 
         operator.apply(move)
+        # OperatorBL.apply performs the MUTATION only. Accounting is the Operator wrapper's
+        # job, and these tests drive the BL layer directly, so the record has to be applied
+        # here or objective_terms() below reads caches the move never reached.
+        sln.apply_accounting(move.accounting)
         actual = term_deltas(before, sln.objective_terms())
         for name, predicted, measured in zip(type(actual)._fields, move.deltas, actual):
             self.assertAlmostEqual(predicted, measured, places=9, msg=f"term {name} mismatched")
@@ -197,6 +140,7 @@ class DeltaArithmetic(SeededTestCase):
         sln = make_solution(depots, customers, [10])   # capacity == load of two customers
         route = route_of(customers, [0, 1], depots[0])
         sln.add_route_to_vehicle(route, sln.vehicles[0])
+        sln.initialize_accounting()
         self.assertEqual(route.current_load, sln.vehicles[0].capacity)
 
         before = sln.objective_terms()
@@ -224,12 +168,16 @@ class DeltaArithmetic(SeededTestCase):
                 sln = make_solution(depots, customers, [100])
                 route = route_of(customers, [0, 1, 2, 3], depots[0])
                 sln.add_route_to_vehicle(route, sln.vehicles[0])
+                sln.initialize_accounting()
 
                 before = sln.objective_terms()
                 operator = SplitRoute(sln)
-                move = operator.evaluate((route, split_index, depots[1]))
+                # Trailing operand is the destination for the second half; see SplitRouteOps.
+                move = operator.evaluate((route, split_index, depots[1],
+                                          Route([], route.end_depot)))
                 self.assertTrue(move.is_actionable, "valid split reported as non-actionable")
                 operator.apply(move)
+                sln.apply_accounting(move.accounting)
 
                 self.assertEqual(route.path_len, split_index)
                 actual = term_deltas(before, sln.objective_terms())
@@ -248,8 +196,10 @@ class DeltaArithmetic(SeededTestCase):
         vehicle = sln.vehicles[0]
         route1 = route_of(customers, [0], depots[0])
         sln.add_route_to_vehicle(route1, vehicle)
+        sln.initialize_accounting()
         route2 = route_of(customers, [6], depots[2])
         sln.add_route_to_vehicle(route2, vehicle)
+        sln.initialize_accounting()
         original_end_depot = route1.end_depot
 
         operator = DirectOperator(sln, CombineRoutes(sln))
@@ -274,6 +224,7 @@ class SolutionStateIsolation(SeededTestCase):
         first = make_solution(depots, customers, [100])
         route = route_of(customers, [0], depots[0])
         first.add_route_to_vehicle(route, first.vehicles[0])
+        first.initialize_accounting()
 
         second = FullSolution()
 
@@ -290,8 +241,10 @@ class SolutionStateIsolation(SeededTestCase):
         sln = make_solution(depots, customers, [100])
         vehicle = sln.vehicles[0]
         sln.add_route_to_vehicle(route_of(customers, [0, 1], depots[1]), vehicle)
+        sln.initialize_accounting()
         live_route = route_of(customers, [2, 3], depots[0])
         sln.add_route_to_vehicle(live_route, vehicle)
+        sln.initialize_accounting()
 
         original_cost = sln.solution_cost()
         snapshot = copy.copy(sln)
@@ -305,6 +258,92 @@ class SolutionStateIsolation(SeededTestCase):
         self.assertAlmostEqual(snapshot.solution_cost(), original_cost, places=9,
                                msg="snapshot changed when the live solution was mutated")
         self.assertNotAlmostEqual(sln.solution_cost(), original_cost, places=9)
+
+
+class VehicleCounterOracle(SeededTestCase):
+    """
+    The per-vehicle counters had NO oracle until 2026-08-28. This proves the new one FIRES.
+
+    Silence is not evidence. An oracle that computes nothing is silent too, and this gap was
+    invisible by construction: objective_terms() READS num_customers and num_routes_overloaded,
+    and every per-term contract assertion compares move.deltas against a diff of two
+    objective_terms() calls. A corrupt counter therefore makes the prediction and the measurement
+    wrong by the SAME amount, and the assertion passes. Two of the five objective terms --
+    vehicles_activated and vehicles_overloaded -- rest entirely on these counters.
+
+    So the corruption test below is not ceremony. It is the only thing standing between that
+    failure mode and a green suite.
+    """
+
+    def _two_route_vehicle(self, capacity=100):
+        depots, customers = make_depots(), simple_customers()
+        sln = make_solution(depots, customers, [capacity])
+        vehicle = sln.vehicles[0]
+        sln.add_route_to_vehicle(route_of(customers, [0, 1], depots[0]), vehicle)
+        sln.add_route_to_vehicle(route_of(customers, [2], depots[0]), vehicle)
+        sln.initialize_accounting()
+        return sln, vehicle
+
+    def test_the_oracle_is_silent_on_a_correct_solution(self):
+        sln, vehicle = self._two_route_vehicle()
+        self.assertEqual(vehicle_counter_problems(sln), [])
+        # Asserted explicitly so a truth function that returns 0 for everything cannot pass by
+        # agreeing with a counter that is also 0.
+        self.assertEqual(vehicle.num_customers, 3)
+        self.assertEqual(vehicle.num_routes_with_customers, 2)
+
+    def test_the_oracle_fires_on_each_corrupted_counter(self):
+        for name in ("num_customers", "num_routes_with_customers", "num_routes_overloaded"):
+            with self.subTest(counter=name):
+                sln, vehicle = self._two_route_vehicle()
+                self.assertEqual(vehicle_counter_problems(sln), [])
+
+                setattr(vehicle, name, getattr(vehicle, name) + 7)
+
+                problems = vehicle_counter_problems(sln)
+                self.assertTrue(
+                    any(name in problem for problem in problems),
+                    f"corrupting {name} produced no finding from the oracle: {problems}")
+
+    def test_the_overload_counter_truth_follows_a_real_overload(self):
+        """Exercises the truth side, not just the disagreement side.
+
+        Capacity 1 with unit demands: the two-customer route is genuinely overloaded and the
+        one-customer route is not, so the recomputed count is 1 rather than trivially 0.
+        """
+        sln, vehicle = self._two_route_vehicle(capacity=1)
+        self.assertEqual(vehicle.num_routes_overloaded, 1)
+        self.assertEqual(vehicle_counter_problems(sln), [])
+
+
+class ChainMembershipOracle(SeededTestCase):
+    """
+    chain_problems must catch vehicle.routes drifting from the route chain.
+
+    Both structures are maintained by link_to_vehicle_*/unlink_from_vehicle, and nothing compared
+    them until 2026-08-28. A drift here is nastier than a wrong number: vehicle.routes is what
+    rand_choice draws operands from, while the chain is what the objective is computed over. So a
+    disagreement makes the solver propose against routes the objective cannot see, or ignore
+    routes it is paying for, and neither shows up as a cost mismatch.
+    """
+
+    def test_it_fires_when_the_routeset_loses_a_chained_route(self):
+        depots, customers = make_depots(), simple_customers()
+        sln = make_solution(depots, customers, [100])
+        vehicle = sln.vehicles[0]
+        route = route_of(customers, [0, 1], depots[0])
+        sln.add_route_to_vehicle(route, vehicle)
+        sln.add_route_to_vehicle(route_of(customers, [2], depots[0]), vehicle)
+        sln.initialize_accounting()
+        self.assertEqual(chain_problems(sln), [])
+
+        # Drop it from the RouteSet only. The chain still links it, so the two now disagree.
+        vehicle.routes.remove(route)
+
+        problems = chain_problems(sln)
+        self.assertTrue(
+            any("vehicle.routes" in problem for problem in problems),
+            f"RouteSet drift from the chain produced no finding: {problems}")
 
 
 if __name__ == "__main__":

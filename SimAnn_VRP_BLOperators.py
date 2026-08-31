@@ -1,13 +1,14 @@
-from typing import Sequence
-
 from SimAnn_VRP_Core_Model import *
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, ClassVar, cast
 import numpy as np
 
 from SimAnn_VRP_Core_Model import Vehicle, Route, LastRoute, Depot, FirstRoute
+# Core_Model <- Accounting <- BLOperators, and never the other way. The core model importing the
+# processor would mean accounting is still entangled with mutation.
+from SimAnn_VRP_Accounting import AccountingProcessor
 
 
 class MoveKind(Enum):
@@ -39,7 +40,11 @@ type ReverseCustomerChainOps          = tuple[Route, Chain]
 type PermuteChainOps                  = tuple[Route, Chain, Sequence[int]]
 type ChangeEndDepotOps                = tuple[Route, Depot]
 type DisposeOfEmptyRoutesOps          = tuple[RouteSet]
-type SplitRouteOps                    = tuple[Route, int, Depot]
+# Trailing Route is the DESTINATION for the second half -- an empty, unassigned route built
+# by operand selection. Splitting creates a route, so the raw delta record needs an object
+# to key that route's (initial, final) transitions on at PRICING time, before split_at runs.
+# split_at already accepts it (it is how CombineRoutes reverts identity-preservingly).
+type SplitRouteOps                    = tuple[Route, int, Depot, Route]
 type CombineRoutesOps                 = tuple[Route, Route]
 #endregion
 
@@ -57,7 +62,12 @@ class Move[Ops: tuple]:
     evaluate() -> apply() -> revert(): a Move[CombineRoutesOps] can only be handed back to an
     operator that consumes CombineRoutesOps.
 
-    MUTABILITY: exactly one field, already_applied, is mutable, and only via mark_applied().
+    MUTABILITY: exactly two fields are mutable, already_applied and accounting_applied, each only
+    via its own named setter. They are SEPARATE because mutation and accounting are separate
+    events: an _evaluates_by_applying operator mutates during evaluate() and leaves the accounting
+    for the next apply(), so the structure can be in the solution while the derived caches are not
+    yet. While that is true, accounting oracles cannot run -- the caches are legitimately behind.
+
     Everything else is frozen -- the priced result of evaluate() must never drift after the fact.
     Mutating in place rather than rebuilding is load-bearing, not a convenience: OperatorBL
     gatekeeps on `self._applied is move`, so producing a new object to change the flag silently
@@ -76,19 +86,41 @@ class Move[Ops: tuple]:
     # _evaluates_by_applying operator mutated during evaluate(), or because apply() ran since.
     already_applied: bool = False
 
+    # What the core model reported about the mutation, and what the processor resolved it into.
+    # default_factory, not a plain default: RawDeltaRecord holds a dict, so a shared default would
+    # let one move's routes leak into every other move built without one.
+    raw_deltas: RawDeltaRecord = RawDeltaRecord()
+    accounting: AccountingRecord = AccountingRecord()
+    # True iff the derived caches reflect this move. INDEPENDENT of already_applied: a move that
+    # priced by mutating is applied but unaccounted until the next apply() tops it up.
+    accounting_applied: bool = False
+
     @property
     def is_actionable(self) -> bool:
         return self.kind is MoveKind.VALID
 
     def mark_applied(self, applied: bool) -> None:
         """
-        The ONLY sanctioned mutation on a Move; every other field raises FrozenInstanceError.
+        One of exactly two sanctioned mutations on a Move; every other field raises
+        FrozenInstanceError.
 
         object.__setattr__ is the standard frozen-dataclass escape hatch. It's deliberate and
         deliberately narrow: one named method, trivial to grep, so any future divergence between
         a move's own state and OperatorBL._applied has exactly one place to have come from.
         """
         object.__setattr__(self, "already_applied", applied)
+
+    def mark_accounting_applied(self, applied: bool) -> None:
+        """
+        The second sanctioned mutation, for the same reason and with the same narrowness.
+
+        Separate from mark_applied because the two states genuinely come apart. An
+        _evaluates_by_applying operator returns from evaluate() with the structure already in the
+        solution but the derived caches untouched, and Operator.apply tops the accounting up
+        afterwards. Folding them into one flag would make that window unrepresentable, and the
+        window is where accounting oracles must not run.
+        """
+        object.__setattr__(self, "accounting_applied", applied)
 
 class OperatorBL[Ops: tuple](ABC):
     """
@@ -137,7 +169,7 @@ class OperatorBL[Ops: tuple](ABC):
 
     # ---------------------------------------------------------------- hooks
     @abstractmethod
-    def _evaluate_impl(self, operands: Ops) -> tuple[ObjectiveTermDelta | None, MoveKind, *tuple[Any, ...]]:
+    def _evaluate_impl(self, operands: Ops) -> tuple[RawDeltaRecord | None, MoveKind, *tuple[Any, ...]]:
         """PURE (unless _evaluates_by_applying). See class docstring for the return contract."""
         pass
 
@@ -161,7 +193,7 @@ class OperatorBL[Ops: tuple](ABC):
     def evaluate(self, operands: Ops) -> Move[Ops]:
         assert not self.is_applied, f"{type(self).__name__}.evaluate() called with a move still applied."
 
-        deltas, kind, *decisions = self._evaluate_impl(operands)
+        priced, kind, *decisions = self._evaluate_impl(operands)
         applied_yet = self._evaluates_by_applying
 
         if self._evaluates_in_batch:
@@ -185,11 +217,16 @@ class OperatorBL[Ops: tuple](ABC):
         if kind is MoveKind.NOOP:
             return Move(MoveKind.NOOP, operands)
 
-        assert isinstance(deltas, ObjectiveTermDelta), (
-            f"{type(self).__name__}._evaluate_impl returned kind=VALID with deltas={deltas!r}.")
+        raw = priced
+        assert isinstance(raw, RawDeltaRecord), (
+            f"{type(self).__name__}._evaluate_impl returned kind=VALID with raw={raw!r}.")
+
+        processed, accounting = AccountingProcessor.process(raw, self.sln)
+        deltas = processed
 
         move = Move(MoveKind.VALID, operands, deltas, self.improvement_from_deltas(deltas),
-                    self.sln.version, already_applied=applied_yet)
+                    self.sln.version, already_applied=applied_yet,
+                    raw_deltas=raw, accounting=accounting)
         if applied_yet:
             # Order matters: the Move records the PRE-apply version, then the solution advances.
             # revert() asserts eval_version == sln.version - 1 against exactly this.
@@ -335,7 +372,10 @@ class ReassignCustomerChain(OperatorBL[ReassignCustomerChainOps]):
 
         not_reversed, reversed_ = src_route.cost_deltas_if_customer_chain_moved(rng, dest_route, dest_idx)
 
-        # Only travel_distance differs, so this comparison decides the whole orientation.
+        # Only travel_distance differs, so this comparison decides the whole orientation. Each
+        # orientation arrives as a (deltas, raw record) pair; index 1 is the RAW RECORD, which is
+        # where distance lives since step 1 moved that term to the processor. Index 0 reads back
+        # 0 for both orientations, which silently pins this to `not_reversed` forever.
         reverse = reversed_.travel_distance < not_reversed.travel_distance
         return (reversed_ if reverse else not_reversed), MoveKind.VALID, reverse
 
@@ -458,6 +498,9 @@ class SwapCustomerChains(OperatorBL[SwapCustomerChainsOps]):
         # there the arc between them depends on both. argmin is correct either way.
         options = ((deltas[0], False, False), (deltas[1], True, False),
                    (deltas[2], False, True), (deltas[3], True, True))
+        # option[0] is the (deltas, raw record) pair; option[0][1] is the RAW RECORD, which is
+        # where distance lives since step 1. Ranking on option[0][0] reads 0 for all four and
+        # collapses the argmin to "always the first option".
         best, reverse1, reverse2 = min(options, key=lambda option: option[0].travel_distance)
         return best, MoveKind.VALID, reverse1, reverse2
 
@@ -557,7 +600,12 @@ class PermuteChain(OperatorBL[PermuteChainOps]):
         before = route.total_distance()
         self._revert_info = self._apply_impl(operands)
         after = route.total_distance()
-        return ObjectiveTermDelta(travel_distance=after - before), MoveKind.VALID
+        # Intra-route permutation: distance only, same as the L3 intra-route aggregators. Nothing
+        # structural moves, so the record carries no route entry.
+        # The record carries the distance and the ObjectiveTermDelta does not: since step 1 the
+        # processor derives travel_distance from the record, and setting it here too doubles it.
+        travel_delta = after - before
+        return RawDeltaRecord(travel_distance=travel_delta), MoveKind.VALID
 
     def _apply_impl(self, operands: PermuteChainOps) -> tuple[Route, int, Sequence[int]]:
         route, chain, permutation = operands
@@ -615,7 +663,7 @@ class DisposeOfEmptyRoutesBL(OperatorBL[DisposeOfEmptyRoutesOps]):
 
         if self.dispose_only_trivial_routes:
             # trivial routes are cost-neutral by definition
-            return ObjectiveTermDelta(), MoveKind.VALID
+            return RawDeltaRecord(), MoveKind.VALID
 
         return self.sln.cost_deltas_for_removing_empty_routes(routes), MoveKind.VALID
 
@@ -651,8 +699,11 @@ class SplitRoute(OperatorBL[SplitRouteOps]):
     # a priced "insert an empty route into this vehicle" primitive, which does not exist yet.
     # cost_deltas_for_split_at is cheap (SplitRandomRoute proposes in ~9us) and correct, so it
     # stays until that primitive exists. CombineRoutes below is the decomposed one.
+    #
+    # The created route arrives as the trailing operand instead. That is enough for the raw
+    # record -- which only needs the OBJECT to key transitions on -- without a priced primitive.
     def _evaluate_impl(self, operands: SplitRouteOps):
-        route, split_index, intermediate_end_depot = operands
+        route, split_index, intermediate_end_depot, new_route = operands
         # To be splittable: src_route must have multiple customers (each customer to a different src_route).
         #   Index out of bounds: invalid. Index = 0 or split_index == path length => there is no customer to split.
         num_customers = route.num_customers
@@ -660,11 +711,13 @@ class SplitRoute(OperatorBL[SplitRouteOps]):
         if num_customers <= 1 or 0 == split_index or split_index >= num_customers:
             return None, MoveKind.INVALID
 
-        return route.cost_deltas_for_split_at(split_index, intermediate_end_depot), MoveKind.VALID
+        return route.cost_deltas_for_split_at(split_index, intermediate_end_depot, new_route), MoveKind.VALID
 
     def _apply_impl(self, operands: SplitRouteOps) -> tuple[Route, Route]:
-        route, split_index, intermediate_end_depot = operands
-        new_route = route.split_at(split_index, intermediate_end_depot)
+        route, split_index, intermediate_end_depot, new_route = operands
+        # Same object the pricing keyed its record on -- that is the whole point of threading it
+        # through the operands rather than letting split_at construct one.
+        route.split_at(split_index, intermediate_end_depot, new_route)
         self.sln.all_routes.add(new_route)
         return route, new_route
 
@@ -794,7 +847,8 @@ class _SequentialCombineRoutes(OperatorBL[CombineRoutesOps]):
 
         insert_visit = route1.get_visit_at(dest_idx)
         assert isinstance(insert_visit, CustomerVisit|LastRouteVisit)
-        chain_insert, _reversed = route1.cost_deltas_if_customer_chain_inserted_before(
+
+        chain_insert, _ = route1.cost_deltas_if_customer_chain_inserted_before(
             visits, insert_visit)
         route1.insert_customer_chain(visits, dest_idx, False)
 
@@ -807,7 +861,19 @@ class _SequentialCombineRoutes(OperatorBL[CombineRoutesOps]):
 
         self._revert_info = (route1, chain, dest_idx, own_end_depot,
                              route2, other_prev_route, other_slot)
-        return chain_removal + chain_insert + depot_change + route_removal, MoveKind.VALID
+        # The composition rule, on the four primitives above. Prices ADD; raw records CHAIN via
+        # then(), which is a different operator and deliberately not spelled `+`.
+        #
+        # Writing this as `chain_removal + chain_insert + ...` would still run: these are tuples
+        # now, so `+` CONCATENATES them into an 8-tuple instead of summing four prices. It would
+        # not raise. The explicit indexing below is what keeps that silent.
+        steps = (chain_removal, chain_insert, depot_change, route_removal)
+        raw = steps[0]
+        for later in steps[1:]:
+            # Each step was priced against the state the previous one left, which is exactly the
+            # precondition then() asserts.
+            raw = raw.then(later)
+        return raw, MoveKind.VALID
 
     def _apply_impl(self, operands: CombineRoutesOps) -> tuple:
         """

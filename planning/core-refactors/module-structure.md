@@ -91,4 +91,4 @@ this one after it, or accept the rework.
 - [planning/operator-selection/budget-gated-selection.md](../operator-selection/budget-gated-selection.md) -- proposes cost-estimate field placement for budget gating
 - [planning/README.md](../README.md)
 - [planning/experiments/joint-parameter-search.md](../experiments/joint-parameter-search.md)
-- [raw-delta-accounting.md](raw-delta-accounting.md)
+- [planning/implemented/raw-delta-accounting.md](../implemented/raw-delta-accounting.md)

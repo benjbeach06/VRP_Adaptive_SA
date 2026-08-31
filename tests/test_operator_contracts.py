@@ -33,7 +33,9 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from _harness import (
     Customer, FULL_MATRIX, Route, SeededTestCase,
     DirectOperator,
-    all_problems, fingerprint, make_depots, make_solution, random_instance, route_of, term_deltas,
+    all_problems, fingerprint, make_depots, make_solution, random_instance,
+    raw_record_claim_problems, raw_record_completeness_problems,
+    raw_record_distance_problems, route_of, route_states, term_deltas,
 )
 from SimAnn_VRP_BLOperators import CombineRoutes, ReassignRouteBefore
 
@@ -53,6 +55,7 @@ class OperatorContractBase(SeededTestCase):
         operator = DirectOperator(sln, base_operator)
         before_fingerprint = fingerprint(sln)
         before_terms = sln.objective_terms()
+        before_states = route_states(sln)
 
         move = operator.evaluate(operands)
         if not move.is_actionable:
@@ -61,7 +64,14 @@ class OperatorContractBase(SeededTestCase):
         if not move.already_applied:
             self.assertEqual(sln.objective_terms(), before_terms,
                              f"{label}: evaluate() mutated the solution (not pure)")
-            operator.apply(move)
+
+        # UNCONDITIONAL, and that matters. An _evaluates_by_applying operator arrives here with the
+        # structure already in the solution but its accounting still owed, and apply() is where the
+        # accounting is topped up. Guarding this call on `not already_applied` -- as it was until
+        # 2026-08-28 -- means a by-applying move is never accounted anywhere in this suite, so the
+        # all_problems check below would pass against caches that were simply never written.
+        # apply() gatekeeps itself for the structural half, so calling it always is safe.
+        operator.apply(move)
 
         actual = term_deltas(before_terms, sln.objective_terms())
         for name, predicted, measured in zip(type(actual)._fields, move.deltas, actual):
@@ -70,6 +80,18 @@ class OperatorContractBase(SeededTestCase):
                 msg=f"{label}: term '{name}' predicted {predicted} but measured {measured}")
 
         self.assertEqual(all_problems(sln), [], f"{label}: invariants broken after apply")
+
+        # All three halves of the raw-record oracle. Claim was wired first, during the conversion,
+        # because it is the only one that stays meaningful while records are partial. Completeness
+        # and distance went in once all 24 aggregators reported -- before that, an unconverted
+        # aggregator's empty record is indistinguishable from a converted one that is wrong.
+        after_terms = sln.objective_terms()
+        self.assertEqual(raw_record_claim_problems(before_states, move.raw_deltas), [],
+                         f"{label}: raw delta record disagrees with the mutation it describes")
+        self.assertEqual(raw_record_completeness_problems(before_states, sln, move.raw_deltas), [],
+                         f"{label}: raw delta record is missing a route that changed")
+        self.assertEqual(raw_record_distance_problems(before_terms, after_terms, move.raw_deltas), [],
+                         f"{label}: raw delta record's travel_distance is wrong")
 
         # No commit() here: committing finalises the move and clears the operator's revert
         # payload, so a contract test that commits can no longer check the revert half.
@@ -110,6 +132,8 @@ class ReassignRouteMatrix(OperatorContractBase):
             victim = (a_routes if group == "A" else b_routes)[position]
             while victim.path_len:
                 victim.pop_customer_at(0)
+        # END OF THE BUILD -- after the emptying pops, which are setup, not the move under test.
+        sln.initialize_accounting()
         return sln, vehicle_a, vehicle_b, a_routes, b_routes
 
     def test_matrix(self):
@@ -169,6 +193,7 @@ class CombineRoutesMatrix(OperatorContractBase):
         else:
             sln.add_route_to_vehicle(first, vehicle_a)
             sln.add_route_to_vehicle(second, vehicle_b)
+        sln.initialize_accounting()
         return sln, first, second
 
     def test_matrix(self):
@@ -209,6 +234,9 @@ class RandomisedOperatorContract(OperatorContractBase):
             wrapper = solver.operators[step % len(solver.operators)]
             before_fingerprint = fingerprint(sln)
             before_terms = sln.objective_terms()
+            # BEFORE propose(), not after: a by-applying operator mutates during evaluate, so a
+            # snapshot taken afterwards would already include the change it is meant to witness.
+            before_states = route_states(sln)
 
             move = wrapper.propose()
             if not move.is_actionable:
@@ -221,10 +249,14 @@ class RandomisedOperatorContract(OperatorContractBase):
             if not move.already_applied:
                 self.assertEqual(sln.objective_terms(), before_terms,
                                  f"{label}: propose() mutated the solution")
-                # apply_for_acceptance, not apply: paired with the revert_and_reject below, this
-                # is exactly the solver's accept/reject path, so the test exercises the timed
-                # production route rather than a quieter one only tests use.
-                wrapper.apply_for_acceptance(move)
+
+            # apply_for_acceptance, not apply: paired with the revert_and_reject below, this is
+            # exactly the solver's accept/reject path, so the test exercises the timed production
+            # route rather than a quieter one only tests use.
+            #
+            # UNCONDITIONAL for the same reason as assert_operator_contract above -- a by-applying
+            # move's accounting is topped up here, and guarding the call would leave it unwritten.
+            wrapper.apply_for_acceptance(move)
 
             actual = term_deltas(before_terms, sln.objective_terms())
             for name, predicted, measured in zip(type(actual)._fields, move.deltas, actual):
@@ -232,6 +264,19 @@ class RandomisedOperatorContract(OperatorContractBase):
                     predicted, measured, places=9,
                     msg=f"{label}: term '{name}' predicted {predicted} but measured {measured}")
             self.assertEqual(all_problems(sln), [], f"{label}: invariants broken after apply")
+
+            # THE RAW-RECORD CHECK BELONGS HERE, not only in assert_operator_contract. That helper
+            # is reached by exactly two operator classes -- ReassignRouteBefore and CombineRoutes,
+            # measured 2026-08-28 -- so the oracle wired into it covers 2 of the roster. This loop
+            # cycles EVERY operator the solver actually runs, which is the coverage the aggregator
+            # conversion needs. Without this, a wrong record in any other operator is silent.
+            self.assertEqual(raw_record_claim_problems(before_states, move.raw_deltas), [],
+                             f"{label}: raw delta record disagrees with the mutation it describes")
+            self.assertEqual(raw_record_completeness_problems(before_states, sln, move.raw_deltas), [],
+                             f"{label}: raw delta record is missing a route that changed")
+            self.assertEqual(
+                raw_record_distance_problems(before_terms, sln.objective_terms(), move.raw_deltas),
+                [], f"{label}: raw delta record's travel_distance is wrong")
 
             wrapper.revert_and_reject(move)
             self.assertEqual(fingerprint(sln), before_fingerprint,

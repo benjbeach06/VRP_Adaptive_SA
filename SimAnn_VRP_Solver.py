@@ -794,6 +794,11 @@ class SimAnnVRPSolver:
         while remaining:
             add_next_route()
 
+        # END OF THE BUILD. Nothing accounted while the routes went in -- mutation does not
+        # maintain the derived caches any more -- so this must run before solution_cost() reads
+        # them. The build owns the call, not the caller.
+        sln.initialize_accounting()
+
         self.best_objective = sln.solution_cost()
         self.curr_objective = self.best_objective
 
@@ -806,6 +811,8 @@ class SimAnnVRPSolver:
 
         sln.add_route_to_vehicle(new_route, sln.vehicles[0])
 
+        # END OF THE BUILD -- see make_initial_solution.
+        sln.initialize_accounting()
 
         self.best_objective = sln.solution_cost()
         self.curr_objective = self.best_objective
@@ -855,12 +862,10 @@ class SimAnnVRPSolver:
         depot_breakdown = sln.depot_usage_breakdown()
         # Sorted membership, not RouteSet order: removal is swap-with-last, so order churn is
         # expected and is not a defect.
-        def depot_members(route_set):
-            return sorted(str(route) for route in route_set)
 
-        if any(depot_members(depot_breakdown[depot]) != depot_members(sln.depot_route_starts[depot])
-               for depot in sln.depots):
-            problems.append("depot usage breakdown disagrees with depot_route_starts")
+        for depot in sln.depots:
+            if symdiff := depot_breakdown[depot].symmetric_difference(sln.depot_route_starts[depot]):
+                problems.append(f"depot usage breakdown disagrees with depot_route_starts: {(depot, [str(route) for route in symdiff])}")
 
         # sln.customers holds the raw problem-data Customer objects, not the per-route
         # CustomerVisit wrappers that carry linkage -- check the actual visits in each route.

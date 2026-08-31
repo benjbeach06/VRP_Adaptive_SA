@@ -45,7 +45,7 @@ import numpy as np
 
 from SimAnn_VRP_Core_Model import (  # noqa: E402
     Customer, CustomerVisit, Depot, FullSolution, ObjectiveTermDelta, Route, Vehicle,
-    seed_solver_rng,
+    VIRTUAL_DEPOT, seed_solver_rng,
 )
 from SimAnn_VRP_Operators import Operator  # noqa: E402
 
@@ -188,17 +188,30 @@ def depot_usage_problems(sln: FullSolution) -> list[str]:
 
 
 def chain_problems(sln: FullSolution) -> list[str]:
-    """Each vehicle's route chain must be well-formed and depot-consistent."""
+    """Each vehicle's route chain must be well-formed, depot-consistent, and agree with
+    vehicle.routes.
+
+    The MEMBERSHIP comparison was added 2026-08-28. The chain and the RouteSet are two separate
+    structures maintained by the same two mutators, link_to_vehicle_*/unlink_from_vehicle, and
+    nothing had ever checked one against the other, so they could drift in silence.
+
+    That drift would be nastier than a wrong number. vehicle.routes is what rand_choice draws
+    operands from; the chain is what the objective is computed over. A disagreement makes the
+    solver propose moves against routes the objective cannot see, or ignore routes it is paying
+    for -- neither of which shows up as a cost mismatch.
+    """
     problems = []
     for vehicle in sln.vehicles:
-        seen = set()
+        seen, chained, cycled = set(), [], False
         current = vehicle.first_route.next_route
         previous = vehicle.first_route
         while isinstance(current, Route):
             if id(current) in seen:
                 problems.append(f"vehicle {vehicle.vID}: cycle in route chain at {current}")
+                cycled = True
                 break
             seen.add(id(current))
+            chained.append(current)
             if current.prev_route is not previous:
                 problems.append(f"vehicle {vehicle.vID}: {current}.prev_route is not its predecessor")
             if current.start_depot is not previous.end_depot:
@@ -208,6 +221,15 @@ def chain_problems(sln: FullSolution) -> list[str]:
             previous, current = current, current.next_route
         if vehicle.last_route.start_depot is not previous.end_depot:
             problems.append(f"vehicle {vehicle.vID}: LastRoute.start_depot != final route's end depot")
+
+        if not cycled and {id(route) for route in chained} != {id(route) for route in vehicle.routes}:
+            # Compared by IDENTITY, reported by str: two distinct routes can stringify alike, so
+            # str is safe to read but not to decide on. Membership only, never order -- RouteSet
+            # removal is swap-with-last, so a remove/add round trip restores membership but not
+            # position (same reason depot_usage_problems sorts).
+            problems.append(
+                f"vehicle {vehicle.vID}: route chain {sorted(str(route) for route in chained)} "
+                f"!= vehicle.routes {sorted(str(route) for route in vehicle.routes)}")
     return problems
 
 
@@ -217,9 +239,186 @@ def load_problems(sln: FullSolution) -> list[str]:
             if abs(route.recompute_current_load() - route.current_load) > 1e-9]
 
 
+def vehicle_counter_problems(sln: FullSolution) -> list[str]:
+    """Each vehicle's incrementally-maintained counters must equal a fresh walk of its route chain.
+
+    These had NO oracle until 2026-08-28, and the gap was invisible by construction:
+    objective_terms() READS num_customers and num_routes_overloaded, and the per-term contract
+    assertion compares move.deltas against a diff of two objective_terms() calls. A corrupt counter
+    therefore makes the prediction and the measurement wrong by the SAME amount, and the assertion
+    passes. Two of the five objective terms -- vehicles_activated and vehicles_overloaded -- rest
+    on exactly these counters.
+
+    Ground truth is the CHAIN, deliberately, not vehicle.routes. The chain is what fingerprint and
+    chain_problems already treat as authoritative structure, whereas vehicle.routes is maintained
+    by link_to_vehicle_*/unlink_from_vehicle -- the same two mutators that maintain these counters.
+    Checking a counter against a set updated in the same breath would let a shared bug through.
+
+    Nothing here checks that vehicle.routes agrees with the chain. That is a separate gap, still
+    open; chain_problems walks the chain but never compares membership.
+    """
+    problems = []
+    for vehicle in sln.vehicles:
+        chain, seen = [], set()
+        current = vehicle.first_route.next_route
+        while isinstance(current, Route):
+            if id(current) in seen:
+                # chain_problems reports the cycle itself. Bail rather than spin, and skip this
+                # vehicle's counters -- a truth built from a broken chain says nothing.
+                chain = None
+                break
+            seen.add(id(current))
+            chain.append(current)
+            current = current.next_route
+
+        if chain is None:
+            continue
+
+        for name, tracked, truth in (
+            ("num_customers", vehicle.num_customers,
+             sum(route.num_customers for route in chain)),
+            ("num_routes_with_customers", vehicle.num_routes_with_customers,
+             sum(1 for route in chain if route.has_customers)),
+            ("num_routes_overloaded", vehicle.num_routes_overloaded,
+             sum(1 for route in chain if route.is_overloaded)),
+        ):
+            if tracked != truth:
+                problems.append(
+                    f"vehicle {vehicle.vID}: {name} tracked {tracked} != recomputed {truth}")
+    return problems
+
+
+#region Raw-record oracle
+# The state a RouteDelta describes, for a route that is not on the solution at all -- either not
+# yet created, or disposed. Matches RouteDelta's two sentinels: a VirtualDepot for "no start
+# depot", None for "no vehicle". NOT None for both -- a route object that exists but is unassigned
+# genuinely reads back a VirtualDepot, which is what Route.__init__ installs and what
+# unlink_from_vehicle restores, so None here would fail every created- or disposed-route entry.
+ABSENT_ROUTE_STATE = (0, 0, VIRTUAL_DEPOT, None)
+
+
+def route_states(sln: FullSolution) -> dict[Route, tuple]:
+    """Every route's RAW structural state, keyed by identity, in the record's field order."""
+    return {route: _live_route_state(route) for route in sln.all_routes}
+
+
+def _live_route_state(route: Route) -> tuple:
+    """Read a route's current state directly, so disposal is readable too.
+
+    A disposed route is gone from all_routes but the object still exists, and reads back as
+    unassigned -- which is exactly the transition the record should be claiming.
+
+    LOAD IS RECOMPUTED FROM THE PATH, NOT READ OFF route.current_load. Since step 3 that field is
+    a SINK-WRITTEN CACHE: a bare mutation does not touch it, so comparing it before and after a
+    mutation reports "load did not change" every single time. Grading the record against it would
+    make the completeness check for load_changes vacuous -- and that check is the only thing
+    standing between a forgotten load entry and a silently wrong total_route_overload.
+
+    START DEPOT IS used_start_depot, NOT THE RAW FIELD, for a different reason: the record reports
+    the depot a route COUNTS AGAINST, which is virtual whenever the route is inactive. An empty
+    route still carries a real geometric start depot and relinking still moves it, so grading
+    against the raw field reports a change the record is right to omit. That produced false
+    "start_depot_changes has no entry" findings on every empty route.
+
+    num_customers and vehicle need no treatment. num_customers is len(path), vehicle is structure,
+    and both move with the mutation itself.
+    """
+    return (route.recompute_current_load(), route.num_customers,
+            route.used_start_depot, route.vehicle)
+
+
+# The four field maps on a RawDeltaRecord, paired with that field's slot in the state tuples
+# route_states() and _live_route_state() build. One list, so the two oracles below cannot drift
+# out of step over which fields exist or what order they are in.
+RECORD_FIELDS = (("load", "load_changes", 0),
+                 ("num_customers", "customer_deltas", 1),
+                 ("start_depot", "start_depot_changes", 2),
+                 ("vehicle", "vehicle_changes", 3))
+
+
+def raw_record_claim_problems(before_states: dict, record) -> list[str]:
+    """Every transition the record CLAIMS must match what actually happened.
+
+    THE CORRECTNESS HALF. It checks only what a map actually says, per field, and is silent about
+    a field a route is absent from -- an absent field makes no claim, so there is nothing here to
+    verify. That is deliberate, and it is why this half cannot collude with the shape: it never
+    resolves a default, so it never re-derives the same answer the processor did.
+
+    What it therefore cannot catch is a MISSING entry, which reads back as "held still" and prices
+    the move as if that part never happened. raw_record_completeness_problems is the half that
+    catches those, and under the per-field record it is load-bearing rather than a convenience.
+    """
+    problems = []
+    for field_name, map_name, slot in RECORD_FIELDS:
+        for route, (initial, final) in getattr(record, map_name).items():
+            was = before_states.get(route, ABSENT_ROUTE_STATE)[slot]
+            now = _live_route_state(route)[slot]
+            if initial != was:
+                problems.append(f"{route}: record claims {field_name} started at {initial!r}, "
+                                f"but it was {was!r}")
+            if final != now:
+                problems.append(f"{route}: record claims {field_name} ended at {final!r}, "
+                                f"but it is {now!r}")
+    return problems
+
+
+def raw_record_completeness_problems(before_states: dict, sln: FullSolution, record) -> list[str]:
+    """Every field a route ACTUALLY moved must have an entry in that field's map.
+
+    PER FIELD, not per route. Under the per-field record a route legitimately appears in one map
+    and not another, so "this route has an entry somewhere" proves nothing -- a route that moved
+    vehicle AND load, but is listed only under vehicle, is priced with the wrong load and has an
+    entry the whole time.
+
+    This is the check the record shape rests on. Absence means unchanged, and the consumer reads
+    the live value off the route accordingly; if absence can also mean "the aggregator forgot",
+    then every derived term silently prices a partial mutation.
+    """
+    problems = []
+    touched = set(before_states) | set(sln.all_routes)
+    for _, map_name, _ in RECORD_FIELDS:
+        touched |= set(getattr(record, map_name))
+
+    for route in touched:
+        was = before_states.get(route, ABSENT_ROUTE_STATE)
+        now = _live_route_state(route)
+        for field_name, map_name, slot in RECORD_FIELDS:
+            if was[slot] != now[slot] and route not in getattr(record, map_name):
+                problems.append(f"{route}: changed {field_name} from {was[slot]!r} to "
+                                f"{now[slot]!r} but {map_name} has no entry")
+    return problems
+
+
+def raw_record_distance_problems(before_terms, after_terms, record) -> list[str]:
+    """The record's travel_distance must match the distance the solution actually moved.
+
+    THE THIRD HALF, and the only one that reads a field outside `routes`. The other two check
+    structural transitions; distance is a plain sum on the record itself, so neither of them can
+    see it at all. Without this, an aggregator that populates ONLY distance -- every intra-route
+    one does, by design -- is covered by no oracle whatsoever.
+
+    Scoped the same way completeness is, and for the same reason: an aggregator that has not been
+    converted yet reports 0, which is indistinguishable from a converted one reporting the wrong
+    value. So this is not wired into assert_operator_contract until all 24 populate distance. Until
+    then it is called directly, over the aggregators known to be converted.
+
+    Deliberately NOT phrased as "0 or correct". That version would be unconditional today and would
+    strengthen on its own, but it permanently excuses a converted aggregator that wrongly reports
+    zero -- the conditional-oracle trap that made the missing counter oracles worthless.
+    """
+    claimed = record.travel_distance
+    measured = after_terms.travel_distance - before_terms.travel_distance
+    # places=9 matches the per-term contract assertion; both sides sum floats in different orders.
+    if round(claimed - measured, 9) != 0:
+        return [f"record claims travel_distance {claimed} but the solution moved {measured}"]
+    return []
+#endregion
+
+
 def all_problems(sln: FullSolution) -> list[str]:
     return (visit_link_problems(sln) + depot_usage_problems(sln)
-            + chain_problems(sln) + load_problems(sln))
+            + chain_problems(sln) + load_problems(sln)
+            + vehicle_counter_problems(sln))
 
 
 def fingerprint(sln: FullSolution):

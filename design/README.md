@@ -39,6 +39,11 @@ The other homes do not overlap with this one:
 | | [hierarchical_magnetism](operator_selection/hierarchical_magnetism.md) | pulling an unproposed operator toward its SIBLINGS rather than the flat roster |
 | | [dynamic_penalty](operator_selection/dynamic_penalty.md) | score, the weight EMA, and the cost-ratio penalty -- plus the design defect that forced its current shape |
 | schedule | [time_based_schedule](schedule/time_based_schedule.md) | one clock for cooling and plateau detection, in seconds by default and iterations as the determinism fallback |
+| raw-delta accounting | [README](raw_delta_accounting/README.md) | the four layers, and the folder's reading order |
+| | [raw_delta_record](raw_delta_accounting/raw_delta_record.md) | one map per field keyed by route, transition form, the composition rule, travel as one number |
+| | [processor](raw_delta_accounting/processor.md) | the two outputs, the check behind the three activation terms, why the bases are read before the mutation |
+| | [accounting_record](raw_delta_accounting/accounting_record.md) | the `AccountingRecord` fields, its derived `inverse`, and how the sink applies one |
+| | [tracking_for_cached_accounting](raw_delta_accounting/tracking_for_cached_accounting.md) | the two bits that track a move's applied structure and accounting, and the one-time cache build |
 
 ## Target structure
 
@@ -62,6 +67,12 @@ code gets covered, not restructured ahead of need.
 - [design/schedule/time_based_schedule.md](schedule/time_based_schedule.md) -- unified clock for cooling and plateau, seconds or iteration fallback
 - [design/span_reorder/farthest_insertion_ops.md](span_reorder/farthest_insertion_ops.md) -- three heuristic insertion variants and their differences
 - [RESULTS.md](../RESULTS.md) -- all measurements, including withdrawn results
+- [design/raw_delta_accounting/accounting_record.md](raw_delta_accounting/accounting_record.md) -- the accounting record, its inverse, and the sink
+- [design/raw_delta_accounting/processor.md](raw_delta_accounting/processor.md) -- the resolver from raw record to objective delta
+- [design/raw_delta_accounting/raw_delta_record.md](raw_delta_accounting/raw_delta_record.md) -- the record the core model produces
+- [design/raw_delta_accounting/README.md](raw_delta_accounting/README.md) -- the raw-delta accounting hub: four layers and reading order
+- [design/raw_delta_accounting/tracking_for_cached_accounting.md](raw_delta_accounting/tracking_for_cached_accounting.md) -- the two application-tracking bits, and the one-time cache build
 
 ## Links to here
 
+*(none yet)*

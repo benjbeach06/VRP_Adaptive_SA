@@ -276,16 +276,42 @@ class Operator[Ops: tuple](ABC):
         """
         return self.base_operator.evaluate(operands)
 
+    def _account(self, move: Move[Ops]) -> None:
+        """
+        Bring the derived caches up to date for `move`, if they are not already. Idempotent, so the
+        uniform apply/revert/commit sequence the solver and the tests both drive stays safe when
+        nothing is owed.
+
+        See design/raw_delta_accounting/tracking_for_cached_accounting.md.
+        """
+        if move.accounting_applied:
+            return
+
+        self.sln.apply_accounting(move.accounting)
+        move.mark_accounting_applied(True)
+
+    def _undo_account(self, move: Move[Ops]) -> None:
+        """Undo `move`'s accounting. Runs BEFORE the mutation is undone, so the caches are rolled
+        back against the same structure they were computed against."""
+        if not move.accounting_applied:
+            return
+
+        self.sln.apply_accounting(move.accounting.inverse)
+        move.mark_accounting_applied(False)
+
     def apply_for_acceptance(self, move: Move[Ops]):
         # Core accept path within solver: Apply, and do necessary timing/accounting
         dt = 0
-        if move.already_applied or not move.is_actionable:
-            pass
-        else:
+        if move.is_actionable:
+            # Accounting is charged into dt with the mutation: it is real apply cost, and for an
+            # _evaluates_by_applying move it is the ONLY cost incurred here, since the structural
+            # work already happened during propose().
             t0 = time.perf_counter()
-            self.base_operator.apply(move)
+            if not move.already_applied:
+                self.base_operator.apply(move)
+                move.mark_applied(True)
+            self._account(move)
             dt = time.perf_counter() - t0
-            move.mark_applied(True)
 
         # _last_propose_time must have been set by the propose() that produced this move. It once
         # was not, for BestOfCandidates only, which priced CustomerBestOfkSwapInRandomRoute at
@@ -322,11 +348,14 @@ class Operator[Ops: tuple](ABC):
         33,654 proposals in a 60s run at n=200. Its printed "Average apply time" is therefore a
         one-sample figure, and reading it as a cost is a mistake. Scoring is unaffected.
         """
-        if move.already_applied:
-            return
+        if not move.already_applied:
+            self.base_operator.apply(move)
+            move.mark_applied(True)
 
-        self.base_operator.apply(move)
-        move.mark_applied(True)
+        # Reached even when the move arrived already applied. That is the whole point: an
+        # _evaluates_by_applying move mutated during evaluate() and its accounting is still owed,
+        # and OperatorBL.apply is unreachable for it because this method used to return first.
+        self._account(move)
 
     def commit(self, move: Move[Ops]):
         self.base_operator.commit(move)
@@ -337,6 +366,9 @@ class Operator[Ops: tuple](ABC):
             return
 
         t0 = time.perf_counter()
+        # Accounting first, then the mutation: the caches are rolled back against the same
+        # structure they were computed against.
+        self._undo_account(move)
         self.base_operator.revert(move)
         self.segment_time += time.perf_counter() - t0
         move.mark_applied(False)
@@ -357,6 +389,8 @@ class Operator[Ops: tuple](ABC):
         if not move.already_applied:
             return
 
+        # Accounting first, then the mutation -- see revert_and_reject.
+        self._undo_account(move)
         self.base_operator.revert(move)
         move.mark_applied(False)
         return
@@ -711,7 +745,7 @@ class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
         super().__init__(sln, explore_reward, ReassignCustomerChain(sln))
 
     @abstractmethod
-    def _choose_chain(self, src_route: Route) -> Chain | None:
+    def _choose_chain(self, src_route: Route) -> Chain:
         """None means this route cannot supply the kind of chain this operator makes."""
         raise NotImplementedError
 
@@ -738,7 +772,7 @@ class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
             tries += 1
 
         assert isinstance(src_route, Route)
-        customer_chain = self._choose_chain(src_route) if valid else None
+        customer_chain = self._choose_chain(src_route) if valid else range(0)
         destination = (self._choose_destination(src_route, customer_chain)
                        if customer_chain is not None else None)
         if destination is None:
@@ -751,13 +785,15 @@ class _ChainReassignmentBase(Operator[ReassignCustomerChainOps], ABC):
 
         # Trailing False is a placeholder: ReassignCustomerChain sets _evaluates_in_batch, so
         # evaluate() replaces this with the orientation it priced as better.
+        assert isinstance(src_route, Route)
+        assert isinstance(dest_route, Route)
         return src_route, customer_chain, dest_route, dest_index, False
 
 
 class RandomCustomerReassignment(_ChainReassignmentBase):
     """Chain of exactly one -- the classic single-customer relocate."""
 
-    def _choose_chain(self, src_route: Route) -> Chain | None:
+    def _choose_chain(self, src_route: Route) -> Chain:
         # A bare int IS a Chain; as_chain_range normalizes it downstream.
         return rand_int_inclusive(0, len(src_route.path) - 1)
 
@@ -775,7 +811,7 @@ class ReassignChainNextToNeighbor(_ChainReassignmentBase):
     from this solver's own acceptance data.
     """
 
-    def _choose_chain(self, src_route: Route) -> Chain | None:
+    def _choose_chain(self, src_route: Route) -> Chain:
         return rand_int_inclusive(0, len(src_route.path) - 1)
 
     def _choose_destination(self, src_route: Route, chain: Chain) -> tuple[Route, int] | None:
@@ -789,10 +825,10 @@ class RandomCustomerChainReassignment(_ChainReassignmentBase):
     paired A/B showed that choice was worth about 31 objective units.
     """
 
-    def _choose_chain(self, src_route: Route) -> Chain | None:
+    def _choose_chain(self, src_route: Route) -> Chain:
         src_len = len(src_route.path)
         if src_len < 2:
-            return None
+            return range(0)
 
         # start is bounded so a 2-chain always fits from it. The cap is half the route, rounded
         # up, so it scales with the route: a chain past halfway approximates moving the whole
@@ -800,7 +836,7 @@ class RandomCustomerChainReassignment(_ChainReassignmentBase):
         start = rand_int_inclusive(0, src_len - 2)
         max_len = min(src_len - start, -(-src_len // 2))
         if max_len < 2:
-            return None   # e.g. a 2-customer route, where the half-cap forbids a 2-chain
+            return range(0)   # e.g. a 2-customer route, where the half-cap forbids a 2-chain
 
         # Geometric, shifted so the minimum is 2. +1e-50 guards rand_unit() == 0 (random() draws
         # from [0, 1)); it is lost to double precision elsewhere, so the distribution is unchanged.
@@ -821,12 +857,12 @@ class ReassignClosestChainWithRandomCustomer(_ChainReassignmentBase):
     the most to gain, so capping would discard exactly the cases worth having.
     """
 
-    def _choose_chain(self, src_route: Route) -> Chain | None:
+    def _choose_chain(self, src_route: Route) -> Chain:
         num_customers = len(src_route.path)
         anchor = rand_int_inclusive(0, num_customers - 1)
         other = src_route.closest_non_adjacent_customer(anchor)
         if other is None:
-            return None
+            return range(0)
 
         low, high = (anchor, other) if anchor < other else (other, anchor)
         # The open interval leaves both anchors in place, so it spans at most num_customers - 2
@@ -1628,13 +1664,23 @@ class SplitRandomRoute(Operator[SplitRouteOps]):
         route = rand_choice(sln.all_routes)
         path = route.path
 
+        # The destination for the second half, built HERE rather than inside split_at, so pricing
+        # has a route object to key the created route's transitions on. It must carry `route`'s
+        # CURRENT end depot: split_at's refill argument re-points the FIRST half, and the second
+        # half keeps whatever it was constructed with. Route.__init__ does no depot accounting
+        # for an unassigned route, so this costs nothing beyond the allocation.
+        # FLAGGED: one allocation per proposal, including proposals that turn out invalid.
+        # SplitRandomRoute proposes in ~9us; measure before trading this for a pooled route.
+        new_route = Route([], route.end_depot)
+
         if len(path) <= 1:
-            return route, 0, sln.depots[0]   # reported as invalid by SplitRoute._evaluate_impl
+            # reported as invalid by SplitRoute._evaluate_impl
+            return route, 0, sln.depots[0], new_route
 
         depot = rand_choice(sln.depots)
         split_index = rand_int_inclusive(1, len(path) - 1)
 
-        return route, split_index, depot
+        return route, split_index, depot, new_route
 
 
 class CombineRandomRoutes(BestOfCandidates[CombineRoutesOps]):

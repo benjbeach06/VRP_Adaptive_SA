@@ -82,4 +82,4 @@ The oracle harness can assert that the index and the DLL agree, which is the usu
 - [planning/experiments/joint-parameter-search.md](../experiments/joint-parameter-search.md)
 - [module-structure.md](module-structure.md)
 - [route-distance-tracking.md](route-distance-tracking.md)
-- [raw-delta-accounting.md](raw-delta-accounting.md)
+- [planning/implemented/raw-delta-accounting.md](../implemented/raw-delta-accounting.md)

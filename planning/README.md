@@ -23,8 +23,8 @@ The plans are grouped into five folders by what they touch:
 | [inverted-view-refactor](core-refactors/inverted-view-refactor.md) | deferred, gate NOT met | O(1) "where is customer j"; needs ablation evidence for guidance, which currently sits at 2 sigma |
 | [end-depot-index](core-refactors/end-depot-index.md) | measured, small | the only operator whose cost grows with instance size |
 | [module-structure](core-refactors/module-structure.md) | deferred by timeboxing | 4,662-line core model; a mechanical `self` -> typed-parameter split into a static evaluator |
-| [raw-delta-accounting](core-refactors/raw-delta-accounting.md) | infrastructure, gate for others | accounting is derived twice and independently; one processor replaces ~29 per-mutation derivations |
-| [route-distance-tracking](core-refactors/route-distance-tracking.md) | blocked on the above | no route knows its own length; maintain it like load, with an oracle twin |
+| [raw-delta-accounting](implemented/raw-delta-accounting.md) | **IMPLEMENTED** (steps 0-3, 5; step 4 deferred) | accounting was derived twice and independently; one processor now replaces ~29 per-mutation derivations |
+| [route-distance-tracking](core-refactors/route-distance-tracking.md) | unblocked; raw-delta-accounting landed | no route knows its own length; maintain it like load, with an oracle twin |
 | [determinism-import-branch](core-refactors/determinism-import-branch.md) | small, isolated | per-call attribute read on a hot path for a determinism-only decision |
 
 ### problem-model/
@@ -32,7 +32,7 @@ The plans are grouped into five folders by what they touch:
 | plan | status | one-line reason |
 |---|---|---|
 | [warm-start](problem-model/warm-start.md) | small, isolated | saved solutions cannot be loaded back |
-| [vehicle-time-limits](problem-model/vehicle-time-limits.md) | blocked on raw-delta-accounting | travel + service + loading time per vehicle; the largest step toward realistic dispatch |
+| [vehicle-time-limits](problem-model/vehicle-time-limits.md) | blocked on route-distance-tracking | travel + service + loading time per vehicle; the largest step toward realistic dispatch |
 | [asymmetric-distances](problem-model/asymmetric-distances.md) | gated on a real need | supplied distance oracle, directed by default; breaks O(1) chain reversal |
 
 ### operator-selection/
@@ -131,7 +131,7 @@ See [implemented/README.md](implemented/README.md) for features that have shippe
   knobs fixed; needs many more runs per config, and iteration-gating is a trap.
 - [RESULTS.md](../RESULTS.md) -- the evidence these plans are gated on, and the withdrawn re-tune
   result.
-- [planning/core-refactors/raw-delta-accounting.md](core-refactors/raw-delta-accounting.md) -- accounting is derived twice and independently; one processor replaces ~29 per-mutation derivations.
+- [planning/implemented/raw-delta-accounting.md](implemented/raw-delta-accounting.md) -- accounting is derived twice and independently; one processor replaces ~29 per-mutation derivations.
 
 ## Links to here
 

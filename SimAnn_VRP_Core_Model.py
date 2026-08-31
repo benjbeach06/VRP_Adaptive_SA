@@ -1,6 +1,7 @@
 import copy
 import random
 from bisect import bisect_left
+from dataclasses import dataclass
 from ftplib import all_errors
 
 from itertools import chain
@@ -8,11 +9,10 @@ from itertools import chain
 import numpy as np
 from numpy import cumsum, ndarray
 
-#from Temp_TimeIt import num_trials
-
 from_iterable = chain.from_iterable
 
-from typing import cast, Any, List, DefaultDict, Iterable, Iterator, Sequence, Collection
+from typing import Any, List, DefaultDict, Iterable, Iterator, Mapping, Sequence, Collection
+from types import MappingProxyType
 from collections import defaultdict
 from math import hypot, ceil
 
@@ -20,7 +20,7 @@ from functools import lru_cache
 from enum import Enum, auto
 from typing import NamedTuple
 
-from abc import ABC, abstractmethod
+from abc import ABC
 
 Num = float | int
 
@@ -159,10 +159,10 @@ def sub_permute_path(subpermutation: Sequence[int], path: List[CustomerVisit]):
     for i in range(len(subpermutation) - 1):
         # Example: subperm = 1, 3, 5 -> put 3 in 1, then 5 in 3. Then need to put original 1 in 5 (after loop).
         next_visit = path[subpermutation[i + 1]]
-        curr_visit.replace_customer_with_customer_from_same_route(next_visit.source_customer)
+        curr_visit.replace_customer(next_visit.source_customer)
         curr_visit = next_visit
 
-    curr_visit.replace_customer_with_customer_from_same_route(start_customer)
+    curr_visit.replace_customer(start_customer)
 
 #endregion
 
@@ -208,6 +208,232 @@ class ObjectiveTermDelta(NamedTuple):
         """
         sign = -1 if minimizing else 1
         return sign * self.get_cost_delta(travel_unit_cost, vehicle_cost, depot_cost, overload_penalty, vehicle_overload_penalty)
+
+# The default for a field no mutation touched. IMMUTABLE, and shared by every record that omits
+# that field -- which is the only way a NamedTuple can default a mapping at all. A plain {} default
+# would be ONE dict shared across every record ever built, and the first aggregator to write into
+# it would corrupt every other record silently.
+#
+# Sharing is safe because a record is read-only after construction, and it is the cheaper option
+# besides: an omitted field now allocates NOTHING, where the explicit four-dict form allocated four
+# dicts per proposal whether or not a mutation touched them.
+NO_CHANGES: Mapping[Any, Any] = MappingProxyType({})
+
+class RawDeltaRecord(NamedTuple):
+    """
+    Everything the core model reports about one mutation: raw structural change, and nothing else.
+
+    No activation, no overload, no objective terms. Resolving those belongs to the processor, which
+    is the only place a step function is evaluated. See
+    planning/core-refactors/raw-delta-accounting.md.
+
+    ONE MAP PER FIELD, AND A ROUTE APPEARS ONLY IN THE MAPS IT ACTUALLY MOVED IN. A route that
+    changes nothing but its start depot appears in `start_depot_changes` and nowhere else.
+    Nothing writes a (x, x) entry to say "this held still" -- absence says it, for free.
+
+    ABSENT MEANS UNCHANGED, and the consumer reads the current value off the key. That is what
+    makes the omission safe: the base a step function needs is on the Route object already, and it
+    is still valid precisely because the field did not move. Plain dicts, so `route in map` is the
+    whole membership test; `.get(route, NOMOVE)` gives a typed read where a uniform shape is easier
+    than a branch. (STALE COMMENT)
+
+    THE COST OF THE SHAPE: an entry that is missing but SHOULD be there is silent. It reads back as
+    "held still" and prices the move as if that part never happened, with nothing malformed to trip
+    over. raw_record_completeness_problems is what stands between that and a wrong objective, which
+    makes it load-bearing rather than a convenience.
+
+    Routes key by object IDENTITY, which is safe: identity survives an apply -> revert cycle
+    because split_at refills the original object rather than constructing a fresh one, and RouteSet
+    already keys a dict on Route for the same reason.
+
+    The dicts must not be mutated after construction.
+    """
+    travel_distance: Num = 0
+    load_changes: Mapping[Route, tuple[Num, Num]] = NO_CHANGES
+    customer_deltas: Mapping[Route, tuple[int, int]] = NO_CHANGES
+    start_depot_changes: Mapping[Route, tuple[Depot, Depot]] = NO_CHANGES
+    vehicle_changes: Mapping[Route, tuple[Vehicle | None, Vehicle | None]] = NO_CHANGES
+
+    @staticmethod
+    def empty() -> RawDeltaRecord:
+        """A record reporting no change at all."""
+        return RawDeltaRecord()
+
+    @staticmethod
+    def for_travel(travel_delta: Num) -> RawDeltaRecord:
+        """
+        Distance moved and nothing else -- every intra-route mutation has this shape.
+        Convenience method for TESTING ONLY. It's just an unnecessary indirection for production code.
+        """
+        return RawDeltaRecord(travel_distance=travel_delta)
+
+    @staticmethod
+    def for_customers_changing(travel_delta: Num,
+                               *changes: tuple[Route, Num, int]) -> RawDeltaRecord:
+        """
+        The most common shape: routes gain or lose customers, and nothing else about them moves.
+
+        Each change is (route, load_delta, count_delta), and writes ONE entry into each of the two
+        numeric maps. Start depot and vehicle hold, so those maps stay empty -- a route keeps its
+        depot and its vehicle when its customer list changes.
+
+        An entry whose two ends are equal is dropped rather than written, so a same-route move that
+        cancels leaves no trace and needs no special branch at the call site.
+        """
+        loads: dict[Route, tuple[Num, Num]] | Mapping[Any, Any] = {}
+        counts: dict[Route, tuple[int, int]] | Mapping[Any, Any] = {}
+        depot_starts: dict[Route, tuple[Depot, Depot]] | Mapping[Any, Any] = {}
+
+        for route, load_delta, count_delta in changes:
+            old_num_customers = route.num_customers
+            new_num_customers = old_num_customers + count_delta
+            if load_delta:
+                assert isinstance(loads, dict)
+                loads[route] = (route.current_load, route.current_load + load_delta)
+            if count_delta:
+                assert isinstance(counts, dict)
+                counts[route] = (old_num_customers, new_num_customers)
+
+            is_assigned = route.vehicle is not None
+
+            old_is_active = is_assigned and old_num_customers > 0
+            new_is_active = is_assigned and new_num_customers > 0
+            active_delta = new_is_active - old_is_active
+            if active_delta != 0:
+                old_start_depot = route.start_depot if old_is_active else VIRTUAL_DEPOT
+                new_start_depot = route.start_depot if new_is_active else VIRTUAL_DEPOT
+
+                assert isinstance(depot_starts, dict)
+                depot_starts[route] = (old_start_depot, new_start_depot)
+
+
+
+        # `or _NO_CHANGES` rather than the dict itself: a mutation that moves count but not load
+        # (a customer swap) should leave the load map costing nothing.
+        return RawDeltaRecord(travel_distance=travel_delta,
+                              load_changes=loads or NO_CHANGES,
+                              customer_deltas=counts or NO_CHANGES,
+                              start_depot_changes=depot_starts or NO_CHANGES)
+
+    def then(self, later: RawDeltaRecord) -> RawDeltaRecord:
+        """
+        Compose two records applied in order: self first, then `later`.
+
+        Distance adds. Each map chains independently on its key, keeping the first record's initial
+        and the second's final, and an entry DROPS when the two ends MATCH.
+
+        `later` must have been measured against the state `self` left -- that is what makes the
+        chain valid. Asserted on the fields where a mismatch means a genuine composition bug rather
+        than float drift; load is exempt for exactly that reason, and a wrong load surfaces in the
+        overload term anyway.
+
+        Iteration is self's keys first, then keys only `later` touched. Deterministic, so two equal
+        compositions build identical dicts.
+        """
+        return RawDeltaRecord(
+            travel_distance=self.travel_distance + later.travel_distance,
+            load_changes=_chained(self.load_changes, later.load_changes,
+                                        "load", check_gap=False),
+            customer_deltas=_chained(self.customer_deltas,
+                                           later.customer_deltas, "customer count"),
+            # == not `is` for depots: Depot inherits object.__eq__, so == IS identity for every real
+            # depot, and additionally correct for VirtualDepot, which makes all virtuals equal. A
+            # record priced before unlink_from_vehicle cannot hold the fresh VirtualDepot that call
+            # will construct, so `is` would report a gap that is not one.
+            start_depot_changes=_chained(self.start_depot_changes,
+                                         later.start_depot_changes, "start depot"),
+            vehicle_changes=_chained(self.vehicle_changes,
+                                           later.vehicle_changes, "vehicle"))
+
+
+def _chained[K, V](first: Mapping[K, tuple[V, V]], second: Mapping[K, tuple[V, V]], field: str,
+                   check_gap: bool = True) -> Mapping[K, tuple[V, V]]:
+    """One field's map across two records applied in order. See RawDeltaRecord.then()."""
+    merged: dict[K, tuple[V, V]] = {}
+    for key in (*first, *(k for k in second if k not in first)):
+        if key not in first:
+            initial, final = second[key]
+        elif key not in second:
+            initial, final = first[key]
+        else:
+            assert not check_gap or first[key][1] == second[key][0], (
+                f"composition gap for {key} on {field}: the first record leaves "
+                f"{first[key][1]!r}, the second starts from {second[key][0]!r}. The second record "
+                f"was not measured against the state the first one left.")
+            initial, final = first[key][0], second[key][1]
+
+        if initial != final:
+            merged[key] = (initial, final)
+    # A composition that cancels everything in this field costs nothing to carry.
+    return merged or NO_CHANGES
+
+
+# Branch-free helper for inverting delta dict
+INVERT_STRATEGIES_DELTA_DICT = {
+    True: lambda _: NO_CHANGES,
+    False: lambda d: {k: -v for k, v in d.items()}
+}
+def invert_delta_dict(dct: dict[Any, Num] | Mapping[Any, Any]) -> dict[Any, Num] | Mapping[Any, Any]:
+    assert isinstance(dct, dict) or dct is NO_CHANGES
+    return INVERT_STRATEGIES_DELTA_DICT[dct is NO_CHANGES](dct)
+
+
+# Branch-free helper for inverting delta dict
+INVERT_STRATEGIES_CHANGE_DICT = {
+    True: lambda _: NO_CHANGES,
+    False: lambda d: {k: (vf, vi) for k, (vi, vf) in d.items()}
+}
+def invert_change_dict(dct: dict[Any, tuple[Any, Any]] | Mapping[Any, Any]) -> dict[Any, tuple[Any, Any]] | Mapping[Any, Any]:
+    assert isinstance(dct, dict) or dct is NO_CHANGES
+    return INVERT_STRATEGIES_CHANGE_DICT[dct is NO_CHANGES](dct)
+
+class AccountingRecord(NamedTuple):
+    """
+    Resolved cache updates, ready to write. Applying one DECIDES NOTHING.
+
+    Every step function was already evaluated by the processor. If applying this record ever needs
+    a threshold comparison or a zero-crossing test, the processing has leaked into the sink -- see
+    planning/core-refactors/raw-delta-accounting.md.
+    """
+    # VEHICLE accounting records: routes_overloaded, routes_with_customers, num_customers.
+    vehicle_delta_routes_overloaded: dict[Vehicle, int] | Mapping[Any, Any] = NO_CHANGES
+    vehicle_delta_active_routes: dict[Vehicle, int] | Mapping[Any, Any] = NO_CHANGES
+    vehicle_delta_num_customers: dict[Vehicle, int] | Mapping[Any, Any] = NO_CHANGES
+
+    # ROUTE accounting records: Just raw loads. Counts are accounted via path length.
+    route_loads: dict[Route, tuple[Num, Num]] | Mapping[Any, Any] = NO_CHANGES
+
+    # DEPOT accounting records: just raw depot changes, since depot_starts must be fully updated.
+    start_depot_changes: dict[Route, tuple[Depot, Depot]] | Mapping[Any, Any] = NO_CHANGES
+
+    @property
+    def is_empty(self) -> bool:
+        return (self.vehicle_delta_routes_overloaded == NO_CHANGES and
+                self.vehicle_delta_active_routes == NO_CHANGES and
+                self.vehicle_delta_num_customers == NO_CHANGES and
+                self.route_loads == NO_CHANGES and
+                self.start_depot_changes == NO_CHANGES)
+
+    @property
+    def inverse(self) -> AccountingRecord:
+        # Unpack the record
+        vehicle_delta_routes_overloaded, vehicle_delta_active_routes, vehicle_delta_num_customers, \
+            route_loads, start_depot_changes = self
+
+        # Invert each record
+        vehicle_delta_routes_overloaded = invert_delta_dict(vehicle_delta_routes_overloaded)
+        vehicle_delta_active_routes = invert_delta_dict(vehicle_delta_active_routes)
+        vehicle_delta_num_customers = invert_delta_dict(vehicle_delta_num_customers)
+
+        route_loads = invert_change_dict(route_loads)
+        start_depot_changes = invert_change_dict(start_depot_changes)
+
+        return AccountingRecord(vehicle_delta_routes_overloaded = vehicle_delta_routes_overloaded,
+                                vehicle_delta_active_routes = vehicle_delta_active_routes,
+                                vehicle_delta_num_customers = vehicle_delta_num_customers,
+                                route_loads = route_loads,
+                                start_depot_changes = start_depot_changes)
+
 
 #region Core node definitions
 class Node:
@@ -260,10 +486,6 @@ class Node:
     def is_customer_visit(self) -> bool:
         return isinstance(self, CustomerVisit)
     #endregion
-
-_exNode = Node((0,0))
-_exNodeVarKeys = vars(_exNode).keys()
-
 
 class Depot(Node):
     def __init__(self, dID: int=0, location: tuple[Num, Num]=(0, 0), supply_limit: int=-1, vehicle_count: int=-1, **kwargs):
@@ -370,10 +592,6 @@ class RouteVisit(Node, ABC):
     prev_visit: RouteVisit | None
     next_visit: RouteVisit | None
 
-    # Populate on linkage
-    depot_route_starts: DefaultDict[Depot, RouteSet]
-
-
     def __init__(self, node: Node, **kwargs):
         assert 'location' not in kwargs or kwargs['location'] == node.location, \
             "location mismatch between node and forwarded kwargs"
@@ -419,22 +637,6 @@ class RouteVisit(Node, ABC):
         old_length = self.distance_in
         new_length = new_customer.distance(self.prev_visit) + self.distance(new_customer)
         return new_length - old_length
-
-    def change_depot_uses(self, depot: Depot, route: Route, num_uses_delta: int):
-        """
-        Record or un-record `route` as STARTING at `depot`.
-
-        The route is passed rather than read from self.route: a set stores identity, so a stale
-        back-pointer (which __copy__ can produce) would silently insert the wrong object where a
-        counter could not have noticed. Every caller already holds the route.
-        """
-        if depot.is_virtual_depot:
-            raise ValueError("Virtual depots cannot be used.")
-
-        if num_uses_delta > 0:
-            self.depot_route_starts[depot].add(route)
-        elif num_uses_delta < 0:
-            self.depot_route_starts[depot].discard(route)
 
     #endregion
 
@@ -503,20 +705,6 @@ class CustomerVisit(Customer, RouteVisit):
     # For src_route splits: new depot will activate, no need to calculate depot usage changes here. Vehicles won't activate/deactivate.
     # New overloads need to be computed at the src_route level, as full demand lists before and after must be summed
 
-    # Reminder: "Route uses its depot" = "Route has customers and is assigned"
-    def will_decrement_depot_usage_if_removed(self) -> bool:
-        # If there is no src_route, the operation is invalid
-        # If the src_route is inactive, depot usage is already not counted
-        route = self.route
-        if route is None or route.is_inactive:
-            return False
-
-        # If we're here: the src_route is active - so depot usage decrements if the src_route will be inactive
-        return route.is_inactive_after_customers_removed()
-
-    def will_deactivate_depot_if_removed(self) -> bool:
-        prev_visit: FirstRouteVisit = self.prev_visit # type: ignore # It will only be touched if this customer is the last one, in which case prev is a first visit.
-        return self.will_decrement_depot_usage_if_removed() and prev_visit.num_routes_starting_here == 1
 
     def current_route_load_delta_if_swapped_with(self, other: CustomerVisit) -> Num:
         # Can reduce numerical error compared to "always subtract" if in same src_route:
@@ -527,9 +715,7 @@ class CustomerVisit(Customer, RouteVisit):
 
     #region Object operations
 
-    def replace_customer_with_customer_from_same_route(self, new_customer: Customer):
-        # Called only as part of an intra-src_route swap or permutation. Skips load change computations.
-
+    def replace_customer(self, new_customer: Customer):
         # Reason to copy values instead of just mirroring a reference: cost comps will happen much more frequently than node replacements.
         # Thus, copying values ("is a" node) removes a layer of indirection
 
@@ -539,21 +725,6 @@ class CustomerVisit(Customer, RouteVisit):
             setattr(self, key, node_fields[key])
 
         # 2. Update the source customer for this visit
-        self.source_customer = new_customer
-
-    def replace_customer(self, new_customer: Customer):
-        # Reason to copy values instead of just mirroring a reference: cost comps will happen much more frequently than node replacements.
-        # Thus, copying values ("is a" node) removes a layer of indirection
-
-        # 1. Update src_route's loading and overloading info. MUST do before changing the fields!
-        self.swap_demand_from_route(new_customer)
-
-        # 2. Update fields for this visit to match the new customer
-        node_fields = vars(new_customer)
-        for key in _exCustomer_vars:
-            setattr(self, key, node_fields[key])
-
-        # 3. Update the source customer for this visit
         self.source_customer = new_customer
 
     def swap_customers(self, other: CustomerVisit):
@@ -568,26 +739,8 @@ class CustomerVisit(Customer, RouteVisit):
             other.replace_customer(curr_customer)
         else:
             # Save some computation time: intra-src_route swaps can skip computations of load change deltas.
-            self.replace_customer_with_customer_from_same_route(other_customer)
-            other.replace_customer_with_customer_from_same_route(curr_customer)
-
-    def add_demand_to_route(self):
-        route = self.route
-        if route is not None:
-            route.count_load_change(self.demand)
-
-    def remove_demand_from_route(self):
-        route = self.route
-        if route is not None:
-            route.count_load_change(-self.demand)
-
-    def swap_demand_from_route(self, other: Customer):
-        # Swap load to dest_route's load, and update vehicle overloading info
-        route = self.route
-
-        if route is not None:
-            load_delta = other.demand - self.demand
-            route.count_load_change(load_delta)
+            self.replace_customer(other_customer)
+            other.replace_customer(curr_customer)
 
     def unlink_from_route(self):
         # Only unlinks src_route and uncounts src_route from vehicle and updates depot accounting.
@@ -595,33 +748,6 @@ class CustomerVisit(Customer, RouteVisit):
         # must be performed before the src_route's path is mutated.
         route = self.route
         if route is None:
-            raise ValueError(f"Cannot unlink CustomerVisit {self.cID}: it is already unlinked!")
-
-        # If it's the last in the src_route, the src_route goes inactive and stops using its start depot.
-        # NOTE: this is the USAGE-COUNT question ("does depot_route_starts drop by 1"), NOT the
-        # activation question ("does the depot go from used to unused"). Gating this on
-        # will_deactivate_depot_if_removed() instead would skip the decrement whenever 2+ routes
-        # start at that depot, leaving depot_route_starts permanently too high.
-        if self.will_decrement_depot_usage_if_removed():
-            self.prev_visit.uncount_route_depot_use(route) # type: ignore - If it decrements: src_route exists and this is its only customer, so prev visit is a FirstRouteVisit
-
-        # Link neighbors
-        prev_visit = self.prev_visit
-        next_visit = self.next_visit
-
-        prev_visit.next_visit = next_visit
-        next_visit.prev_visit = prev_visit
-
-        # Unlink self from src_route
-        self.route = None
-        self.prev_visit = None # type: ignore # None only for a short bit
-        self.next_visit = None # type: ignore # none only for a short bit
-
-    def unlink_from_route_no_depot_accounting(self):
-        # Only unlinks src_route and uncounts src_route from vehicle.
-        # Does not process loading changes or vehicle accounting, since some of those operations
-        # must be performed before the src_route's path is mutated.
-        if self.route is None:
             raise ValueError(f"Cannot unlink CustomerVisit {self.cID}: it is already unlinked!")
 
         # Link neighbors
@@ -679,10 +805,6 @@ class FirstRouteVisit(Depot, RouteVisit):
         return super().distance(other)
 
     @property
-    def num_routes_starting_here(self):
-        return len(self.depot_route_starts[self.source_depot])
-
-    @property
     def prev_node(self) -> LastRouteVisit | None:
         if self.route is not None:
             if isinstance(self.route.prev_route, Route):
@@ -718,32 +840,6 @@ class FirstRouteVisit(Depot, RouteVisit):
     #endregion
 
     #region Delta computations
-    # Reminder: "Route is active" = "src_route moves" and "src_route's vehicle has customers"
-    # Reminder 2: "Route uses its start depot" = "Route is active"
-    def will_depot_swap_decrement_current_depot_usage(self, new_depot: Depot):
-        # Current depot usage decreases exactly when the src_route is active and the depot changes (including to virtual)
-        return self.source_depot != new_depot and self.route.is_active
-
-    def will_depot_swap_increment_new_depot_usage(self, new_depot: Depot):
-        # Next depot usage increases exactly when the 1) depot changes to a non-virtual one, and 2) the src_route will be active after the change (new depot increments if will be active)
-        # Note: "to a non-virtual one" skipped: is_active_after_start_depot_swap requires new_depot is not virtual explicitly in the logic
-        return self.source_depot != new_depot and self.route.is_active_after_start_depot_swap(new_depot)
-
-    def num_depot_usage_deltas_if_depot_swapped(self, new_depot: Depot) -> defaultdict[Depot, int]:
-        curr_delta = -self.will_depot_swap_decrement_current_depot_usage(new_depot)
-        new_delta = self.will_depot_swap_increment_new_depot_usage(new_depot)
-
-        depot_num_use_deltas = defaultdict(int)
-
-        # Assign deltas, but only to non-virtual depots (those deltas would be 0 anyway)
-        if self.route_is_assigned:
-            depot_num_use_deltas[self.source_depot] = curr_delta
-
-        if not new_depot.is_virtual_depot:
-            depot_num_use_deltas[new_depot] = new_delta
-
-        return depot_num_use_deltas
-
     def start_travel_delta_if_depot_swapped(self, new_node: Depot) -> Num:
         # Change to src_route travel distance if replacing the node here with a new one
         old_length = self.distance_out
@@ -766,15 +862,6 @@ class FirstRouteVisit(Depot, RouteVisit):
 
     #region Object operations
 
-    def count_route_depot_use(self, route: Route):
-        self.change_depot_uses(self.source_depot, route, 1)
-
-    def uncount_route_depot_use(self, route: Route):
-        self.change_depot_uses(self.source_depot, route, -1)
-
-    def change_my_depot_uses(self, route: Route, num_uses_delta: int):
-        self.change_depot_uses(self.source_depot, route, num_uses_delta)
-
     def replace_depot(self, new_depot: Depot):
         # If the depot is unchanged, return or both current and new depots are virtual
         if self.depot_is(new_depot):
@@ -789,10 +876,6 @@ class FirstRouteVisit(Depot, RouteVisit):
         # a linked, post-construction visit here, so the back-pointer is set.
         own_route = self.route
         assert own_route is not None, "FirstRouteVisit.replace_depot on an unlinked visit"
-        if not self.source_depot.is_virtual_depot:
-            self.change_my_depot_uses(own_route, -self.will_depot_swap_decrement_current_depot_usage(new_depot))
-        if not new_depot.is_virtual_depot:
-            self.change_depot_uses(new_depot, own_route, self.will_depot_swap_increment_new_depot_usage(new_depot))
 
         # 2. Update fields for this visit to match the new depot
         depot_fields = vars(new_depot)
@@ -834,7 +917,6 @@ class NextRouteKind(Enum):
 
 class LastRouteVisit(Depot, RouteVisit):
     prev_visit: CustomerVisit | FirstRouteVisit # prev visit is never None
-    #next_visit: FirstRouteVisit | None # next visit is either None or the start of the next src_route
 
     # NOTE: Core operations can only focus on changing where a src_route ends, not starts.
     # BUT changing where one src_route ends for a vehicle necessarily changes where the next starts
@@ -946,24 +1028,6 @@ class LastRouteVisit(Depot, RouteVisit):
         new_length = self.prev_visit.distance(new_customer) + new_customer.distance(self)
         return new_length - old_length
 
-    def num_depot_usage_deltas_if_depot_swapped(self, new_depot: Depot) -> defaultdict[Depot, int]:
-        depot_num_use_deltas = defaultdict(int)
-        # Depot uses are counted if the src_route is active: assigned and has customers.
-        # So: end depot change cannot affect counting for current src_route, but could affect counting for next src_route.
-
-        # If the depot doesn't change or the src_route is unassigned, report no changes
-        # If the new depot is virtual, return no change: Invalid operation
-        route = self.route
-        if self.depot_is(new_depot) or route.vehicle is None or new_depot.is_virtual_depot:
-            return depot_num_use_deltas
-
-        # Report any depot use changes from changing the next src_route's start depot (if there is a next src_route)
-        next_node = self.next_visit
-        if next_node is not None:
-            depot_num_use_deltas = next_node.num_depot_usage_deltas_if_depot_swapped(new_depot)
-
-        return depot_num_use_deltas
-
     def end_travel_delta_if_route_removed(self) -> Num:
         # If src_route is removed: the next src_route's start depot will change
         # FirstRouteVisit handles the disconnect from start->next_visit
@@ -980,22 +1044,6 @@ class LastRouteVisit(Depot, RouteVisit):
     #endregion
 
     #region Object operations
-
-    # DEAD, deliberately kept commented rather than deleted. These wrote END-depot usage into
-    # depot_route_starts, which counts route STARTS only -- calling them corrupts it. Nothing calls
-    # them today; a decrement path used to, and only escaped notice because a buggy guard was
-    # almost always false (see test_core_model_regressions, combine-revert end-depot test).
-    # They may come back if end-depot usage is ever tracked properly -- see
-    # TODO(end-depot-index) on SwapRouteTailsAtSharedDepot for why that is not cheap.
-    #
-    # def count_route_in_depot(self):
-    #     self.change_depot_uses(self.source_depot, 1)
-    #
-    # def uncount_route_in_depot(self):
-    #     self.change_depot_uses(self.source_depot, -1)
-
-    #def change_my_depot_uses(self, num_uses_delta: int):
-    #    self.change_depot_uses(self.source_depot, num_uses_delta)
 
     def replace_depot(self, new_depot: Depot):
         """
@@ -1145,7 +1193,8 @@ class LastRoute(VehicleNode):
     def set_start_depot(self, new_depot: Depot):
         self.start_depot = new_depot
 
-
+# Shared virtual depot sentinel to cut down on object creation.
+VIRTUAL_DEPOT = VirtualDepot()
 class Route(VehicleNode):
         # NOTE: Equality and hashing are identity-based to ensure performance in sets/lists, and to
         #   guarantee stability despite field mutability. Uniqueness is managed externally.
@@ -1165,8 +1214,6 @@ class Route(VehicleNode):
         next_route: Route | LastRoute  | None # None iff unassigned
         current_load: Num
 
-        depot_route_starts: defaultdict[Depot, RouteSet]
-
         def __init__(self, path: list[CustomerVisit], end_depot: Depot):
             # MUST come first: populate_derived_data/count_load_change below read self.vehicle,
             # and there is no class-level default to fall back on.
@@ -1176,21 +1223,19 @@ class Route(VehicleNode):
 
             self.path = path # List of customer visits
 
-            self.first_visit = FirstRouteVisit(VirtualDepot(), self)
+            self.first_visit = FirstRouteVisit(VIRTUAL_DEPOT, self)
             self.last_visit = LastRouteVisit(end_depot, self)
 
             self.current_load = 0
-            if len(path) > 0:
-                self.count_load_change(self.recompute_current_load())
+            # Load changes are populated once after full solution creation, then only by operator apply() methods.
 
-            self.populate_derived_data()
-
+            self.link_visits()
             # Start_depot and vehicle will be filled out when the src_route is added to a vehicle.
 
         def set_values(self, path: list[CustomerVisit]|None =None, vehicle: Vehicle|None=None, start_depot:Depot|None=None, end_depot:Depot|None=None):
             if path is not None:
                 self.path = path
-                self.populate_derived_data()
+                self.link_visits()
             if vehicle is not None:
                 self.vehicle = vehicle
             if start_depot is not None:
@@ -1206,6 +1251,11 @@ class Route(VehicleNode):
         @property
         def start_depot(self) -> Depot:
             return self.first_visit.source_depot
+
+        @property
+        def used_start_depot(self) -> Depot:
+            # Start depot if active, VirtualDepot otherwise
+            return self.first_visit.source_depot if self.is_active else VIRTUAL_DEPOT
 
         @property
         def end_depot(self) -> Depot:
@@ -1374,260 +1424,6 @@ class Route(VehicleNode):
 
         #region Delta computations
 
-        #region Components of dest_route delta computations
-
-        #region Self triviality, activity and activation predictors: node operations
-
-        #region Triviality
-        def is_trivial_after_start_depot_swap(self, depot: Depot) -> bool:
-            return self.is_empty and self.end_depot == depot
-
-        def is_trivial_after_end_depot_swap(self, depot: Depot) -> bool:
-            # ASSUME here: target end depot is not virtual
-            return self.is_empty and self.start_depot == depot
-
-        def is_trivial_after_customer_remove(self) -> bool:
-            # ASSUME here: customer removal is valid - we have >= 1 customer
-            return self.path_len == 1 and self.start_depot == self.end_depot
-        #endregion
-
-        #region Activation tracking: depot swaps and customer moves
-
-        #region Will src_route be active after operations?
-        # NOTE: A src_route is active if it has customers and is assigned to a vehicle.
-        def is_active_after_start_depot_swap(self, depot: Depot) -> bool:
-            # TODO: Consider constraining that, within a solve:
-            #  1) All customers must be assigned to a vehicle via a src_route at all times, and
-            #  2) We never operate with unassigned routes that have no customers: they can only be deleted
-            #  These assumptions would remove a lot of unnecessary None-checking, potentially accelerating computation.
-            #  BUT for computations potentially called during initial solution construction, we cannot leverage this constraint.
-
-            return self.is_active and not depot.is_virtual_depot
-
-        def is_active_after_end_depot_swap(self, _: Depot) -> bool:
-            # ASSUME here: target end depot is not virtual - illegal target for end depot
-
-            # End depot swaps do not affect src_route activity.
-            # TODO: Remove all uses of this after src_route activity definition is finalized
-            return self.is_active
-
-        def is_inactive_after_customers_removed(self, num_customers: int = 1) -> bool:
-            # ASSUME here: the removal is valid - src_route holds at least num_customers
-            # Will be inactive if it is unassigned or if the removal takes every customer it has.
-            return self.vehicle is None or self.path_len == num_customers
-
-        def is_active_after_customer_add(self) -> bool:
-            # A src_route with customers is always active if it is assigned to a vehicle.
-            return self.is_assigned
-        #endregion
-
-        #region How does src_route activation change after operations?
-
-        def activation_change_after_start_depot_swap(self, depot: Depot) -> int:
-            # returns -1 if deactivates, 0 if no change, 1 if activates
-            if self.start_depot == depot: # Depot unchanged!
-                return 0
-
-            active = self.is_active
-            will_be_active = self.is_active_after_start_depot_swap(depot)
-
-            activates = not active and will_be_active
-            deactivates = active and not will_be_active
-
-            return activates - deactivates
-
-        def activation_change_after_end_depot_swap(self, _: Depot) -> int:
-            # End depot swaps no longer have any effect on current src_route activation.
-            # The only effects come from changing the next src_route's start depot.
-            # TODO: Remove all uses of this after src_route activity definition is finalized
-            return 0
-
-        def deactivates_after_customers_removed(self, num_customers: int = 1) -> bool:
-            # ASSUME here: the removal is valid - src_route holds at least num_customers
-            return self.is_active and self.is_inactive_after_customers_removed(num_customers)
-
-        def deactivates_after_customer_popped(self, num_customers: int = 1) -> bool:
-            return self.deactivates_after_customers_removed(num_customers)
-
-        def activates_after_customer_insert(self) -> bool:
-            return self.is_inactive and self.is_active_after_customer_add()
-
-        def activates_after_customer_append(self) -> bool:
-            return self.activates_after_customer_insert()
-        #endregion
-
-        #endregion
-
-        # endregion
-
-        #region General computations for overload deltas if load and/or vehicle changes.
-        def overload_delta_if_load_changes(self, load_delta) -> Num:
-            if self.vehicle is None: return 0
-
-            final_load = self.current_load + load_delta
-            final_amount_overloaded = max(0, final_load - self.vehicle.capacity)
-            return final_amount_overloaded - self.amount_overloaded
-
-        def is_overloaded_delta_if_load_changes(self, load_delta) -> int:
-            if self.vehicle is None: return 0
-
-            # Returns: 1 if is newly overloaded, 0 if no change, -1 if newly not overloaded
-            is_overloaded = self.is_overloaded
-            will_be_overloaded = self.current_load + load_delta > self.vehicle.capacity
-
-            return will_be_overloaded - is_overloaded
-
-        def is_vehicle_overloaded_delta_if_load_changes(self, load_delta: Num) -> int:
-            vehicle = self.vehicle
-
-            if vehicle is None:
-                return 0
-
-            is_overloaded_delta = self.is_overloaded_delta_if_load_changes(load_delta)
-
-            curr_num_overloaded = vehicle.num_routes_overloaded
-            was_overloaded = curr_num_overloaded > 0
-            will_be_overloaded = curr_num_overloaded + is_overloaded_delta > 0
-
-            return will_be_overloaded - was_overloaded
-
-        def is_vehicle_overloaded_delta_if_load_changes_from_other_route(self, load_delta: Num, other: Route) -> int:
-            if self == other:
-                # Same src_route - no change.
-                return 0
-
-            if not self.shares_vehicle_with(other):
-                self_delta = self.is_vehicle_overloaded_delta_if_load_changes(load_delta)
-                other_delta = other.is_vehicle_overloaded_delta_if_load_changes(-load_delta)
-                return self_delta + other_delta
-
-            # If same vehicle: must handle differently
-            vehicle = self.vehicle
-
-            if vehicle is None:
-                return 0
-
-            is_overloaded_delta = self.is_overloaded_delta_if_load_changes(load_delta)
-            is_other_overloaded_delta = other.is_overloaded_delta_if_load_changes(-load_delta)
-
-            curr_num_overloaded = vehicle.num_routes_overloaded
-            was_overloaded = curr_num_overloaded > 0
-            will_be_overloaded = curr_num_overloaded + is_overloaded_delta + is_other_overloaded_delta > 0
-
-            return will_be_overloaded - was_overloaded
-        #endregion
-
-        #region Full depot usage deltas from start/end depot changes
-        ### Changes for: pure start/end depot assignment change, or if src_route is moved
-        ### Important logic to be used on "next src_route" and "this src_route" to determine effects of changing start and end depots.
-        ### Affects: Insert self, remove self, change end depot of self.
-        def depot_num_usage_deltas_if_start_depot_changes(self, new_start_depot: Depot) -> defaultdict[Depot, int]:
-            return self.first_visit.num_depot_usage_deltas_if_depot_swapped(new_start_depot)
-
-        def depot_num_usage_deltas_if_end_depot_changes(self, new_end_depot: Depot) -> defaultdict[Depot, int]:
-            return self.last_visit.num_depot_usage_deltas_if_depot_swapped(new_end_depot)
-
-        def depot_num_usage_deltas_if_removed(self) -> defaultdict[Depot, int]:
-            # Supports any combination of active/inactive routes for self and next src_route.
-
-            if not self.is_assigned_to_active_vehicle:
-                return defaultdict(int) # Cannot remove! No current vehicle.
-
-            # If the vehicle is assigned, the depot changes are:
-            # 1) Assign current start depot to next src_route (if it exists).
-            # 2) Unassign current start depot from this src_route (which may or may not currently be trivial/active). ("Unassign" = "Assign VirtualDepot")
-
-            unassign_depot = VirtualDepot()
-            start_depot = self.start_depot
-
-            # 1) Current depot gets unassigned from current src_route.
-            depot_num_usage_deltas = self.first_visit.num_depot_usage_deltas_if_depot_swapped(unassign_depot) # unassign_current_deltas
-
-            # 2) Current start depot gets assigned to next src_route if it exists
-            next_route = self.next_route
-            if isinstance(next_route, Route):
-                # Subtly different usage results than replacing the last depot of this src_route:
-                # Example: Route is empty last src_route in active vehicle.
-                # Replacing last depot of this src_route could make this src_route inactive - as would un-assigning first depot.
-                # Both would decrement one activation from the first depot - double-counting the deactivation of this src_route!
-                reassign_next_deltas = next_route.first_visit.num_depot_usage_deltas_if_depot_swapped(start_depot)
-
-                # Combine all depots' deltas by summing them per vehicle
-                append_new_defaultdict_by_value_sum(depot_num_usage_deltas, reassign_next_deltas)
-
-            # Put the two together and return it
-            return depot_num_usage_deltas
-
-        def depot_num_usage_deltas_if_inserted_before(self, other: Route|LastRoute) -> defaultdict[Depot, int]:
-            # SHORTCUT: If pointing at self, no change!
-            if other is self:
-                return defaultdict(int)
-
-            # Changes:
-            # 1) Current start depot changes to new start depot
-            # 2) Current next src_route's start depot changes to current start depot
-            # 3) New next src_route's start depot changes to current end depot
-
-            # Since end depot changes have no effect on start depot activation, we don't have to worry about that.
-            vehicle = other.vehicle
-            assert vehicle is not None
-
-            start_depot = self.start_depot
-            next_route = self.next_route
-
-            new_start_depot = other.start_depot
-
-
-            # 1) Current start depot changes to new start depot
-            depot_num_usage_deltas = self.depot_num_usage_deltas_if_start_depot_changes(new_start_depot)
-
-            # 2) Next src_route start depot changes to current start depot
-            if isinstance(next_route, Route): # Note: if None then index >= vehicle.num_routes - it's an append!
-                reassign_new_next_deltas = next_route.depot_num_usage_deltas_if_start_depot_changes(start_depot)
-
-                # Add in new deltas, combining same-key deltas via a sum
-                append_new_defaultdict_by_value_sum(depot_num_usage_deltas, reassign_new_next_deltas)
-
-            # 3) New next src_route start depot changes to current end depot
-            if not isinstance(other, LastRoute):
-                reassign_new_next_deltas = other.depot_num_usage_deltas_if_start_depot_changes(self.end_depot)
-
-                # Add in new deltas, combining same-key deltas via a sum
-                append_new_defaultdict_by_value_sum(depot_num_usage_deltas, reassign_new_next_deltas)
-
-            return depot_num_usage_deltas
-
-        def depot_num_usage_deltas_if_appended_to(self, vehicle: Vehicle) -> defaultdict[Depot, int]:
-            # Insert to end of vehicle: new_next_route will be None
-            return self.depot_num_usage_deltas_if_inserted_before(vehicle.last_route)
-
-        @staticmethod
-        def depot_activation_delta_from_depot_num_usage_deltas(depot_usage_deltas: defaultdict[Depot, int],
-                                                               depot_route_starts: defaultdict[Depot, RouteSet]) -> int:
-            if not depot_usage_deltas:
-                # No-changes case
-                return 0
-
-            result = 0
-            """ Result will report:
-            +1 for each depot that transitions from 0 to some uses,
-            -1 for each that transitions from some uses to no uses.
-            """
-            for (depot, usage_deltas) in depot_usage_deltas.items():
-                uses = len(depot_route_starts[depot])
-                if usage_deltas > 0:  # Depot gained uses - possible activation
-                    result += uses == 0
-                elif usage_deltas < 0:  # Depot lost uses - possible deactivation: if Num uses lost == current routes starting here.
-                    if uses < -usage_deltas:
-                        raise ValueError("Usage deltas are incorrect! They remove more than current number of routes. "
-                                         "Something went wrong with the bookkeeping for depot uses.")
-                    result -= uses == -usage_deltas
-
-            return result
-        #endregion
-
-        #endregion
-
         #region Basic operations
 
         #region Changing end depot
@@ -1638,24 +1434,28 @@ class Route(VehicleNode):
         # Since we don't allow operations (except removal and customer insertion) for empty routes:
         #   if we're changing the end depot, this src_route is nonempty, and so our vehicle is active and will remain so.
 
-        def depot_activation_delta_if_end_depot_changes(self, new_end_depot: Depot) -> int:
-            if self.is_empty:
-                return 0 # We don't operate with empty routes except for removal! So return 0 change
-
-            depot_num_usage_deltas = self.depot_num_usage_deltas_if_end_depot_changes(new_end_depot)
-            return self.depot_activation_delta_from_depot_num_usage_deltas(depot_num_usage_deltas, depot_route_starts=self.depot_route_starts)
-
-        def cost_deltas_if_end_depot_changes(self, new_end_depot: Depot) -> ObjectiveTermDelta:
+        def cost_deltas_if_end_depot_changes(self, new_end_depot: Depot) -> RawDeltaRecord:
             travel_delta = self.travel_delta_if_end_depot_changes(new_end_depot)
 
-            depot_activation_delta = self.depot_activation_delta_if_end_depot_changes(new_end_depot)
+            # THIS ROUTE DOES NOT CHANGE. A route's end depot IS the next route's start depot, so
+            # set_end_depot -> last_visit.replace_depot moves the NEXT route's start_depot and
+            # leaves this one alone. Measured, not inferred. End-depot use is not tracked until
+            # step 4, so this route's own entry would be unchanged and would drop anyway.
+            start_depots: dict[Route, tuple[Depot, Depot]] | Mapping = NO_CHANGES
+            next_route = self.next_route
 
-            return ObjectiveTermDelta(travel_distance=travel_delta, depots_activated=depot_activation_delta)
+            # isinstance, not `is not None`: the tail route's next_route is the LastRoute sentinel.
+            if isinstance(next_route, Route) and next_route.start_depot != new_end_depot and len(next_route.path) > 0:
+                # Next route start depot change is counted if it has customers and the depot changes (Assignment guaranteed)
+                start_depots = {next_route : (next_route.start_depot, new_end_depot)}
+
+            return RawDeltaRecord(travel_distance=travel_delta,
+                                  start_depot_changes=start_depots)
         #endregion
 
         #region Route operations: removing, inserting, and appending self to/from a vehicle.
         # Possibilities: Travel distance could change. Vehicle could be activated/deactivated.
-        #   Depot could be activated/deactivated. Amount of src_route overload could change.
+        #   Depot could be activated/deactivated. Route loads could change.
 
         #region Travel-related computations
         def travel_delta_if_removed(self) -> Num:
@@ -1698,78 +1498,40 @@ class Route(VehicleNode):
             return self.travel_delta_if_inserted_before(vehicle.last_route)
         #endregion
 
-        #region Depot-related computations
-        def depot_activation_delta_if_removed(self) -> int:
-            if self.is_trivial:
-                return 0
-
-            depot_usage_deltas = self.depot_num_usage_deltas_if_removed()
-            return self.depot_activation_delta_from_depot_num_usage_deltas(depot_usage_deltas, depot_route_starts=self.depot_route_starts)
-
-        def depot_activation_delta_if_inserted_before(self, route: Route|LastRoute) -> int:
-            depot_usage_deltas = self.depot_num_usage_deltas_if_inserted_before(route)
-            return self.depot_activation_delta_from_depot_num_usage_deltas(depot_usage_deltas, depot_route_starts=self.depot_route_starts)
-
-        def depot_activation_delta_if_appended_to(self, vehicle) -> int:
-            depot_usage_deltas = self.depot_num_usage_deltas_if_appended_to(vehicle)
-            return self.depot_activation_delta_from_depot_num_usage_deltas(depot_usage_deltas, depot_route_starts=self.depot_route_starts)
-        #endregion
-
-        #region Vehicle activation-related computations
-        def is_vehicle_deactivated_if_removed(self):
-            # Removal deactivates a vehicle if the src_route has customers and is the sole such src_route for its vehicle
-            vehicle = self.vehicle
-            return vehicle is not None and vehicle.num_routes_with_customers == 1 and self.has_customers
-
-        def is_last_overloaded_route_in_vehicle(self) -> bool:
-            # True if self is currently its vehicle's sole overloaded route, i.e. removing self
-            # (or otherwise un-overloading it) would un-overload the whole vehicle.
-            vehicle = self.vehicle
-            return vehicle is not None and vehicle.num_routes_overloaded == 1 and self.is_overloaded
-
-        def vehicle_activation_delta_if_added(self, vehicle: Vehicle):
-            # Adding to another vehicle involves removing from current vehicle!
-
-            # If current vehicle = vehicle, no change.
-            if vehicle == self.vehicle:
-                return 0
-
-            current_deactivates = self.is_vehicle_deactivated_if_removed()
-            # New activates if it has no customers
-            new_activates = vehicle.num_customers == 0 and self.has_customers
-
-            return new_activates - current_deactivates
-        #endregion
-
         #region Full delta computations
         def cost_deltas_if_removed(self):
             # Also doubles as "travel delta if disposed"
-            # Returns: travel_delta, depot_used_delta, vehicle_used_delta, overload_delta
+            # Returns: travel_delta, depot_used_delta, vehicle_used_delta, load_delta
             if self.vehicle is None:
-                return 0 # Cannot remove a src_route if it's unassigned!
+                return RawDeltaRecord() # Cannot remove a src_route if it's unassigned!
+
+            start_depots: dict[Route, tuple[Depot, Depot]] | Mapping = {}
+
+            if self.is_active:
+                # If self is active, start_depot becomes unused
+                start_depots[self] = (self.start_depot, VIRTUAL_DEPOT)
+
+            vehicles: dict[Route, tuple[Vehicle, Vehicle|None]] = {self: (self.vehicle, None)}
+
+            next_route = self.next_route
+            # isinstance, not `is not None`: the tail route's next_route is the LastRoute sentinel,
+            # which has no start depot to inherit anything.
+            if isinstance(next_route, Route) and next_route.start_depot != self.start_depot and len(next_route.path) > 0:
+                assert isinstance(start_depots, dict) # Make linter glad
+                # Next used start depot changes if next route has customers and its start depot changes (Assignment guaranteed)
+                start_depots[next_route] = (next_route.start_depot, self.start_depot)
+
+            if not start_depots:
+                start_depots = NO_CHANGES
 
             if self.is_trivial:
-                return ObjectiveTermDelta() # Delta = 0
+                return RawDeltaRecord(start_depot_changes=start_depots, vehicle_changes=vehicles) # Delta = 0, but the structure still moves.
 
             travel_delta = self.travel_delta_if_removed()
 
-            # Compute vehicle activation delta
-            # Vehicle is deactivated if all of vehicle's dest_route routes are unused
-            vehicle_activation_delta = -int(self.is_vehicle_deactivated_if_removed())
+            return RawDeltaRecord(travel_distance=travel_delta, start_depot_changes=start_depots, vehicle_changes=vehicles)
 
-            # Compute depot activation delta
-            # Depot is deactivated if self's start depot has only one src_route
-            depot_activation_delta = self.depot_activation_delta_if_removed()
-
-            # Compute overload delta
-            overload_delta = -self.amount_overloaded
-
-            # Compute delta for num vehicles overloaded (-1 if this was the last overloaded src_route in vehicle, 0 o/w)
-            num_vehicles_overloaded_delta = -int(self.is_last_overloaded_route_in_vehicle())
-
-            return ObjectiveTermDelta(travel_delta, vehicle_activation_delta, depot_activation_delta, overload_delta, num_vehicles_overloaded_delta)
-
-        def cost_deltas_if_inserted_before(self, other: Route|LastRoute) -> ObjectiveTermDelta:
+        def cost_deltas_if_inserted_before(self, other: Route|LastRoute) -> RawDeltaRecord:
             vehicle = other.vehicle
             assert vehicle is not None, "Cannot insert before unassigned route"
 
@@ -1778,46 +1540,55 @@ class Route(VehicleNode):
                 # route1 is earlier of self or dest_route, route2 = route1.next_route is the later.
                 # Since the two are adjacent... both exist.
                 route1 = self if other is self.next_route else other
-                route2 = route1.next_route # type: ignore - Linter is unconvincible that route1 is not None without an ignore somewhere
-                return route1.cost_deltas_if_swapped_with_next_route() # type: ignore
+                assert isinstance(route1, Route)
+                return route1.cost_deltas_if_swapped_with_next_route()
 
-            # Returns: travel_delta, depot_used_delta, vehicle_used_delta, overload_delta
+            # Returns: travel_delta, depot_used_delta, vehicle_used_delta, load_delta
             if self.is_empty:
-                return ObjectiveTermDelta() # Delta = 0. (We don't allow inserting empty stuff - so return 0.)
-
-            is_same_vehicle = self.vehicle == vehicle
+                return RawDeltaRecord() # Delta = 0. (We don't allow inserting empty stuff - so return 0.)
 
             travel_delta = self.travel_delta_if_inserted_before(other)
 
-            # Compute vehicle activation delta
-            # Vehicle is activated if all of vehicle's dest_route routes are unused
-            vehicle_activation_delta = int(self.vehicle_activation_delta_if_added(vehicle))
+            # Up to three routes move their start depot, and NONE of them changes load or customer
+            # count -- relinking carries a route's customers with it. The adjacent case never gets
+            # here (it returned above), so self's old successor is never `other`.
+            #   self          -- starts where `other` used to start; joins `vehicle`
+            #   old successor -- inherits self's old start depot, now that self has vacated
+            #   other         -- starts at self's end depot, now that self sits in front of it
+            # LastRoute successors get no entry: they are sentinels, not routes.
+            has_customers = len(self.path) > 0
 
-            # Compute depot activation delta
-            # Depot is deactivated if self's start depot has no routes
-            depot_activation_delta = self.depot_activation_delta_if_inserted_before(other)
+            start_depots: dict[Route, tuple[Depot, Depot]] | Mapping = {}
 
-            # Compute overload deltas
-            if is_same_vehicle:
-                overload_delta = 0
-                num_vehicles_overloaded_delta = 0
-            else:
-                # Total overload
-                old_overload = self.amount_overloaded
-                new_overload = max(0, self.current_load - vehicle.capacity)
-                overload_delta = new_overload - old_overload
+            self_start = self.used_start_depot
+            self_end = self.end_depot
+            other_start = other.start_depot
+            if has_customers and self_start != other_start:
+                # Start depot changes if has customers and changes start depots. (Assignment guaranteed)
+                start_depots[self] = (self_start, other_start)
 
-                # Num vehicles overloaded: mirrors cost_deltas_if_removed's own formula -- removing
-                # self un-overloads its OLD vehicle exactly when self was that vehicle's only
-                # overloaded route (NOT when the vehicle deactivates, which is a different condition).
-                vehicle_overloads_removed = self.is_last_overloaded_route_in_vehicle()
-                vehicle_overloads_added = vehicle.num_routes_overloaded == 0 and (self.current_load > vehicle.capacity)
-                num_vehicles_overloaded_delta = vehicle_overloads_added - vehicle_overloads_removed
+            old_successor = self.next_route
+            if isinstance(old_successor, Route) and len(old_successor.path) > 0\
+               and (old_successor_start := old_successor.start_depot) != self_start:
+                # Successor start depot changes if it has customers and changes start depots. (Assignment guaranteed)
+                start_depots[old_successor] = (old_successor_start, self_start)
+            if isinstance(other, Route) and len(other.path) > 0 \
+               and other_start != self_end:
+                # Other start depot changes if it has customers and changes start depots. (Assignment guaranteed)
+                start_depots[other] = (other_start, self_end)
 
-            return ObjectiveTermDelta(travel_delta, vehicle_activation_delta, depot_activation_delta, overload_delta, num_vehicles_overloaded_delta)
+            if not start_depots:
+                start_depots = NO_CHANGES
 
-        def cost_deltas_if_appended_to(self, vehicle: Vehicle) -> ObjectiveTermDelta:
-            # Returns: travel_delta, depot_used_delta, vehicle_used_delta, overload_delta
+            self_vehicle = self.vehicle
+            vehicle_changes = {self: (self_vehicle, vehicle)} if self_vehicle != vehicle else NO_CHANGES
+
+            return RawDeltaRecord(travel_distance=travel_delta,
+                                  start_depot_changes=start_depots,
+                                  vehicle_changes=vehicle_changes)
+
+        def cost_deltas_if_appended_to(self, vehicle: Vehicle) -> RawDeltaRecord:
+            # Returns: travel_delta, depot_used_delta, vehicle_used_delta
             return self.cost_deltas_if_inserted_before(vehicle.last_route)
         #endregion
         #endregion
@@ -1848,112 +1619,25 @@ class Route(VehicleNode):
             return Route.travel_delta_if_customer_inserted_before(customer, self.last_visit, customer_route)
         #endregion
 
-        #region Vehicle activation deltas
-
-        # NOTE: Active routes does not imply an active vehicle.
-        # Active vehicle = "vehicle has customers"
-        # Active src_route = "src_route moves something and it's assigned to an active vehicle"
-        def vehicle_deactivates_if_customers_removed(self, num_customers: int = 1) -> bool:
-            # For a customer removal to deactivate our vehicle:
-            #   It must take every customer the vehicle has, across all of its routes.
-            vehicle = self.vehicle
-            return vehicle is not None and vehicle.num_customers == num_customers
-
-        def vehicle_activation_delta_if_customers_added(self, customer_route: Route, customer_vehicle: Vehicle|None,
-                                                        num_customers: int = 1) -> int:
-            vehicle = self.vehicle
-
-            same_vehicle = vehicle is not None and customer_vehicle == vehicle
-
-            if same_vehicle:
-                # Move in same vehicle has no effect on activation
-                return 0
-            else:
-                vehicle_activates = vehicle is not None and vehicle.is_inactive
-                customer_vehicle_deactivates = customer_route is not None and customer_route.vehicle_deactivates_if_customers_removed(num_customers)
-
-                return vehicle_activates - customer_vehicle_deactivates
-
-        #endregion
-
-        #region Depot activation deltas
-        def depot_deactivates_if_customers_removed(self, num_customers: int = 1) -> bool:
-            return self.deactivates_after_customers_removed(num_customers) and self.first_visit.num_routes_starting_here == 1
-
-        def depot_activation_delta_if_customers_added(self, customer_route: Route, num_customers: int = 1) -> int:
-            same_route = customer_route == self
-            if same_route:
-                return 0
-            else:
-                start_depot = self.start_depot
-                customer_route_start_depot = customer_route.start_depot
-                if start_depot != customer_route_start_depot:
-                    start_depot_activates = self.activates_after_customer_insert() and self.first_visit.num_routes_starting_here == 0
-                    customer_start_depot_deactivates = customer_route.depot_deactivates_if_customers_removed(num_customers)
-
-                    return start_depot_activates - customer_start_depot_deactivates
-                else:
-                    return 0
-
-
-        #endregion
-
-        #region Overload-related deltas
-        def overload_deltas_if_customer_removed(self, customer: CustomerVisit) -> tuple[Num, int]:
-            load_delta = -customer.demand
-
-            overload_delta = self.overload_delta_if_load_changes(load_delta)
-            vehicles_overloaded_delta = self.is_vehicle_overloaded_delta_if_load_changes(load_delta)
-
-            return overload_delta, vehicles_overloaded_delta
-
-        def overload_deltas_if_customer_popped(self, index: int) -> tuple[Num, int]:
-            return self.overload_deltas_if_customer_removed(self.path[index])
-
-        def overload_deltas_if_load_added(self, load_delta: Num, customer_route: Route) -> tuple[Num, int]:
-            # Takes the load rather than the customers: summing demand over a chain is the
-            # expensive part, and callers already need that total for their own accounting, so
-            # they compute it once and pass it in.
-            same_route = customer_route == self
-
-            if same_route:
-                # Intra-route move! No change.
-                return 0, 0
-
-            route_overload_delta = self.overload_delta_if_load_changes(load_delta)
-            customer_route_overload_delta = customer_route.overload_delta_if_load_changes(-load_delta)
-            overload_delta = route_overload_delta + customer_route_overload_delta
-
-            vehicles_overloaded_delta = self.is_vehicle_overloaded_delta_if_load_changes_from_other_route(load_delta, customer_route)
-
-            return overload_delta, vehicles_overloaded_delta
-        #endregion
-
         #region Full deltas
-        def cost_deltas_if_customer_removed(self, customer):
+        def cost_deltas_if_customer_removed(self, customer: CustomerVisit) -> RawDeltaRecord:
             travel_delta = self.travel_delta_if_customer_removed(customer)
-            vehicle_delta = -self.vehicle_deactivates_if_customers_removed()
-            depot_delta = -self.depot_deactivates_if_customers_removed()
 
-            overload_delta, num_vehicles_overloaded_delta = self.overload_deltas_if_customer_removed(customer)
+            raw = RawDeltaRecord.for_customers_changing(travel_delta, (self, -customer.demand, -1))
+            return raw
 
-            return ObjectiveTermDelta(travel_delta, vehicle_delta, depot_delta, overload_delta, num_vehicles_overloaded_delta)
-
-        def cost_deltas_if_customer_popped(self, index):
+        def cost_deltas_if_customer_popped(self, index: int) -> RawDeltaRecord:
             travel_delta = self.travel_delta_if_customer_popped(index)
-            vehicle_delta = -self.vehicle_deactivates_if_customers_removed()
-            depot_delta = -self.depot_deactivates_if_customers_removed()
 
-            overload_delta, num_vehicles_overloaded_delta = self.overload_deltas_if_customer_popped(index)
+            raw = RawDeltaRecord.for_customers_changing(
+                travel_delta, (self, -self.path[index].demand, -1))
+            return raw
 
-            return ObjectiveTermDelta(travel_delta, vehicle_delta, depot_delta, overload_delta, num_vehicles_overloaded_delta)
-
-        def cost_deltas_if_customer_inserted_before(self, customer: CustomerVisit, insert_visit: CustomerVisit | LastRouteVisit) -> ObjectiveTermDelta:
+        def cost_deltas_if_customer_inserted_before(self, customer: CustomerVisit, insert_visit: CustomerVisit | LastRouteVisit) -> RawDeltaRecord:
             if insert_visit is customer or insert_visit is customer.next_visit:
-                return ObjectiveTermDelta() # No-op!
+                return RawDeltaRecord() # No-op!
 
             customer_route: Route | None = customer.route
-            customer_vehicle = None if customer_route is None else customer_route.vehicle
 
             assert isinstance(insert_visit, CustomerVisit|LastRouteVisit)
             assert isinstance(customer_route, Route)
@@ -1964,13 +1648,18 @@ class Route(VehicleNode):
             # will triage between the two.
 
             travel_delta = Route.travel_delta_if_customer_inserted_before(customer, insert_visit, customer_route)
-            depot_delta = self.depot_activation_delta_if_customers_added(customer_route)
-            vehicle_activation_delta = self.vehicle_activation_delta_if_customers_added(customer_route, customer_vehicle)
-            (overload_delta, num_vehicles_overloaded_delta) = self.overload_deltas_if_load_added(customer.demand, customer_route)
 
-            return ObjectiveTermDelta(travel_distance=travel_delta, depots_activated=depot_delta,
-                                      vehicles_activated=vehicle_activation_delta, total_route_overload=overload_delta,
-                                      vehicles_overloaded=num_vehicles_overloaded_delta)
+            # Two routes, because the customer CROSSES a boundary: it leaves customer_route and
+            # joins self. The same-route case moves nothing across a boundary, so it reports
+            # distance only.
+            assert isinstance(customer_route, Route)
+            customer_deltas = (customer_route, -customer.demand, -1)
+            raw = (RawDeltaRecord(travel_distance=travel_delta) if customer_route is self
+                   else RawDeltaRecord.for_customers_changing(
+                       travel_delta, (self, customer.demand, 1),
+                       customer_deltas))
+
+            return raw
 
 
         def cost_deltas_if_customer_appended(self, customer):
@@ -2005,7 +1694,7 @@ class Route(VehicleNode):
             return (before_chain.distance(after_chain)
                     - before_chain.distance(first) - last.distance(after_chain))
 
-        def cost_deltas_if_customer_chain_removed(self, chain: Chain) -> ObjectiveTermDelta:
+        def cost_deltas_if_customer_chain_removed(self, chain: Chain) -> RawDeltaRecord:
             """
             Price taking `chain` out of this route, charged BEFORE the removal happens.
 
@@ -2015,17 +1704,21 @@ class Route(VehicleNode):
             rng = as_chain_range(chain)
             k = len(rng)
             if k == 0:
-                return ObjectiveTermDelta()
+                return RawDeltaRecord()
 
             path = self.path
             chain_load = sum(path[i].demand for i in rng)
 
-            return ObjectiveTermDelta(
-                travel_distance=self.travel_delta_if_customer_chain_removed(rng),
-                vehicles_activated=-self.vehicle_deactivates_if_customers_removed(k),
-                depots_activated=-self.depot_deactivates_if_customers_removed(k),
-                total_route_overload=self.overload_delta_if_load_changes(-chain_load),
-                vehicles_overloaded=self.is_vehicle_overloaded_delta_if_load_changes(-chain_load))
+            travel_delta = self.travel_delta_if_customer_chain_removed(rng)
+
+            # Only this route moves. The visits come out DETACHED -- they belong to no route until
+            # someone inserts them -- so there is no second entry to make here. Start depot and
+            # vehicle are untouched even when the route empties completely: an empty route is still
+            # an assigned route, and whether it still COUNTS as using its depot is a step function
+            # of the customer count, which the processor resolves. Reported, not decided.
+            raw = RawDeltaRecord.for_customers_changing(travel_delta, (self, -chain_load, -k))
+
+            return raw
 
         @staticmethod
         def travel_deltas_if_customer_chain_inserted_before(
@@ -2047,7 +1740,7 @@ class Route(VehicleNode):
         def cost_deltas_if_customer_chain_inserted_before(
                 self, visits: Sequence[CustomerVisit],
                 insert_visit: CustomerVisit | LastRouteVisit
-        ) -> tuple[ObjectiveTermDelta, ObjectiveTermDelta]:
+        ) -> tuple[RawDeltaRecord, RawDeltaRecord]:
             """
             Price splicing detached `visits` into THIS route before insert_visit.
 
@@ -2059,29 +1752,25 @@ class Route(VehicleNode):
             """
             k = len(visits)
             if k == 0:
-                return ObjectiveTermDelta(), ObjectiveTermDelta()
+                return RawDeltaRecord(), RawDeltaRecord()
 
             chain_load = sum(visit.demand for visit in visits)
-            vehicle = self.vehicle
-
-            # The destination halves of depot_activation_delta_if_customers_added and
-            # vehicle_activation_delta_if_customers_added, with the source subtraction dropped.
-            vehicle_delta = int(vehicle is not None and vehicle.is_inactive)
-            depot_delta = int(self.activates_after_customer_insert()
-                              and self.first_visit.num_routes_starting_here == 0)
-            overload_delta = self.overload_delta_if_load_changes(chain_load)
-            vehicles_overloaded_delta = self.is_vehicle_overloaded_delta_if_load_changes(chain_load)
 
             fwd_travel, rev_travel = Route.travel_deltas_if_customer_chain_inserted_before(
                 visits, insert_visit)
 
-            def terms(travel: Num) -> ObjectiveTermDelta:
-                return ObjectiveTermDelta(travel_distance=travel, vehicles_activated=vehicle_delta,
-                                          depots_activated=depot_delta,
-                                          total_route_overload=overload_delta,
-                                          vehicles_overloaded=vehicles_overloaded_delta)
+            # Destination-only, matching the price above: `visits` are detached, so no source route
+            # appears here. The two orientations differ only in distance, but each gets its OWN
+            # record -- the caller keeps whichever it picks, and a shared dict would alias.
 
-            return terms(fwd_travel), terms(rev_travel)
+
+            # changes = (route, load_change, customer_count_change)
+            changes = (self, chain_load, k)
+
+            raw_fwd = RawDeltaRecord.for_customers_changing(fwd_travel, changes)
+            raw_rev = RawDeltaRecord.for_customers_changing(rev_travel, changes)
+
+            return raw_fwd, raw_rev
         #endregion
 
         def travel_deltas_if_customer_chain_moved(self, chain: Chain,
@@ -2109,7 +1798,7 @@ class Route(VehicleNode):
             return removal + forward, removal + backward
 
         def cost_deltas_if_customer_chain_moved(self, chain: Chain, dest_route: Route,
-                                                dest_idx: int) -> tuple[ObjectiveTermDelta, ObjectiveTermDelta]:
+                                                dest_idx: int) -> tuple[RawDeltaRecord, RawDeltaRecord]:
             # Returns (not_reversed, reversed). The two differ ONLY in travel_distance: the other
             # four terms depend on which customers moved and where to, never on their order.
             # This makes no decision -- it hands back both prices and the caller picks.
@@ -2128,22 +1817,23 @@ class Route(VehicleNode):
 
             if same_route:
                 # No customer crosses a route boundary, so load, depot and vehicle are untouched.
-                return (ObjectiveTermDelta(travel_distance=fwd_travel),
-                        ObjectiveTermDelta(travel_distance=rev_travel))
+                return RawDeltaRecord(travel_distance=fwd_travel), RawDeltaRecord(travel_distance=rev_travel)
 
             chain_load = sum(self.path[i].demand for i in rng)
-            depot_delta = dest_route.depot_activation_delta_if_customers_added(self, k)
-            vehicle_delta = dest_route.vehicle_activation_delta_if_customers_added(self, self.vehicle, k)
-            (overload_delta,
-             vehicles_overloaded_delta) = dest_route.overload_deltas_if_load_added(chain_load, self)
 
-            def terms(travel: Num) -> ObjectiveTermDelta:
-                return ObjectiveTermDelta(travel_distance=travel, vehicles_activated=vehicle_delta,
-                                          depots_activated=depot_delta,
-                                          total_route_overload=overload_delta,
-                                          vehicles_overloaded=vehicles_overloaded_delta)
+            # The chain crosses a boundary: k customers leave self and join dest_route. The
+            # same-route case returned above, so these are always two distinct entries.
 
-            return terms(fwd_travel), terms(rev_travel)
+            # changes = (route, load_change, customer_count_change)
+            self_changes = (self, -chain_load, -k)
+            other_changes = (dest_route, chain_load, k)
+
+            raw_fwd = RawDeltaRecord.for_customers_changing(
+                    fwd_travel, self_changes, other_changes)
+            raw_rev = RawDeltaRecord.for_customers_changing(
+                rev_travel, self_changes, other_changes)
+
+            return raw_fwd, raw_rev
         #endregion
 
         #endregion
@@ -2153,7 +1843,7 @@ class Route(VehicleNode):
         #region Composite operations: Swapping customers, permuting/subpermuting, combining, and splitting
 
         #region Customer swaps
-        # can only change travel distance or overload routes)
+        # can only change travel distance or route loads)
         @staticmethod
         def cost_deltas_for_adjacent_customer_swap_starting_with(customer1: CustomerVisit):
             customer2 = customer1.next_visit
@@ -2164,7 +1854,11 @@ class Route(VehicleNode):
             # No depots/vehicles are activated and no src_route loads change.
 
             travel_delta = customer1.travel_delta_if_swapped_with(customer2)
-            return ObjectiveTermDelta(travel_distance=travel_delta)
+            # INTRA-ROUTE: distance and nothing else. No customer crosses a route boundary,
+            # so load, count, start depot and vehicle all end where they started -- and an
+            # a record with no route entries at all. A populated route map
+            # here would mean the raw schema is wrong (guide section 3).
+            return RawDeltaRecord(travel_distance=travel_delta)
 
         def cost_deltas_for_adjacent_customer_swap_starting_at(self, index: int):
             # Get cost for swapping customer at index with the next one.
@@ -2180,23 +1874,8 @@ class Route(VehicleNode):
             return self.cost_deltas_for_adjacent_customer_swap_starting_with(customer1)
 
         @staticmethod
-        def total_overload_deltas_for_load_swap(route1: Route, route2: Route, route1_load_delta: Num) -> tuple[Num, int]:
-            # Takes the load moving INTO route1 rather than the customers moving, so a chain swap
-            # can sum its demands once and reuse this unchanged. Returns
-            # (total_route_overload_delta, num_vehicles_overloaded_delta).
-            if route1 is route2:
-                # Load is unchanged! Intra-route swap: demand never leaves the route.
-                return 0, 0
-
-            route1_overload_delta = route1.overload_delta_if_load_changes(route1_load_delta)
-            route2_overload_delta = route2.overload_delta_if_load_changes(-route1_load_delta)
-
-            num_vehicles_overloaded_delta = route1.is_vehicle_overloaded_delta_if_load_changes_from_other_route(route1_load_delta, route2)
-
-            return route1_overload_delta + route2_overload_delta, num_vehicles_overloaded_delta
-
-        @staticmethod
-        def total_overload_deltas_for_customer_swap(customer1: CustomerVisit, customer2: CustomerVisit) -> tuple[Num, int]:
+        def total_load_deltas_for_customer_swap(customer1: CustomerVisit, customer2: CustomerVisit) -> tuple[Num, Num]:
+            # Returns (route1 delta, route2 delta)
             route1 = customer1.route
             route2 = customer2.route
 
@@ -2206,7 +1885,7 @@ class Route(VehicleNode):
             # current_route_load_delta_if_swapped_with, not a bare demand difference: it reduces
             # numerical error when both customers share a route.
             route1_load_delta = customer1.current_route_load_delta_if_swapped_with(customer2)
-            return Route.total_overload_deltas_for_load_swap(route1, route2, route1_load_delta)
+            return route1_load_delta, -route1_load_delta
 
         # Any two customers
         @staticmethod
@@ -2216,11 +1895,20 @@ class Route(VehicleNode):
             # Travel delta
             travel_delta = customer1.travel_delta_if_swapped_with(customer2)
 
-            # Total overload and num vehicles overloaded delta
-            (route_overload_delta, num_vehicles_overloaded_delta) = Route.total_overload_deltas_for_customer_swap(customer1, customer2)
+            # A swap moves LOAD but not COUNT: each route gives one customer and takes one back.
+            # Intra-route swaps move nothing at all, and their entries cancel to unchanged.
+            route1, route2 = customer1.route, customer2.route
+            assert route1 is not None and route2 is not None
+            if route1 is route2:
+                raw = RawDeltaRecord(travel_distance=travel_delta)
+            else:
+                # A swap moves LOAD but not COUNT: each route gives one customer and takes one back.
+                route1_load_delta = customer1.current_route_load_delta_if_swapped_with(customer2)
+                raw = RawDeltaRecord.for_customers_changing(
+                    travel_delta, (route1, route1_load_delta, 0), (route2, -route1_load_delta, 0))
 
             # Swapping customers does not change vehicle or depot activation. So we're ready to return.
-            return ObjectiveTermDelta(travel_distance=travel_delta, total_route_overload=route_overload_delta, vehicles_overloaded=num_vehicles_overloaded_delta)
+            return raw
 
         def cost_deltas_for_intra_route_customer_swap_at(self, i: int, j: int):
             customer1 = self.path[i]
@@ -2243,8 +1931,8 @@ class Route(VehicleNode):
             return rng1.stop == rng2.start or rng2.stop == rng1.start
 
         def cost_deltas_for_customer_chain_swap(self, chain: Chain, other: Route, other_chain: Chain
-                                                ) -> tuple[ObjectiveTermDelta, ObjectiveTermDelta,
-                                                           ObjectiveTermDelta, ObjectiveTermDelta]:
+                                                ) -> tuple[RawDeltaRecord, RawDeltaRecord,
+                                                           RawDeltaRecord, RawDeltaRecord]:
             """
             TODO(swap-len1-shortcut): when both chains have length 1 the four travels are equal,
             because reversing a single customer changes nothing. Detect that and compute one.
@@ -2285,8 +1973,12 @@ class Route(VehicleNode):
 
                 a_visit = e_first.prev_visit
                 # Same-route move, so these carry travel_distance only.
+                # Index [1], the RAW RECORD, not [0]: since step 1 the aggregators no longer put
+                # travel_distance in the ObjectiveTermDelta -- the processor derives it from the
+                # record. Reading [0] here returns 0 and silently prices every adjacent chain swap
+                # as if the move cost nothing.
                 moved = self.cost_deltas_if_customer_chain_moved(early, self, early.start + len(late))
-                moved_travel = (moved[0].travel_distance, moved[1].travel_distance)
+                moved_travel = moved[0].travel_distance, moved[1].travel_distance
 
                 def reverse_late_delta(head_early):
                     # The late chain ends up at [early.start, early.start + len(late)), bracketed
@@ -2327,17 +2019,25 @@ class Route(VehicleNode):
             # guard ever goes, these terms come back.
             chain1_load = sum(path1[i].demand for i in rng1)
             chain2_load = sum(path2[j].demand for j in rng2)
-            overload_delta, vehicles_overloaded_delta = Route.total_overload_deltas_for_load_swap(
-                self, other, chain2_load - chain1_load)
+
+            # Each route gives its chain and takes the other's, so load and count both move by the
+            # difference. Intra-route swaps exchange nothing across a boundary, so no entries.
+            # Each orientation gets its OWN record: the caller keeps whichever it picks, and a
+            # shared dict would alias.
+            def raw(travel: Num) -> RawDeltaRecord:
+                if self is other:
+                    return RawDeltaRecord(travel_distance=travel)
+                return RawDeltaRecord.for_customers_changing(
+                    travel,
+                    (self, chain2_load - chain1_load, len(rng2) - len(rng1)),
+                    (other, chain1_load - chain2_load, len(rng1) - len(rng2)))
 
             return tuple(  # type: ignore - fixed length 4, built from a 4-tuple
-                ObjectiveTermDelta(travel_distance=t, total_route_overload=overload_delta,
-                                   vehicles_overloaded=vehicles_overloaded_delta)
-                for t in travels)
+                raw(t) for t in travels)
         #endregion
 
         #region Permutation and subpermutation (travel distance only)
-        def cost_deltas_for_permutation(self, permutation: Sequence[int]) -> ObjectiveTermDelta:
+        def cost_deltas_for_permutation(self, permutation: Sequence[int]) -> RawDeltaRecord:
             # WARNING: Must permute anyway to get the cost delta. Could be cheaper to apply the operator, compute, then unapply.
             if len(permutation) != len(self.path):
                 raise ValueError("Permutation has wrong length")
@@ -2352,10 +2052,14 @@ class Route(VehicleNode):
 
             travel_delta = new_distance - old_distance
 
-            return ObjectiveTermDelta(travel_distance=travel_delta)
+            # INTRA-ROUTE: distance and nothing else. No customer crosses a route boundary,
+            # so load, count, start depot and vehicle all end where they started -- and an
+            # a record with no route entries at all. A populated route map
+            # here would mean the raw schema is wrong (guide section 3).
+            return RawDeltaRecord(travel_distance=travel_delta)
 
         # UNUSED - DEPRECATE
-        def cost_deltas_for_subpermutation(self, subpermutation: Sequence[int]) -> ObjectiveTermDelta:
+        def cost_deltas_for_subpermutation(self, subpermutation: Sequence[int]) -> RawDeltaRecord:
             # WARNING: Must sub-permute anyway to get the cost delta. Could be cheaper to apply the operator, compute, then unapply.
             # We would like to compute via summing along a cycle of customer swaps instead. Issue: Need to actually swap customers before computing this.
             old_distance = self.total_distance()
@@ -2397,11 +2101,20 @@ class Route(VehicleNode):
 
                 travel_delta = new_distance - old_distance
 
-            return ObjectiveTermDelta(travel_distance=travel_delta)
+            # INTRA-ROUTE: distance and nothing else. No customer crosses a route boundary,
+            # so load, count, start depot and vehicle all end where they started -- and an
+            # a record with no route entries at all. A populated route map
+            # here would mean the raw schema is wrong (guide section 3).
+            return RawDeltaRecord(travel_distance=travel_delta)
         #endregion
 
         #region Splitting this src_route
-        def cost_deltas_for_split_at(self, split_index: int, refill_depot: Depot) -> ObjectiveTermDelta:
+        def cost_deltas_for_split_at(self, split_index: int, refill_depot: Depot,
+                                     new_route: Route) -> RawDeltaRecord:
+
+            # `new_route` is the empty, unassigned route the split will fill -- the SAME object
+            # split_at receives. Splitting creates a route, and the raw record keys transitions
+            # on route objects, so the created one has to exist before pricing can describe it.
             path = self.path
 
             # split_index is the index of the new (second-half) route's first customer -- same
@@ -2411,16 +2124,16 @@ class Route(VehicleNode):
             # use isinstance instead of is_customer_visit for linter's sanity
             if not isinstance(split_customer, CustomerVisit):
                 # First split src_route must end with customer
-                return ObjectiveTermDelta()
+                return RawDeltaRecord()
 
             if not split_customer.next_visit.is_customer_visit:
                 # Second split src_route must begin with customer
                 # Note: next_visit is guaranteed to exist since split_customer is a customer visit
-                return ObjectiveTermDelta()
+                return RawDeltaRecord()
 
             vehicle = self.vehicle
             if vehicle is None:
-                return ObjectiveTermDelta() #  Cannot split unassigned routes
+                return RawDeltaRecord() #  Cannot split unassigned routes
 
 
             ## Compute each relevant delta
@@ -2428,37 +2141,33 @@ class Route(VehicleNode):
             # Travel
             travel_delta = split_customer.travel_delta_if_depot_stop_added_after_this(refill_depot)
 
-            # Depot activation
-            # Guaranteed to activate refill depot if self is assigned (which is guaranteed): new src_route will have customers and thus be active
-            depot_activation_delta = int(len(self.depot_route_starts[refill_depot]) == 0)
-
             # No new vehicles will be activated, so we skip vehicle activation delta
 
             # Capacity overloading
-            old_overload = self.amount_overloaded
-
             split2_load = sum(customer.demand for customer in path[split_index:])
             split1_load = self.current_load - split2_load
 
-            split1_new_overload = max(0, split1_load - vehicle.capacity)
-            split2_new_overload = max(0, split2_load - vehicle.capacity)
+            # Two entries, and only two. The route AFTER self keeps its start depot: new_route was
+            # constructed carrying self's ORIGINAL end depot, and it lands between them, so the
+            # successor still starts where it started. refill_depot re-points the FIRST half only.
+            split2_count = self.num_customers - split_index
+            # self keeps its start depot and its vehicle, so it appears only in the two numeric
+            # maps. new_route is CREATED: it gains a depot and a vehicle, so it appears in all four.
 
-            overload_delta = split1_new_overload + split2_new_overload - old_overload
 
-            # Vehicle overloading
-            vehicle_num_overloads = vehicle.num_routes_overloaded
-            vehicle_was_overloaded = vehicle_num_overloads > 0
+            assert split_index > 0 # We NEVER price wasteful splits. Caller must catch this degenerate case.
+            assert split2_count > 0
 
-            route_was_overloaded = old_overload > 0
-            split1_overloaded = split1_new_overload > 0
-            split2_overloaded = split2_new_overload > 0
+            raw = RawDeltaRecord(
+                travel_distance=travel_delta,
+                load_changes={self: (self.current_load, split1_load),
+                                    new_route: (new_route.current_load, split2_load)},
+                customer_deltas={self: (self.num_customers, split_index),
+                                       new_route: (new_route.num_customers, split2_count)},
+                start_depot_changes={new_route: (new_route.start_depot, refill_depot)},
+                vehicle_changes={new_route: (new_route.vehicle, vehicle)})
 
-            vehicle_new_num_overloads = vehicle_num_overloads - route_was_overloaded + split1_overloaded + split2_overloaded
-            vehicle_will_be_overloaded = vehicle_new_num_overloads > 0
-
-            vehicle_num_overloaded_delta = vehicle_will_be_overloaded - vehicle_was_overloaded
-
-            return ObjectiveTermDelta(travel_distance=travel_delta, depots_activated=depot_activation_delta, total_route_overload=overload_delta, vehicles_overloaded=vehicle_num_overloaded_delta)
+            return raw
         #endregion
 
         #region Combining another src_route with this one
@@ -2578,95 +2287,94 @@ class Route(VehicleNode):
 
             return travel_delta
 
-        # Combining cannot activate self.vehicle: we only allow combining with active routes, so self must be nonempty!
-        def depot_activation_delta_for_combine_with(self, other: Route) -> int:
-            if self is other:
-                return 0 # Can't combine with self
-
-            if other == self.next_route:
-                # Combination with next src_route looks very different: The stop in between the routes is just removed, and next-src_route start activation is removed if it's nonempty.
-                return self.depot_activation_delta_for_combine_with_next_route()
-
-            # Combine with prev src_route is the same as combine with nonadjacent:
-            # Effects of current-src_route start depot change are handled by depot removal.
-            # Current-src_route end depot change does not affect current-src_route start depot activation, so the caveat that start and depots may change simultaneously affects nothing.
-            return self.depot_activation_delta_for_combine_with_nonadjacent(other)
-
-        def depot_activation_delta_for_combine_with_nonadjacent(self, other: Route) -> int:
-            assert self is not other, "Cannot combine with self"
-
-            # Depot changes are:
-            # 1) Remove the dest_route src_route from its vehicle
-            # 2) Change the end depot for this src_route to the dest_route's end depot
-
-            # 1) Other removal
-            depot_activation_deltas = other.depot_num_usage_deltas_if_removed()
-
-            # 2) Self end depot replacement
-            next_route = self.next_route
-            if isinstance(next_route, Route) and self.end_depot != other.end_depot:
-                this_depot_activation_deltas = self.depot_num_usage_deltas_if_end_depot_changes(other.end_depot)
-                append_new_defaultdict_by_value_sum(depot_activation_deltas, this_depot_activation_deltas)
-
-            return self.depot_activation_delta_from_depot_num_usage_deltas(depot_activation_deltas, depot_route_starts=self.depot_route_starts)
-
-        def depot_activation_delta_for_combine_with_next_route(self) -> int:
-            # Math is different if combining with next src_route.
-            other = self.next_route
-
-            # Explicitly assume that valid swap vetting is done before this stage. We don't want to double-check these conditions again in production
-            assert other is not None, "No next src_route to combine with"# If dest_route is None the operation is illegal.
-            assert self is not other, "Cannot combine with self"
-            assert isinstance(other, Route), "Can only combine with Routes"
-
-            # Why is it different? When dest_route is removed, the next src_route's start depot changes, and on combination, it changes again.
-            # That is: the "sum of changes" approach calculates outcomes with the wrong predicted data, and
-            # e.g. could count activation of 2 different start depots for the next src_route instead of 1.
-
-            # Depot changes are just: Remove any use count of dest_route's start depot.
-            # Thus, quick computation: If the dest_route src_route is active (has customers, since it's definitely assigned), the depot loses a use, and so deactivates if that lost use was the last one.
-            return -(other.has_customers and len(self.depot_route_starts[other.start_depot]) == 1)
-
-        def overload_related_deltas_for_combine_with(self, other: Route) -> tuple[Num, int]:
-            if self.is_inactive or other.is_inactive or self is other:
-                return 0, 0  # We don't operate with inactive routes except for removal! So return 0 change
-
-            other_load = other.current_load
-            this_overload_delta = self.overload_delta_if_load_changes(other_load)
-            other_overload_delta = other.overload_delta_if_load_changes(-other_load)
-            overload_delta = this_overload_delta + other_overload_delta
-
-
-            vehicles_overloaded_delta = self.is_vehicle_overloaded_delta_if_load_changes_from_other_route(other_load, other)
-
-            return overload_delta, vehicles_overloaded_delta
-
-        def vehicle_activation_delta_for_combine_with(self, other: Route) -> int:
-            if self.vehicle == other.vehicle:
-                # Shuffling routes within a vehicle won't deactivate it
-                return 0
-
-            return -other.is_vehicle_deactivated_if_removed()
-
-        def cost_deltas_for_combine_with(self, other: Route) -> ObjectiveTermDelta:
+        def cost_deltas_for_combine_with(self, other: Route) -> RawDeltaRecord:
             if self is other:
                 raise ValueError("Cannot combine a src_route with itself")
 
+            # Call assumption: self and other are different and nonempty
+            has_customers = self.has_customers
+            other_has_customers = other.has_customers
+            assert self is not other and has_customers and other_has_customers, "Cannot combine a src_route with itself"
+
             travel_delta = self.travel_delta_for_combine_with(other)
-            depot_activation_delta = self.depot_activation_delta_for_combine_with(other)
-            (overload_delta, vehicles_overloaded_delta) = self.overload_related_deltas_for_combine_with(other)
 
-            # If this and dest_route don't share a vehicle, dest_route's vehicle may deactivate
-            vehicle_activation_delta = self.vehicle_activation_delta_for_combine_with(other)
+            # UP TO THREE ROUTES MOVE, and only the first is obvious.
+            #
+            #   self        absorbs other's customers, so load and count rise. Its START DEPOT also
+            #               moves when other is its PREDECESSOR: the chain is other -> self, so
+            #               once other is gone self takes other's slot and therefore other's start
+            #               depot. Claiming it unchanged is wrong, and the raw-record oracle caught
+            #               exactly that on the adjacency="prev" cases.
+            #   other       is emptied AND unlinked in the one call: load and count to zero, start
+            #               depot to a VirtualDepot, vehicle to None.
+            #   next route  inherits other's end depot, because combine_with gives self that end
+            #               depot and a route's end depot IS the next route's start depot. Skipped
+            #               when the next route IS other, which is about to disappear anyway.
+            #   other's own successor inherits other's START depot, because unlinking other closes
+            #               the gap in ITS chain. Only in the NON-ADJACENT case: when other is
+            #               self's successor the two effects coincide (self ends up carrying other's
+            #               end depot, which is what that successor already started at), and when
+            #               other is self's predecessor the successor IS self, handled above.
 
-            return ObjectiveTermDelta(travel_distance=travel_delta, depots_activated=depot_activation_delta, vehicles_activated=vehicle_activation_delta,
-                                      total_route_overload=overload_delta, vehicles_overloaded=vehicles_overloaded_delta)
+            start_depot = self.start_depot
+            other_start_depot = other.start_depot
+            used_start_depot = self.used_start_depot
+            other_used_start_depot = other.used_start_depot
+            self_start = other_used_start_depot if self.prev_route is other else used_start_depot
+
+            current_load = self.current_load
+            loads: dict[Route, tuple[Num, Num]] = {
+                self: (current_load, current_load + other.current_load),
+                other: (other.current_load, 0)}
+            counts: dict[Route, tuple[int, int]] = {
+                self: (self.num_customers, self.num_customers + other.num_customers),
+                other: (other.num_customers, 0)}
+            start_depots: dict[Route, tuple[Depot, Depot]] = {}
+
+            other_active = other.is_active
+            split_legal = self.is_active or other_active
+            assert split_legal, "Cannot price combine solely between inactive routes"
+
+            if other_active:
+                # Uncount other's start depot - it becomes empty and unassigned
+                start_depots[other] = (other_used_start_depot, VIRTUAL_DEPOT)
+
+            if self_start is not start_depot and self.vehicle is not None:
+                start_depots[self] = (used_start_depot, self_start)
+
+            vehicles: dict[Route, tuple[Vehicle | None, Vehicle | None]] = {
+                other: (other.vehicle, None)}
+
+            next_route = self.next_route
+            if (isinstance(next_route, Route) and next_route is not other
+                    and next_route.start_depot != # type: ignore - Linter is an idiot. Gated by isinstance -_-
+                    other.end_depot):
+                assert isinstance(next_route, Route)
+                next_final_use_depot = other.end_depot if next_route.is_active else VIRTUAL_DEPOT
+                start_depots[next_route] = (next_route.used_start_depot, next_final_use_depot)
+
+            other_successor = other.next_route
+            if (isinstance(other_successor, Route) and other_successor is not self
+                    and other is not next_route
+                    and other_successor.start_depot != # type: ignore - Linter is an idiot. Gated by isinstance -_-
+                    other_start_depot):
+                assert isinstance(other_successor, Route)
+                other_successor_final_use_depot = other_start_depot if other_successor.is_active else VIRTUAL_DEPOT
+                start_depots[other_successor] = (other_successor.used_start_depot, other_successor_final_use_depot)
+
+            raw = RawDeltaRecord(travel_distance=travel_delta,
+                                 load_changes=loads,
+                                 customer_deltas=counts,
+                                 start_depot_changes=start_depots,
+                                 vehicle_changes=vehicles)
+
+            return raw
         #endregion
 
         #region Reversing/reassigning subpaths
 
         #region Reversing a subpath
-        def cost_deltas_if_customer_chain_reversed(self, chain: Chain) -> ObjectiveTermDelta:
+        def cost_deltas_if_customer_chain_reversed(self, chain: Chain) -> RawDeltaRecord:
             rng = as_chain_range(chain)
             assert 0 <= rng.start and rng.stop <= self.num_customers and len(rng) > 1, (
                 f"cost_deltas_if_customer_chain_reversed {rng} out of range for "
@@ -2683,14 +2391,19 @@ class Route(VehicleNode):
             old_distance = first_customer.distance_in + last_customer.distance_out
             new_distance = first_customer.prev_visit.distance(last_customer) + last_customer.next_visit.distance(first_customer)
 
-            return ObjectiveTermDelta(travel_distance=new_distance-old_distance)
+            # INTRA-ROUTE: distance and nothing else. No customer crosses a route boundary,
+            # so load, count, start depot and vehicle all end where they started -- and an
+            # a record with no route entries at all. A populated route map
+            # here would mean the raw schema is wrong (guide section 3).
+            travel_delta = new_distance - old_distance
+            return RawDeltaRecord(travel_distance=travel_delta)
 
 
         #endregion
 
         #endregion
 
-        def cost_deltas_if_swapped_with_next_route(self):
+        def cost_deltas_if_swapped_with_next_route(self) -> RawDeltaRecord:
             # These deltas come exclusively from changes in the start_depot of each src_route.
             # So? We simply ask the routes for the travel deltas when swapping their start depots.
             # This includes the src_route after next if it exists.
@@ -2709,11 +2422,11 @@ class Route(VehicleNode):
                 # route2 is the LastRoute sentinel: self is the vehicle's final route, so there
                 # is nothing after it to swap with. No-op rather than an error, matching the
                 # empty-route case below (soft rule on calculate, hard on operate).
-                return ObjectiveTermDelta()
+                return RawDeltaRecord()
 
             if route1.is_empty or route2.is_empty:
                 # Cannot swap with empty routes (soft rule on calculate, hard on operate)
-                return ObjectiveTermDelta()
+                return RawDeltaRecord()
 
             # Before swap: routes are route0->route1->route2->route3
             # After swap: routes are route0->route2->route1->route3
@@ -2722,7 +2435,6 @@ class Route(VehicleNode):
             # 2) src_route 2 starts at original start for route1
             # 3) src_route 3 starts at end of route1
 
-            start_depot_1 = route1.start_depot
             end_depot_1 = route1.end_depot
             end_depot_2 = route2.end_depot
             route3 = route2.next_route
@@ -2733,6 +2445,10 @@ class Route(VehicleNode):
             route2_first_visit = route2.first_visit
             route3_first_visit = route3.first_visit if route3_exists else None # type: ignore
 
+            start_depot_1 = route1.start_depot
+            start_depot_2 = route2.start_depot
+            start_depot_3 = route3.start_depot if route3_exists else VIRTUAL_DEPOT # type: ignore
+
             # TRAVEL DELTAS
             travel_delta_1 = route1_first_visit.start_travel_delta_if_depot_swapped(end_depot_2)
             travel_delta_2 = route2_first_visit.start_travel_delta_if_depot_swapped(start_depot_1)
@@ -2740,82 +2456,37 @@ class Route(VehicleNode):
 
             travel_delta = travel_delta_1 + travel_delta_2 + travel_delta_3
 
-            # DEPOT ACTIVATION DELTAS
-            # Compute num use deltas per start-swap operation
-            depot_num_use_deltas_1 = route1_first_visit.num_depot_usage_deltas_if_depot_swapped(end_depot_2)
-            depot_num_use_deltas_2 = route2_first_visit.num_depot_usage_deltas_if_depot_swapped(start_depot_1)
-            depot_num_use_deltas_3 = route3_first_visit.num_depot_usage_deltas_if_depot_swapped(end_depot_1) if route3_exists else 0 # type: ignore
-
-            # Aggregate num use deltas from the three operations
-            all_depot_num_use_deltas = depot_num_use_deltas_1
-            append_new_defaultdict_by_value_sum(all_depot_num_use_deltas, depot_num_use_deltas_2)
-            if route3_exists: append_new_defaultdict_by_value_sum(all_depot_num_use_deltas, depot_num_use_deltas_3) # type: ignore
-
-            # Compute delta for number of depots activated from full use delta info
-            depot_activation_delta = self.depot_activation_delta_from_depot_num_usage_deltas(all_depot_num_use_deltas, depot_route_starts=self.depot_route_starts)
-
             # Vehicle activation delta = 0: Vehicles are considered active if they have customers,
             # which is unaffected by src_route order.
 
             # Vehicle overloading and total amount of overloading are 0: src_route swapping within a vehicle does not affect src_route/vehicle overloading
 
-            return ObjectiveTermDelta(travel_distance=travel_delta, depots_activated=depot_activation_delta)
+            # Exactly the three start-depot moves the numbered comment above lists, and nothing
+            # else: swapping two adjacent routes carries each one's customers with it, so load,
+            # customer count and vehicle are all unchanged for every route involved.
+
+            start_depots: dict[Route, tuple[Depot, Depot]] | Mapping = {}
+            if route1.is_active and start_depot_1 != end_depot_2:
+                assert isinstance(start_depots, dict)
+                start_depots[route1] = (start_depot_1, end_depot_2)
+            if route2.is_active and start_depot_2 != start_depot_1:
+                assert isinstance(start_depots, dict)
+                start_depots[route2] = (start_depot_2, start_depot_1)
+            if route3_exists and route3.is_active and start_depot_3 != end_depot_1: # type: ignore - route3 is a Route if route3_exists
+                assert isinstance(route3, Route) and isinstance(start_depots, dict)
+                start_depots[route3] = (start_depot_3, end_depot_1)
+
+            if not start_depots:
+                start_depots = NO_CHANGES
+
+            return RawDeltaRecord(travel_distance=travel_delta,
+                                  start_depot_changes=start_depots)
 
         #endregion
 
         #endregion
 
         #region Basic object operations
-
-        def count_load_change(self, load_delta):
-            # Add load_delta to self.current_load, and handle vehicle overload accounting for the load change
-            # Delta must be updated after predicted overload changes are accounted for.
-
-            # Update number of overloads for vehicle
-            vehicle = self.vehicle
-            if vehicle is not None:
-                vehicle.num_routes_overloaded += self.is_overloaded_delta_if_load_changes(load_delta)
-
-            # Update current load delta
-            self.current_load += load_delta
-
-        #region customer registration
-
-        # NOTE: MUST call these before self.num_customers changes if it's not a src_route operation.
-        # Otherwise: Cannot evaluate whether the src_route is about to be empty
-        def register_num_customers_change_in_vehicle(self, num_customer_delta: int, is_route_operation: bool = False):
-            if num_customer_delta == 0: return # No change
-
-            vehicle = self.vehicle
-            if vehicle is not None:
-                # Update num customers
-                vehicle.num_customers += num_customer_delta
-
-                # Update accounting, depending on whether it's a customer or src_route operation
-                delta_sign = 1 if num_customer_delta > 0 else -1
-                if is_route_operation:
-                    # Add or remove. Either count or uncount the src_route based on sign.
-                    vehicle.num_routes_with_customers += delta_sign
-                else:
-                    # Add if positive and currently empty
-                    if delta_sign > 0 and self.is_empty:
-                        vehicle.num_routes_with_customers += 1
-                    if delta_sign < 0 and num_customer_delta == -self.num_customers:
-                        # About to be empty! Decrement customers
-                        vehicle.num_routes_with_customers -= 1
-
-        def count_customers_in_vehicle(self):
-            self.register_num_customers_change_in_vehicle(self.num_customers, is_route_operation=True)
-
-        def uncount_customers_from_vehicle(self):
-            self.register_num_customers_change_in_vehicle(-self.num_customers, is_route_operation=True)
-
-        def register_customer_add_in_vehicle(self):
-            self.register_num_customers_change_in_vehicle(1, is_route_operation=False)
-
-        def register_customer_remove_in_vehicle(self):
-            self.register_num_customers_change_in_vehicle(-1, is_route_operation=False)
-        #endregion
 
         #region Linkage and internal data maintenance# We use only link_after and not link_before: Anytime a src_route links to a prior src_route, it inherits its start depot
 
@@ -2847,15 +2518,10 @@ class Route(VehicleNode):
             # Update next_route depot and linkage
             self._unlink_from_surrounding_routes()
 
-            # Vehicle accounting: Overloading and num customers
-            self.vehicle.num_routes_overloaded -= self.is_overloaded
-
-            self.uncount_customers_from_vehicle()
-
             # Unlink this src_route from the vehicle
             self.vehicle.routes.remove(self)
 
-            self.set_start_depot(VirtualDepot())
+            self.set_start_depot(VIRTUAL_DEPOT)
             self.prev_route = None # type: ignore
             self.next_route = None # type: ignore
             self.vehicle = None # type: ignore
@@ -2878,14 +2544,6 @@ class Route(VehicleNode):
                 # Add to new vehicle and Update accounting
                 self.vehicle = new_vehicle
                 new_vehicle.routes.add(self)
-
-                # Handle accounting
-                self.count_customers_in_vehicle()
-
-                # Mark src_route as an overload for this vehicle
-                # Pitfall for counting routes overloaded per vehicle: opt may shift all overloaded routes to one vehicle instead of splitting them.
-                # To help counteract this, we can add a "Split_random_overloaded_route" operator - active if there are some overloaded routes
-                new_vehicle.num_routes_overloaded += self.is_overloaded
 
         def link_to_vehicle_before(self, other: Route | LastRoute):
             if other is self or other is self.next_route:
@@ -2926,28 +2584,15 @@ class Route(VehicleNode):
             other.next_route._link_after(self)
             self._link_after(other)
 
-        def populate_derived_data(self):
-            # Link path visits together, and compute delivery load for src_route
-            self.uncount_customers_from_vehicle()
-            path = self.path
-            self.count_customers_in_vehicle()
-
-            if len(path) == 0:
-                self.count_load_change(-self.current_load) # Remove all load from self - and update any requisite vehicle overload accounting.
-                self.first_visit.next_visit = self.last_visit
-                self.last_visit.prev_visit = self.first_visit
-                return
-
-            # Update current load and vehicle overload accounting
-            current_load = sum(c.demand for c in path)
-            self.count_load_change(current_load-self.current_load)
-            # Link visits
-            self.link_visits()
-
         def link_visits(self):
             # For use during copy or similar:
             # Relink visits without updating any accounting
             path = self.path
+
+            if len(path) == 0:
+                self.first_visit.next_visit = self.last_visit
+                self.last_visit.prev_visit = self.first_visit
+                return
 
             curr_visit = self.first_visit
             last_visit = self.last_visit
@@ -3006,24 +2651,6 @@ class Route(VehicleNode):
             c.next_visit = next_visit
             next_visit.prev_visit = c
 
-        # To be called exactly once from FullSolution directly after initial solution is populated
-        def link_depot_uses(self, depot_route_starts: defaultdict[Depot, RouteSet]):
-            self.depot_route_starts = depot_route_starts
-
-            self.first_visit.depot_route_starts = depot_route_starts
-            self.last_visit.depot_route_starts = depot_route_starts
-
-            for visit in self.path:
-                visit.depot_route_starts = depot_route_starts
-
-        # To be called only when a new src_route is created during mid-solve.
-        # Currently, only a few operations can do this, like Split()
-        def link_depot_uses_except_customers(self, depot_route_starts: defaultdict[Depot, RouteSet]):
-            self.depot_route_starts = depot_route_starts
-
-            self.first_visit.depot_route_starts = depot_route_starts
-            self.last_visit.depot_route_starts = depot_route_starts
-
         @staticmethod
         def unlink_customer(customer: CustomerVisit):
             # Called at the end of remove operation
@@ -3073,27 +2700,12 @@ class Route(VehicleNode):
 
         #region Customer move operations
         def insert_customer(self, customer: CustomerVisit, index):
-            # Just inserts the customer. Updates start depot's "num_used" if the this route goes
-            # inactive -> active. Mirrors CustomerVisit.unlink_from_route's decrement: the rule is
-            # "uses its depot" = "has customers AND is assigned" (is_active), NOT is_trivial --
-            # an empty route with start != end is non-trivial but still inactive/uncounted.
-            if self.is_inactive and self.is_active_after_customer_add():
-                self.first_visit.count_route_depot_use(self)
-
-            self.register_customer_add_in_vehicle()
-            self.count_load_change(customer.demand)
-
+            # Just inserts the customer.
             self.path.insert(index, customer)
             self.link_customer(index)
 
         def append_customer(self, customer):
-            # Just appends the customer. Same inactive -> active depot-usage rule as insert_customer.
-            if self.is_inactive and self.is_active_after_customer_add():
-                self.first_visit.count_route_depot_use(self)
-
-            self.register_customer_add_in_vehicle()
-            self.count_load_change(customer.demand)
-
+            # Just appends the customer.
             self.path.append(customer)
             self.link_customer(self.path_len-1)
 
@@ -3103,24 +2715,13 @@ class Route(VehicleNode):
             #   the normal list removal cost.
             #   Updates start depot's "num_used" if the src_route becomes trivial post-remove.
 
-            self.register_customer_remove_in_vehicle()
-            self.count_load_change(-customer.demand)
-
             customer.unlink_from_route()
             self.path.remove(customer)
 
-            # Customer unlinking takes care of depot usage accounting.
-
         def pop_customer_at(self, index: int) -> CustomerVisit:
             # Pops the src_route customer at index and returns it.
-            #   Updates start depot's "num_used" if the src_route becomes trivial post-pop.
-            self.register_customer_remove_in_vehicle()
-            self.count_load_change(-self.path[index].demand)
-
             self.unlink_customer_at(index)
             customer = self.path.pop(index)
-
-            # Customer unlinking takes care of depot usage accounting.
 
             return customer
 
@@ -3155,7 +2756,6 @@ class Route(VehicleNode):
             new_route.current_load = self.current_load
 
             # SKIP depot_route_starts: MUST be linked by FullSolution
-
             return new_route
 
         #endregion
@@ -3250,23 +2850,15 @@ class Route(VehicleNode):
                 assert not (new_route.is_assigned or new_route.has_customers), "Invalid route specified for split: target route must be empty and unassigned"
                 new_route.set_values(path = path[split_index:])
 
-            # Remove the tail of the path from the original src_route, and update customer linkages without affecting vehicle customer accounting.
-
-            # We've removed some customers! So un-count them from the vehicle.
-            # They'll be re-counted on insertion of the new src_route.
-            self.register_num_customers_change_in_vehicle(-new_route.num_customers, is_route_operation=False)
-
+            # Remove the tail of the path from the original src_route, and update customer linkages.
             self.path = path[:split_index]
             self.relink_customer(split_index-1)
             new_route.relink_customer(0)
-
-            new_route.link_depot_uses_except_customers(self.depot_route_starts)
 
             # Replace end depot of this src_route with refill_depot
             # We use set_end_depot to ensure that all depot accounting is correct (and self.end_depot=next_route.start_depot
             # as expected) before we insert the new src_route after this one.
             self.set_end_depot(refill_depot)
-            self.count_load_change(-new_route.current_load)
 
             # Add new route after self
             new_route.link_to_vehicle_after(self)
@@ -3294,13 +2886,8 @@ class Route(VehicleNode):
             # Also, increment current vehicle's overload count if this src_route is newly overloaded. (Un-overloading is not possible since demands>0!)
             start_len = self.path_len
 
-            # Even if vehicle is the same, this is needed to balance out the accounting from other.unlink_from_vehicle.
-            # Still needed: #customers doesn't change, but vehicle's num_routes_with_customers might!
-            self.register_num_customers_change_in_vehicle(other.num_customers, is_route_operation=False)
-
             self.path += other.path
             self.set_end_depot(other.end_depot)
-            self.count_load_change(other.current_load)
 
             # Relink dest_route's first customer in self (links src_route ends together), and reassign others' routes as self
             self.relink_customer(start_len)
@@ -3371,7 +2958,7 @@ class Route(VehicleNode):
                     # ..._from_same_route skips the load bookkeeping, which is exactly right here:
                     # the demand never leaves this route, so the full replace_customer would add
                     # and subtract the same amount.
-                    path[span_start + offset].replace_customer_with_customer_from_same_route(customer)
+                    path[span_start + offset].replace_customer(customer)
 
             if reverse:
                 self.reverse_customer_chain(range(dest, dest + k))
@@ -3393,20 +2980,9 @@ class Route(VehicleNode):
             prev_visit = removed[0].prev_visit
             next_visit = removed[-1].next_visit
 
-            # Both of these read path_len, so they must run before the path shrinks.
-            self.register_num_customers_change_in_vehicle(-k, is_route_operation=False)
-            self.count_load_change(-sum(visit.demand for visit in removed))
-
-            was_active = self.is_active
             path[rng.start:rng.stop] = []
             prev_visit.next_visit = next_visit
             next_visit.prev_visit = prev_visit
-
-            # Mirror of insert_customer's inactive -> active increment. unlink_from_route asks this
-            # per customer via will_decrement_depot_usage_if_removed(), which only fires on the
-            # last one; removing a whole chain reaches the same state in one step.
-            if was_active and self.is_inactive:
-                self.first_visit.uncount_route_depot_use(self)
 
             for visit in removed:
                 visit.route = None
@@ -3423,12 +2999,6 @@ class Route(VehicleNode):
             assert 0 <= dest_idx <= self.num_customers, (
                 f"insert_customer_chain dest_idx={dest_idx} out of range for "
                 f"{self.num_customers} customers.")
-
-            if self.is_inactive and self.is_active_after_customer_add():
-                self.first_visit.count_route_depot_use(self)
-
-            self.register_num_customers_change_in_vehicle(k, is_route_operation=False)
-            self.count_load_change(sum(visit.demand for visit in visits))
 
             # Reverse the LIST before splicing rather than calling reverse_customer_chain after.
             # Reversing afterward rewrites source_customer in every slot -- a second pass, plus
@@ -3925,6 +3495,17 @@ class Vehicle:
     @property
     def has_overloaded_route(self) -> bool:
         return self.num_routes_overloaded > 0
+
+    def apply_counter_change(self, routes_overloaded: int, routes_with_customers: int,
+                             num_customers: int) -> None:
+        """Write already-resolved deltas to this vehicle's cached counters.
+
+        Reached only through FullSolution.apply_accounting. It decides nothing -- every argument
+        arrives resolved, so there is no threshold to compare against here.
+        """
+        self.num_routes_overloaded += routes_overloaded
+        self.num_routes_with_customers += routes_with_customers
+        self.num_customers += num_customers
     #endregion
 
     #region Index-safe src_route and depot getters
@@ -4361,19 +3942,21 @@ class FullSolution:
     #region Delta computations (Just removing all empty routes for now)
 
     @staticmethod
-    def cost_deltas_for_removing_empty_routes(routes: RouteSet) -> ObjectiveTermDelta:
+    def cost_deltas_for_removing_empty_routes(routes: RouteSet) -> RawDeltaRecord:
         # Walks prev_route/next_route chains within the set of routes being removed, so adjacent
         # removals aren't double-counted, then accounts for each maximal chain's successor (if a
         # real Route) now starting where the chain started instead of where it ended.
+        assert all(len(route.path) == 0 for route in routes)
+
         routes_remaining = routes.copy()
         num_routes = len(routes_remaining)
         if num_routes == 0:
-            return ObjectiveTermDelta()
+            return RawDeltaRecord()
 
-        depot_route_starts = next(iter(routes_remaining)).depot_route_starts
         travel_delta = 0
-        depot_usage_deltas = defaultdict(int)
         routes_to_remove = []
+        raw_start_depots: dict[Route, tuple[Depot, Depot]] | Mapping = {}
+        raw_vehicles: dict[Route, tuple[Vehicle | None, Vehicle | None]] | Mapping = {}
 
         while num_routes > 0:
             first_in_sequence = routes_remaining[0]
@@ -4410,16 +3993,34 @@ class FullSolution:
             if isinstance(successor, Route):
                 chain_start_depot = first_in_sequence.start_depot
                 travel_delta += successor.first_visit.start_travel_delta_if_depot_swapped(chain_start_depot)
-                append_new_defaultdict_by_value_sum(
-                    depot_usage_deltas, successor.depot_num_usage_deltas_if_start_depot_changes(chain_start_depot))
+
+                successor_start = successor.start_depot
+                if successor.is_active and successor_start != chain_start_depot and successor not in routes_to_remove:
+                    assert isinstance(raw_start_depots, dict)
+                    raw_start_depots[successor] = (successor.start_depot, chain_start_depot)
+
+            # Record entries for this chain BEFORE routes_to_remove is cleared below. Every route
+            # here is empty by precondition, so load and count are 0 on both sides; the transition
+            # that matters is the unlink, which restores a fresh VirtualDepot and drops the vehicle.
+            for removed in routes_to_remove:
+                # Safeguard: This method is for EMPTY routes only - see method title.
+                # Depot use count doesn't budge: Route is empty and is about to be unassigned too, so state change is inactive->inactive
+                assert not len(removed.path) > 0 and isinstance(raw_vehicles, dict)
+                raw_vehicles[removed] = (removed.vehicle, None)
 
             # Remove the routes
             routes_remaining.difference_update(routes_to_remove)
             num_routes = len(routes_remaining)
             routes_to_remove.clear()
 
-        depots_activated = Route.depot_activation_delta_from_depot_num_usage_deltas(depot_usage_deltas, depot_route_starts)
-        return ObjectiveTermDelta(travel_distance=travel_delta, depots_activated=depots_activated)
+        if not raw_start_depots:
+            raw_start_depots = NO_CHANGES
+        if not raw_vehicles:
+            raw_vehicles = NO_CHANGES
+
+        return RawDeltaRecord(travel_distance=travel_delta,
+                              start_depot_changes=raw_start_depots,
+                              vehicle_changes=raw_vehicles)
 
     #endregion
 
@@ -4494,7 +4095,6 @@ class FullSolution:
         # None must not be handed a mutated solution as a side effect.
         self.readd_set_aside_routes(set_aside)
         return None
-        return None
 
     def choose_random_route_insertion_destination(self) -> Route | LastRoute | None:
         # Choose a random route OR last_route for a vehicle
@@ -4560,7 +4160,6 @@ class FullSolution:
         if route.is_empty:
             raise ValueError("Cannot add empty routes.")
 
-        route.link_depot_uses(self.depot_route_starts)
         vehicle.append_route(route)
         self.all_routes.add(route)
 
@@ -4572,13 +4171,74 @@ class FullSolution:
             raise ValueError("Cannot add empty routes.")
 
         vehicle = self.vehicles[vehicle_id]
-        route.link_depot_uses(self.depot_route_starts)
         vehicle.append_route(route)
         self.all_routes.add(route)
 
-    def link_num_depot_uses_to_all(self):
+    #endregion
+
+    #region Accounting application
+    def initialize_accounting(self) -> None:
+        """
+        Build every derived cache directly from the structure, before anything reads the objective.
+        Idempotent: every write is an absolute value recomputed from the structure, never a delta.
+
+        See design/raw_delta_accounting/tracking_for_cached_accounting.md.
+        """
+        # Loads first. The vehicle counters below read route.is_overloaded, which reads
+        # current_load, so this ordering is required rather than stylistic.
         for route in self.all_routes:
-            route.link_depot_uses(self.depot_route_starts)
+            route.current_load = route.recompute_current_load()
+
+        # depot_usage_breakdown() is the oracle's own definition of which routes start where, so
+        # the build path and the check that grades it cannot disagree. __copy__ rebuilds it the
+        # same way, for the same reason.
+        self.depot_route_starts = self.depot_usage_breakdown()
+
+        for vehicle in self.vehicles:
+            vehicle.num_customers = sum(route.num_customers for route in vehicle.routes)
+            vehicle.num_routes_with_customers = sum(route.num_customers > 0
+                                                    for route in vehicle.routes)
+            vehicle.num_routes_overloaded = sum(route.is_overloaded for route in vehicle.routes)
+
+    def apply_accounting(self, record: AccountingRecord):
+        """
+        Write one resolved accounting record. The only place a derived cache is written, and it
+        decides nothing: assignment and arithmetic over numbers the processor already resolved.
+
+        See design/raw_delta_accounting/accounting_record.md.
+        """
+
+        # Unpack the record
+        vehicle_delta_routes_overloaded, vehicle_delta_active_routes, vehicle_delta_num_customers,\
+            route_loads, start_depot_changes = record
+
+        # Update vehicle route overload counts
+        if vehicle_delta_routes_overloaded != NO_CHANGES:
+            for (vehicle, route_overloaded_delta) in vehicle_delta_routes_overloaded.items():
+                vehicle.num_routes_overloaded += route_overloaded_delta
+
+        if vehicle_delta_active_routes != NO_CHANGES:
+            for (vehicle, delta_active_routes) in vehicle_delta_active_routes.items():
+                vehicle.num_routes_with_customers += delta_active_routes
+
+        if vehicle_delta_num_customers != NO_CHANGES:
+            for (vehicle, delta_num_customers) in vehicle_delta_num_customers.items():
+                vehicle.num_customers += delta_num_customers
+
+        if route_loads != NO_CHANGES:
+            for route, (_, final_load) in route_loads.items():
+                route.current_load = final_load
+
+        depot_starts = self.depot_route_starts
+        if start_depot_changes != NO_CHANGES:
+            for route, (init_depot, final_depot) in start_depot_changes.items():
+                # Could pre-aggregate by depot to save internal self calls, but:
+                # Would either create a new set/list (defeats the point of aggregation),
+                # Or (via iterable) searches the whole changeset per depot (bad complexity)
+                if init_depot is not VIRTUAL_DEPOT:
+                    depot_starts[init_depot].remove(route)
+                if final_depot is not VIRTUAL_DEPOT:
+                    depot_starts[final_depot].add(route)
 
     #endregion
 
@@ -4705,9 +4365,6 @@ class FullSolution:
         # definition of which routes start where, so using it here means the copy path and the
         # check can never disagree.
         new_sln.depot_route_starts = new_sln.depot_usage_breakdown()
-
-        # IMPORTANT to do it here so all objects see the copy's map instead of the original's.
-        new_sln.link_num_depot_uses_to_all()
 
         return new_sln
 
