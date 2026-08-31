@@ -1,6 +1,6 @@
 # Raw-delta accounting
 
-**IMPLEMENTED, steps 0-3 and 5, commit `TODO(fill-after-squash)` on branch `raw-delta-accounting`.**
+**IMPLEMENTED, steps 0-3 and 5, commit `321864b` on branch `raw-delta-accounting`.**
 Step 4, end-depot usage tracking, is deferred -- see
 [route-distance-tracking](../core-refactors/route-distance-tracking.md) and "How this diverged, and
 why" at the end. The `AccountingRecord` shape shipped is not the one this plan describes; the

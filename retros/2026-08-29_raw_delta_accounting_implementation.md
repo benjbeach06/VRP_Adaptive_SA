@@ -252,8 +252,18 @@ Suite 97 / 1 skip. `check_links.sh` clean.
 
 ### What Benjamin can learn
 
-Nothing this round. Iterative review is the process working, not a failure. The convention
-checklist exists and is extended as needed.
+Small, and named as small. The processor accounting-record table churned about four edits because
+two passes disagreed: one round said the table duplicated `accounting_record.md` and had it cut to
+prose, a later round read it as a different perspective and had it restored, then reshaped. The
+table's heading already framed it as "how the processor derives them". Cost was minor -- a handful
+of short edits on one table.
+
+No skill or tool would have shortened the work he did. No premature "go" -- every approval followed
+a stated plan.
+
+The earlier framing that review "arrived across four rounds" as a fault is retracted: iterative
+review is the process working. But the search for his side is done each retro, per
+[[feedback-retro-procedure]], not skipped.
 
 ### Workflow improvements
 

@@ -8,7 +8,7 @@ Features planned and built. Each file records the plan as agreed, then how it di
 | [hierarchical-magnetism.md](hierarchical-magnetism.md) | `c25a7a0` | the weight magnet pulls an unproposed operator toward its SIBLINGS, not the flat roster -- see [design/operator_selection/hierarchical_magnetism.md](../../design/operator_selection/hierarchical_magnetism.md) |
 | [forget-benefit-not-cost.md](forget-benefit-not-cost.md) | `c25a7a0` | the weight EMA decays benefit every segment while the cost-ratio penalty never decays -- see [design/operator_selection/dynamic_penalty.md](../../design/operator_selection/dynamic_penalty.md) |
 | [doubly-linked-references.md](doubly-linked-references.md) | `e5262c3` | every doc reference recorded at both ends; shipped as three scripts (`link_scan.py`, `link_annotate.py`, `update_linkages_for_move.py`) plus two skills, wider than the plan's checker-only design |
-| [raw-delta-accounting.md](raw-delta-accounting.md) | `TODO(squash)` | the core model reports raw structural deltas; one processor derives every objective term and one sink writes every cache, replacing ~29 per-mutation derivations. The record shape and apply mechanism diverged from the plan; step 4 (end-depot usage) is deferred -- see [design/raw_delta_accounting/](../../design/raw_delta_accounting/) |
+| [raw-delta-accounting.md](raw-delta-accounting.md) | `321864b` | the core model reports raw structural deltas; one processor derives every objective term and one sink writes every cache, replacing ~29 per-mutation derivations. The record shape and apply mechanism diverged from the plan; step 4 (end-depot usage) is deferred -- see [design/raw_delta_accounting/](../../design/raw_delta_accounting/) |
 
 ## References
 
