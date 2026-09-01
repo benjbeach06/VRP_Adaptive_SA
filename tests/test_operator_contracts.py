@@ -35,7 +35,7 @@ from _harness import (
     DirectOperator,
     all_problems, fingerprint, make_depots, make_solution, random_instance,
     raw_record_claim_problems, raw_record_completeness_problems,
-    raw_record_distance_problems, route_of, route_states, term_deltas,
+    raw_record_distance_problems, route_of, route_states, route_travels, term_deltas,
 )
 from SimAnn_VRP_BLOperators import CombineRoutes, ReassignRouteBefore
 
@@ -56,6 +56,7 @@ class OperatorContractBase(SeededTestCase):
         before_fingerprint = fingerprint(sln)
         before_terms = sln.objective_terms()
         before_states = route_states(sln)
+        before_travels = route_travels(sln)
 
         move = operator.evaluate(operands)
         if not move.is_actionable:
@@ -90,8 +91,10 @@ class OperatorContractBase(SeededTestCase):
                          f"{label}: raw delta record disagrees with the mutation it describes")
         self.assertEqual(raw_record_completeness_problems(before_states, sln, move.raw_deltas), [],
                          f"{label}: raw delta record is missing a route that changed")
-        self.assertEqual(raw_record_distance_problems(before_terms, after_terms, move.raw_deltas), [],
-                         f"{label}: raw delta record's travel_distance is wrong")
+        self.assertEqual(
+            raw_record_distance_problems(before_terms, after_terms, move.raw_deltas,
+                                         before_travels, sln), [],
+            f"{label}: raw delta record's travel attribution is wrong")
 
         # No commit() here: committing finalises the move and clears the operator's revert
         # payload, so a contract test that commits can no longer check the revert half.
@@ -237,6 +240,7 @@ class RandomisedOperatorContract(OperatorContractBase):
             # BEFORE propose(), not after: a by-applying operator mutates during evaluate, so a
             # snapshot taken afterwards would already include the change it is meant to witness.
             before_states = route_states(sln)
+            before_travels = route_travels(sln)
 
             move = wrapper.propose()
             if not move.is_actionable:
@@ -275,8 +279,9 @@ class RandomisedOperatorContract(OperatorContractBase):
             self.assertEqual(raw_record_completeness_problems(before_states, sln, move.raw_deltas), [],
                              f"{label}: raw delta record is missing a route that changed")
             self.assertEqual(
-                raw_record_distance_problems(before_terms, sln.objective_terms(), move.raw_deltas),
-                [], f"{label}: raw delta record's travel_distance is wrong")
+                raw_record_distance_problems(before_terms, sln.objective_terms(), move.raw_deltas,
+                                             before_travels, sln),
+                [], f"{label}: raw delta record's travel attribution is wrong")
 
             wrapper.revert_and_reject(move)
             self.assertEqual(fingerprint(sln), before_fingerprint,

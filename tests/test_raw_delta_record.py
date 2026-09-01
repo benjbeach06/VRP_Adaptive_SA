@@ -26,13 +26,13 @@ from _harness import (Customer, Depot, SeededTestCase, Vehicle, depot_usage_prob
 from SimAnn_VRP_Core_Model import AccountingRecord, Num, RawDeltaRecord, VIRTUAL_DEPOT
 
 
-def rec(travel: Num = 0, loads=None, counts=None, starts=None, vehicles=None) -> RawDeltaRecord:
+def rec(travels=None, loads=None, counts=None, starts=None, vehicles=None) -> RawDeltaRecord:
     """Test-only convenience: build a record naming only the maps a case cares about.
 
     Omitting a map here means what it means in production code -- nothing moved in that field --
     so these tests exercise the real shape rather than a padded one.
     """
-    return RawDeltaRecord(travel, loads or {}, counts or {}, starts or {}, vehicles or {})
+    return RawDeltaRecord(travels or {}, loads or {}, counts or {}, starts or {}, vehicles or {})
 
 
 class RawDeltaComposition(SeededTestCase):
@@ -45,7 +45,24 @@ class RawDeltaComposition(SeededTestCase):
         self.vehicle = Vehicle(i=0, initial_depot=self.depots[0], capacity=100)
 
     def test_distance_adds(self):
-        self.assertAlmostEqual(rec(3.5).then(rec(-1.25)).travel_distance, 2.25, places=9)
+        """Travel is a per-route DELTA, so composing two records adds the two maps."""
+        first = rec(travels={self.route_a: 3.5})
+        second = rec(travels={self.route_a: -1.25})
+        composed = first.then(second)
+        self.assertAlmostEqual(composed.travel_distance, 2.25, places=9)
+        self.assertAlmostEqual(composed.travel_changes[self.route_a], 2.25, places=9)
+
+    def test_distance_on_two_routes_stays_separate(self):
+        """The whole point of the per-route map: the total is a sum, not the only fact kept."""
+        composed = rec(travels={self.route_a: 3.5}).then(rec(travels={self.route_b: -1.25}))
+        self.assertAlmostEqual(composed.travel_changes[self.route_a], 3.5, places=9)
+        self.assertAlmostEqual(composed.travel_changes[self.route_b], -1.25, places=9)
+        self.assertAlmostEqual(composed.travel_distance, 2.25, places=9)
+
+    def test_a_travel_delta_that_cancels_drops_out(self):
+        composed = rec(travels={self.route_a: 4.0}).then(rec(travels={self.route_a: -4.0}))
+        self.assertNotIn(self.route_a, composed.travel_changes)
+        self.assertEqual(composed.travel_distance, 0)
 
     def test_a_route_in_both_records_keeps_the_first_base_and_the_last_final(self):
         """The whole point of transition form: the composed record still carries the true base."""
@@ -121,11 +138,43 @@ class RawDeltaComposition(SeededTestCase):
 
     def test_load_is_exempt_from_the_gap_assert(self):
         """Float drift across a chain of load moves is expected, so composing must not assert on
-        it. A wrong load still surfaces, through the overload term."""
+        it. A wrong load still surfaces, through the overload term.
+
+        Numeric fields compose by DELTA, so the drifted base costs its own 1e-9 and nothing more:
+        the composed final is the first record's final plus the second record's own movement.
+        """
         first = rec(loads={self.route_a: (1, 5)})
         second = rec(loads={self.route_a: (5.000000001, 9)})
 
-        self.assertEqual(first.then(second).load_changes[self.route_a], (1, 9))
+        initial, final = first.then(second).load_changes[self.route_a]
+        self.assertEqual(initial, 1)
+        self.assertAlmostEqual(final, 9, places=6)
+
+    def test_a_second_step_on_one_route_composes_by_its_own_delta(self):
+        """THE CASE ENDPOINT COMPOSITION GOT WRONG, and the reason numeric fields changed rule.
+
+        A sink-written base does not move when the structure does, so an operator pricing two
+        sub-steps against ONE route reads the SAME pre-move base both times. Two removals of 10
+        and 11 from a load of 75 each report an initial of 75. Keeping the second record's final
+        composed those to (75, 64) -- the first step's delta silently discarded -- where the truth
+        is (75, 54), and the sink wrote 64.
+
+        Nothing in the roster takes two sub-steps on one route today. Ruin-and-recreate does, on
+        its first same-route double removal.
+        """
+        first = rec(loads={self.route_a: (75, 65)})
+        second = rec(loads={self.route_a: (75, 64)})   # stale base: still reads 75
+
+        self.assertEqual(first.then(second).load_changes[self.route_a], (75, 54))
+
+    def test_a_live_second_base_composes_the_same_way(self):
+        """Delta composition needs no knowledge of which case it is in. When the second record IS
+        measured against the state the first left, its initial equals the first's final and the
+        rule collapses to the second record's own endpoint."""
+        first = rec(loads={self.route_a: (75, 65)})
+        second = rec(loads={self.route_a: (65, 54)})
+
+        self.assertEqual(first.then(second).load_changes[self.route_a], (75, 54))
 
     def test_an_omitted_field_is_shared_and_cannot_be_written(self):
         """The defaults are ONE shared empty map, so sharing has to be made safe by immutability.
@@ -418,7 +467,7 @@ class RawRecordDistance(SeededTestCase):
         self.assertNotAlmostEqual(real, 0, places=6, msg="the setup mutation moved no distance")
 
         problems = raw_record_distance_problems(
-            before_terms, after_terms, RawDeltaRecord.for_travel(real + 7.5))
+            before_terms, after_terms, RawDeltaRecord.for_travel(self.route, real + 7.5))
 
         self.assertTrue(any("travel_distance" in p for p in problems),
                         f"a wrong distance produced no finding: {problems}")

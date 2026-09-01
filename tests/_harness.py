@@ -239,6 +239,36 @@ def load_problems(sln: FullSolution) -> list[str]:
             if abs(route.recompute_current_load() - route.current_load) > 1e-9]
 
 
+# Two float summations in different orders, so this cannot be an exact comparison. The tolerance
+# is scaled by the magnitude of the value: route totals here run to a few hundred units and a
+# solution total to a few thousand, and an incremental sum of millions of deltas accumulates
+# rounding at the last bits of that magnitude. A real missed update is orders larger.
+TRAVEL_TOLERANCE = 1e-6
+
+
+def travel_problems(sln: FullSolution) -> list[str]:
+    """Cached route and vehicle distance must equal a fresh walk.
+
+    The dual truth this pipeline accepts: the priced per-route delta and the geometry are two
+    derivations of one quantity, and nothing else compares them. A mutation whose aggregator
+    forgets a route, or attributes its share to the wrong one, shows up here and nowhere else --
+    the solution-level total stays right, because the per-route shares still sum to the same
+    number.
+    """
+    problems = []
+    for route in sln.all_routes:
+        recomputed = route.recompute_current_travel()
+        if abs(recomputed - route.current_travel) > TRAVEL_TOLERANCE:
+            problems.append(f"{route}: cached travel {route.current_travel} != "
+                            f"recomputed {recomputed}")
+    for vehicle in sln.vehicles:
+        recomputed = vehicle.get_total_distance()
+        if abs(recomputed - vehicle.current_travel) > TRAVEL_TOLERANCE:
+            problems.append(f"vehicle {vehicle.vID}: cached travel {vehicle.current_travel} != "
+                            f"recomputed {recomputed}")
+    return problems
+
+
 def vehicle_counter_problems(sln: FullSolution) -> list[str]:
     """Each vehicle's incrementally-maintained counters must equal a fresh walk of its route chain.
 
@@ -389,36 +419,55 @@ def raw_record_completeness_problems(before_states: dict, sln: FullSolution, rec
     return problems
 
 
-def raw_record_distance_problems(before_terms, after_terms, record) -> list[str]:
-    """The record's travel_distance must match the distance the solution actually moved.
+def route_travels(sln: FullSolution) -> dict:
+    """Every route's distance, measured from the geometry. Paired with the call below."""
+    return {route: route.recompute_current_travel() for route in sln.all_routes}
 
-    THE THIRD HALF, and the only one that reads a field outside `routes`. The other two check
-    structural transitions; distance is a plain sum on the record itself, so neither of them can
-    see it at all. Without this, an aggregator that populates ONLY distance -- every intra-route
-    one does, by design -- is covered by no oracle whatsoever.
 
-    Scoped the same way completeness is, and for the same reason: an aggregator that has not been
-    converted yet reports 0, which is indistinguishable from a converted one reporting the wrong
-    value. So this is not wired into assert_operator_contract until all 24 populate distance. Until
-    then it is called directly, over the aggregators known to be converted.
+def raw_record_distance_problems(before_terms, after_terms, record,
+                                 before_travels=None, sln=None) -> list[str]:
+    """Travel, checked at BOTH levels: the solution total, and each route's share of it.
 
-    Deliberately NOT phrased as "0 or correct". That version would be unconditional today and would
-    strengthen on its own, but it permanently excuses a converted aggregator that wrongly reports
-    zero -- the conditional-oracle trap that made the missing counter oracles worthless.
+    THE THIRD HALF, and the only one that reads something other than a structural transition. The
+    per-route half is the load-bearing one now that travel is attributed: the shares can be
+    misassigned between two routes and still sum to a correct solution total, so the total alone
+    cannot see the mistake. Cross-route chain moves are exactly where that happens, because the
+    link deltas are only jointly correct and the split has to move the chain's interior across by
+    hand.
+
+    Deliberately NOT phrased as "0 or correct" -- that version permanently excuses an aggregator
+    that wrongly reports zero, which is the conditional-oracle trap that made the missing counter
+    oracles worthless.
     """
+    problems = []
+
     claimed = record.travel_distance
     measured = after_terms.travel_distance - before_terms.travel_distance
     # places=9 matches the per-term contract assertion; both sides sum floats in different orders.
     if round(claimed - measured, 9) != 0:
-        return [f"record claims travel_distance {claimed} but the solution moved {measured}"]
-    return []
+        problems.append(f"record claims travel_distance {claimed} but the solution moved {measured}")
+
+    if before_travels is None or sln is None:
+        return problems
+
+    after_travels = route_travels(sln)
+    claims = record.travel_changes
+    for route in set(before_travels) | set(after_travels) | set(claims):
+        was = before_travels.get(route, 0)
+        now = after_travels.get(route, 0)
+        moved = now - was
+        stated = claims.get(route, 0)
+        if abs(stated - moved) > TRAVEL_TOLERANCE:
+            problems.append(f"{route}: record claims travel changed by {stated}, "
+                            f"but it moved by {moved} ({was} -> {now})")
+    return problems
 #endregion
 
 
 def all_problems(sln: FullSolution) -> list[str]:
     return (visit_link_problems(sln) + depot_usage_problems(sln)
             + chain_problems(sln) + load_problems(sln)
-            + vehicle_counter_problems(sln))
+            + travel_problems(sln) + vehicle_counter_problems(sln))
 
 
 def fingerprint(sln: FullSolution):

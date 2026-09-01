@@ -597,15 +597,16 @@ class PermuteChain(OperatorBL[PermuteChainOps]):
             return None, MoveKind.NOOP
 
         # Route-local O(path length) measurement, not a full-solution objective_terms() diff.
+        # Measured, not read off route.current_travel: that cache is sink-written, so it does not
+        # move when this operator mutates during pricing, and both reads would return the same
+        # number.
         before = route.total_distance()
         self._revert_info = self._apply_impl(operands)
         after = route.total_distance()
         # Intra-route permutation: distance only, same as the L3 intra-route aggregators. Nothing
-        # structural moves, so the record carries no route entry.
-        # The record carries the distance and the ObjectiveTermDelta does not: since step 1 the
-        # processor derives travel_distance from the record, and setting it here too doubles it.
+        # structural moves, so the record names this route and no other.
         travel_delta = after - before
-        return RawDeltaRecord(travel_distance=travel_delta), MoveKind.VALID
+        return RawDeltaRecord(travel_changes={route: travel_delta}), MoveKind.VALID
 
     def _apply_impl(self, operands: PermuteChainOps) -> tuple[Route, int, Sequence[int]]:
         route, chain, permutation = operands

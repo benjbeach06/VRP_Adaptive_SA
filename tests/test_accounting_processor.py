@@ -63,7 +63,7 @@ class OverloadDerivation(SeededTestCase):
         field, and the processor reads it off the route -- which is exactly the behaviour under
         test, so the omissions here are deliberate rather than shorthand.
         """
-        record = RawDeltaRecord(0, loads or {}, {}, {}, vehicles or {})
+        record = RawDeltaRecord({}, loads or {}, {}, {}, vehicles or {})
         terms, _ = AccountingProcessor.process(record, self.sln)
         return terms.total_route_overload
 
@@ -134,7 +134,7 @@ class OverloadDerivation(SeededTestCase):
 
     def test_distance_passes_through_untouched_alongside_the_overload(self):
         """Step 1's term must survive step 2. Both are produced by the one call."""
-        record = RawDeltaRecord(7.5, {self.route_a: (50, 50)}, {}, {},
+        record = RawDeltaRecord({self.route_a: 7.5}, {self.route_a: (50, 50)}, {}, {},
                                 {self.route_a: (self.roomy, self.tight)})
         terms, _ = AccountingProcessor.process(record, self.sln)
         self.assertAlmostEqual(terms.travel_distance, 7.5, places=9)
@@ -148,7 +148,7 @@ class OverloadDerivation(SeededTestCase):
         route_a carries one customer and 50 units onto `tight`, whose capacity is 10. The vehicle
         was idle and unloaded, so it crosses zero on both counters at once.
         """
-        record = RawDeltaRecord(1.0, {self.route_a: (0, 50)}, {}, {},
+        record = RawDeltaRecord({self.route_a: 1.0}, {self.route_a: (0, 50)}, {}, {},
                                 {self.route_a: (None, self.tight)})
         terms, accounting = AccountingProcessor.process(record, self.sln)
 

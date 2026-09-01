@@ -49,6 +49,7 @@ class AccountingProcessor:
         counts = record.customer_deltas
         depots = record.start_depot_changes
         vehicles = record.vehicle_changes
+        travels = record.travel_changes
 
         # Every route any map speaks about. A route absent from all four moved nothing, so it can
         # contribute to no term and needs no entry to stand in for it.
@@ -64,6 +65,7 @@ class AccountingProcessor:
         vehicle_delta_routes_overloaded: defaultdict[Vehicle, int] = defaultdict(int)
         vehicle_delta_active_routes: defaultdict[Vehicle, int] = defaultdict(int)
         vehicle_delta_num_customers: defaultdict[Vehicle, int] = defaultdict(int)
+        vehicle_delta_travel: defaultdict[Vehicle, Num] = defaultdict(float)
 
         # ROUTE accounting records: Just raw loads. Counts are accounted via path length.
 
@@ -109,8 +111,15 @@ class AccountingProcessor:
                     vehicle_delta_num_customers[veh_i] += count_f - count_i
                     vehicle_delta_active_routes[veh_i] += (count_f > 0) - (count_i > 0)
             else:
+                # The route's whole distance moves with it. current_travel is sink-written, so
+                # it still holds the pre-move value here even when an operator priced by mutating
+                # -- the same reason load and the customer count travel in the record.
+                travel_carried = route.current_travel
                 if veh_i_exists:
                     assert veh_i is not None
+                    if travel_carried:
+                        vehicle_delta_travel[veh_i] -= travel_carried
+
                     old_was_overloaded = old_overload > 0
                     if old_was_overloaded:
                         vehicle_delta_routes_overloaded[veh_i] -= 1
@@ -121,6 +130,9 @@ class AccountingProcessor:
 
                 if veh_f_exists:
                     assert veh_f is not None
+                    if travel_carried:
+                        vehicle_delta_travel[veh_f] += travel_carried
+
                     new_is_overloaded = new_overload > 0
                     if new_is_overloaded:
                         vehicle_delta_routes_overloaded[veh_f] += 1
@@ -128,6 +140,18 @@ class AccountingProcessor:
                     if count_f > 0:
                         vehicle_delta_num_customers[veh_f] += count_f
                         vehicle_delta_active_routes[veh_f] += 1
+
+        # Travel. Each entry is a plain delta on one route, so the solution-level term is their
+        # sum and the per-vehicle aggregate is the same sum grouped by the vehicle each route ENDS
+        # on. A route that also changed vehicle already had its whole pre-move distance moved
+        # across in the loop above, so adding the delta to the destination lands the final value
+        # on the right vehicle.
+        travel_delta: Num = 0
+        for (route, route_travel) in travels.items():
+            travel_delta += route_travel
+            final_vehicle = vehicles[route][1] if route in vehicles else route.vehicle
+            if final_vehicle is not None:
+                vehicle_delta_travel[final_vehicle] += route_travel
 
         # Process vehicle is_overloaded and is_active delta changes
         # NOTE: Vehicle is_active and has_overloaded_route are tracked implicitly,
@@ -168,7 +192,7 @@ class AccountingProcessor:
 
         # Finally, construct objective term and accounting
         objective_deltas = ObjectiveTermDelta(
-            travel_distance=record.travel_distance,
+            travel_distance=travel_delta,
             total_route_overload=overload_delta,
             depots_activated=num_depots_used_delta,
             vehicles_activated=num_active_vehicles_delta,
@@ -177,7 +201,9 @@ class AccountingProcessor:
         accounting_record = AccountingRecord(vehicle_delta_routes_overloaded = vehicle_delta_routes_overloaded,
                                             vehicle_delta_active_routes = vehicle_delta_active_routes,
                                             vehicle_delta_num_customers = vehicle_delta_num_customers,
+                                            vehicle_delta_travel = vehicle_delta_travel,
                                             route_loads = loads,
+                                            route_delta_travel = travels,
                                             start_depot_changes = depots)
 
         return objective_deltas, accounting_record
