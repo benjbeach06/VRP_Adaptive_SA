@@ -1474,14 +1474,14 @@ class _SpanReorderBase(Operator[PermuteChainOps]):
 
         # Fixed endpoints are OUTSIDE the span -- whatever it attaches to on each side. Falling
         # back to the depots is what makes a WHOLE-route rebuild well posed.
-        left = (path[start - 1].source_customer.location if start > 0
+        left = (path[start - 1].location if start > 0
                 else route.start_depot.location)
-        right = (path[stop].source_customer.location if stop < len(path)
+        right = (path[stop].location if stop < len(path)
                  else route.end_depot.location)
 
         # The permutation is RELATIVE to the span, so a short span in a long route costs the span,
         # not the route. No full-length identity array is built.
-        order = self._reorder([path[i].source_customer.location for i in span], left, right)
+        order = self._reorder([path[i].location for i in span], left, right)
         if not order:
             return route, 0, order
         return route, span, order

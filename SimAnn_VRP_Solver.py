@@ -465,7 +465,7 @@ class SimAnnVRPSolver:
 
         for op in self.operators:
             path = getattr(type(op), "family", None)
-            assert isinstance(path, tuple) and path,                 f"{type(op).__name__} is in the roster with no family path"
+            assert isinstance(path, tuple) and path, f"{type(op).__name__} is in the roster with no family path"
             node_for(path)
 
         for op in self.operators:
@@ -475,7 +475,7 @@ class SimAnnVRPSolver:
         # A missing floor would read as "no guarantee" when it means the table was not updated.
         missing: list[str] = []
         for child in root.children:
-            assert isinstance(child, _FamilyNode) and child.key is not None,                 "a root child must be a family"
+            assert isinstance(child, _FamilyNode) and child.key is not None, "a root child must be a family"
             if child.key not in FAMILY_FLOOR:
                 missing.append(child.key.name)
             else:
@@ -725,7 +725,7 @@ class SimAnnVRPSolver:
                     return None
             return None
 
-        def get_closest_depot(customer: Customer):
+        def get_closest_depot(customer: CustomerLike):
             # Rows break ties by index, so this matches argmin's lowest-dID choice.
             return depots[sln.customer_depots[customer.cID][0]]
 
