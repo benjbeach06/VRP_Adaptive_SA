@@ -215,8 +215,6 @@ condition has to decide.
 
 ## Links to here
 
-- [design/operator_selection/exploitation_governance.md](../../design/operator_selection/exploitation_governance.md)
-  -- cites mechanism 4 as the open work it wants replaced by something adaptive.
 - [planning/implemented/forget-benefit-not-cost.md](../implemented/forget-benefit-not-cost.md) -- cites this as
   the hub for mechanisms 3 and 4.
 - [planning/README.md](../README.md) -- lists this as the HUB entry in the roadmap table.

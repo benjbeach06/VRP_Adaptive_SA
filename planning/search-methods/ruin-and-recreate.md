@@ -74,3 +74,5 @@ None. This is the next substantial piece of work.
 ## Links to here
 
 - [planning/README.md](../README.md)
+- [RESULTS.md](../../RESULTS.md) -- lists the thin inter-route neighborhood as a known limitation and names this plan as the fix
+- [design/raw_delta_accounting/raw_delta_record.md](../../design/raw_delta_accounting/raw_delta_record.md) -- names this as the first roster addition that reaches same-route double removal, the case delta composition exists for

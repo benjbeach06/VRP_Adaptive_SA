@@ -120,3 +120,4 @@ Kept in place and commented rather than stashed -- a stash goes stale as the sur
 - [planning/implemented/forget-benefit-not-cost.md](../../planning/implemented/forget-benefit-not-cost.md)
 - [planning/operator-selection/operator-selection.md](../../planning/operator-selection/operator-selection.md)
 - [RESULTS.md](../../RESULTS.md) -- cites this as the pricing fix that would let K be learned rather than hand-swept
+- [design/span_reorder/farthest_insertion_ops.md](../span_reorder/farthest_insertion_ops.md) -- cites this penalty as how the expensive reorder operators are priced now

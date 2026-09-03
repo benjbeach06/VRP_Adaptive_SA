@@ -25,17 +25,24 @@ A solution assembled route by route carries no accounting, because nothing maint
 build. `FullSolution.initialize_accounting` computes every cache directly from the finished
 structure:
 
-- each route's load, from its customers' demands,
+- each route's load, from its customers' demands, and its distance, by walking its visit chain,
 - the routes starting at each depot, from the structure,
-- per vehicle: the customer count from the per-route path lengths, and the counts of routes with
-  customers and of overloaded routes by counting the vehicle's routes.
+- per vehicle: the distance as the sum over its routes, the customer count from the per-route path
+  lengths, and the counts of routes with customers and of overloaded routes by counting the
+  vehicle's routes.
 
-Load comes first, because the overloaded-route count reads it. Every write is an absolute value, so
-the method is idempotent.
+**Ordering is required, not stylistic.** Routes come before vehicles, because the per-vehicle
+distance sums the per-route figure and the overloaded-route count reads the per-route load. Every
+write is an absolute value recomputed from the structure, so the method is idempotent.
 
 The build owns the call. It runs at the end of each initial-solution builder, before the first
-objective evaluation, so no caller has to remember it. A route writes nothing when it is
-constructed: it has no vehicle and no solution yet.
+objective evaluation, so no caller has to remember it.
+
+**One cache is seeded earlier, and only one.** A route sets its own distance in its constructor,
+after linking its visits, because that is the honest starting value for a cache nothing else
+recomputes. It costs one walk for a route built with a path and nothing for an empty one, which is
+the hot construction. No other cache is written there: a fresh route has no vehicle and no
+solution, so there is nothing else to be right about.
 
 ## References
 

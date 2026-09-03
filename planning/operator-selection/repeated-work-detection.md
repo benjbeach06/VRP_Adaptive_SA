@@ -106,3 +106,4 @@ here is the RATE of genuine repeats, which is a different number.
 
 - [planning/README.md](../README.md)
 - [operator-selection.md](operator-selection.md)
+- [design/operator_selection/exploitation_governance.md](../../design/operator_selection/exploitation_governance.md) -- names this plan as what would remove the exploit-only repeated-proposal waste

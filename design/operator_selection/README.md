@@ -22,12 +22,12 @@ per-leaf adjustments, which now feed the family max as well. `hierarchical_magne
 ## Everything unbuilt
 
 Open selection work is in
-[planning/operator-selection.md](../../planning/operator-selection/operator-selection.md), which frames it as three
+[planning/operator-selection/operator-selection.md](../../planning/operator-selection/operator-selection.md), which frames it as three
 related concerns: exploit-only against exploratory operators, expensive against cheap ones, and
 running operators the solver has no time for.
 
 **Ablations.** Several decisions here were made structurally and are unmeasured. They are listed in
-[planning/ablations.md](../../planning/experiments/ablations.md).
+[planning/experiments/ablations.md](../../planning/experiments/ablations.md).
 
 ## Re-measuring
 

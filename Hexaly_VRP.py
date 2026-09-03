@@ -21,7 +21,7 @@ def build_model():
         vehicle_starts = sum(([i]*depot["vehicle_count"] for (i, depot) in enumerate(depots)), [])
 
         num_vehicles = len(vehicles)
-        max_routes = 200
+        max_routes = 20
         cost_per_vehicle = 10
         cost_per_depot = 20
 

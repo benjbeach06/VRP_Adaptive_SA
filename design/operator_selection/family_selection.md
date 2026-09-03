@@ -22,7 +22,7 @@ The roster is a list of available moves. It should not also be the allocation po
 
 The numbers below describe what the mechanism does. They are not the argument for building it, and
 none of them is strong enough to be. **Whether the tree improves the objective is unmeasured until
-family-level ablation runs** -- see [planning/ablations.md](../../planning/experiments/ablations.md).
+family-level ablation runs** -- see [planning/experiments/ablations.md](../../planning/experiments/ablations.md).
 
 ## Operators carry a PATH, not a class position
 
@@ -73,7 +73,7 @@ MAX is associative, so the fold is one bottom-up pass and depth costs nothing.
 damped that. Two reasons to think it is acceptable, neither measured: the family routes nearly all of
 its share to the star that earned it, which is correct behavior rather than a failure; and spikes
 decay, since a high reaction factor makes them sharp and short-lived. Whether a spike does harm
-before it decays is in [planning/ablations.md](../../planning/experiments/ablations.md).
+before it decays is in [planning/experiments/ablations.md](../../planning/experiments/ablations.md).
 
 ## Size still matters, indirectly, and that is the right incentive
 
@@ -172,7 +172,7 @@ The first version encoded the tree as adjacency lists over integer ids, with int
 `n_internal` and leaves above.
 
 **It assumed the tree shape never changes**, and that assumption was never stated or checked.
-[planning/family-generation.md](../../planning/operator-selection/family-generation.md) has families adding and removing
+[planning/operator-selection/family-generation.md](../../planning/operator-selection/family-generation.md) has families adding and removing
 members during a solve, so positional ids would mean reindexing or tombstones on every change.
 
 The two forms are within a few nanoseconds of each other per selection, which is under 0.1% of even
@@ -189,7 +189,7 @@ cumulative arrays are recomputed by `refresh_family_tree`, which already runs on
 A node with no children cannot report a MAX, which is why an emptied parent goes as well.
 
 **Dynamic ADD is the same capability and is not built.** The structure now permits it. See
-[planning/family-generation.md](../../planning/operator-selection/family-generation.md).
+[planning/operator-selection/family-generation.md](../../planning/operator-selection/family-generation.md).
 
 - [share_floors.md](share_floors.md) -- the projection that guarantees each root family a minimum
   share. Floors bind at level 0 only.
@@ -199,7 +199,7 @@ A node with no children cannot report a MAX, which is why an emptied parent goes
   restores cost-adjusted competition is now built -- [dynamic_penalty.md](dynamic_penalty.md).
 - [hierarchical_magnetism.md](hierarchical_magnetism.md) -- the sibling-local magnet that runs on
   this tree, folding and lifting the same `adj_weights` this doc describes.
-- [planning/operator-selection.md](../../planning/operator-selection/operator-selection.md) -- open selection work.
+- [planning/operator-selection/operator-selection.md](../../planning/operator-selection/operator-selection.md) -- open selection work.
 - [span_reorder/reorder_operators.md](../span_reorder/reorder_operators.md) -- the inheritance there
   marks a family boundary, and the tree now reads it.
 
@@ -215,6 +215,7 @@ A node with no children cannot report a MAX, which is why an emptied parent goes
 - [planning/operator-selection/operator-selection.md](../../planning/operator-selection/operator-selection.md)
 - [planning/operator-selection/repeated-work-detection.md](../../planning/operator-selection/repeated-work-detection.md)
 - [retros/2026-08-26_doc_linking_and_time_robust_tuning.md](../../retros/2026-08-26_doc_linking_and_time_robust_tuning.md) -- retro; the body_links() reversed-section bug was found on this file
+- [exploitation_governance.md](exploitation_governance.md) -- supplies the adj_weights mirror this tree folds
 
 ## References
 

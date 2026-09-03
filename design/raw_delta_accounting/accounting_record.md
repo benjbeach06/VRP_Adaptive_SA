@@ -10,11 +10,17 @@ carries no thresholds and no derived state. Everything in it is a number the sin
 | `vehicle_delta_routes_overloaded` | delta per vehicle |
 | `vehicle_delta_active_routes` | delta per vehicle |
 | `vehicle_delta_num_customers` | delta per vehicle |
+| `vehicle_delta_travel` | delta per vehicle |
 | `route_loads` | `(initial, final)` per route |
+| `route_delta_travel` | delta per route |
 | `start_depot_changes` | `(initial, final)` depot per route |
 
-The three per-vehicle fields are signed deltas. The two per-route fields are transitions: they
-carry the value before the change and the value after it.
+Five fields are signed deltas. Two are transitions: they carry the value before the change and the
+value after it.
+
+**Travel is a delta on both levels.** Distance has no threshold of its own, so there is nothing for
+the processor to resolve against a base — the sink adds and the inverse negates. Load is a
+transition instead because the overload term reads it against a capacity.
 
 `start_depot_changes` records what `Route.used_start_depot` returns, not the geometric start depot.
 That is the real start depot while the route is active and `VIRTUAL_DEPOT` while it is not, so a
@@ -32,9 +38,9 @@ move is `sln.apply_accounting(record.inverse)`. `apply_accounting` returns nothi
 
 ## Application
 
-The sink adds each per-vehicle delta to its counter, assigns each route's load from its pair, and
-moves each route between the per-depot route sets. It evaluates no threshold; the processor
-resolved all of those.
+The sink adds each per-vehicle delta to its counter, adds each route's travel delta to its cached
+distance, assigns each route's load from its pair, and moves each route between the per-depot route
+sets. It evaluates no threshold; the processor resolved all of those.
 
 A start-depot change is applied raw: remove the route from the initial depot's route set, add it
 to the final one, skip `VIRTUAL_DEPOT` on each end. A record that names a route the initial depot

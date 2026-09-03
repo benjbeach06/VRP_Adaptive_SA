@@ -3733,7 +3733,7 @@ class RouteSet:
 
 class Vehicle:
     __slots__ = "vID", "initial_depot", "capacity", "routes", "num_routes_overloaded", "current_travel",\
-                "num_routes_with_customers", "num_customers", "current_travel", "first_route", "last_route"
+                "num_routes_with_customers", "num_customers", "first_route", "last_route"
 
     # Unique vehicle id
     #vID: int

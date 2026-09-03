@@ -1539,8 +1539,7 @@ class ReorderLongRouteByFarthestInsertion(_FarthestInsertionReorderBase):
     """
     Whole route, chosen weighted by SQUARED travel distance.
 
-    Selection is O(total customers) per proposal -- no route caches its length. Accepted for
-    now; planning/route-distance-tracking.md makes it O(1).
+    Selection is O(#routes) per proposal
     """
     def _choose_span(self):
         routes = self.sln.all_routes
@@ -1551,8 +1550,7 @@ class ReorderLongRouteByFarthestInsertion(_FarthestInsertionReorderBase):
         # RouteSet the way choose_random_nonempty_route does.
         cumulative, running = [], 0.0
         for route in routes:
-            distance = route.total_distance()
-            running += distance * distance
+            running += (dst:=route.current_travel) * dst
             cumulative.append(running)
         if running <= 0.0:
             return None

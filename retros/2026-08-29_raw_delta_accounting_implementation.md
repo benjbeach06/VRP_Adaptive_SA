@@ -285,3 +285,4 @@ review is the process working. But the search for his side is done each retro, p
 ## Links to here
 
 - [planning/implemented/raw-delta-accounting.md](../planning/implemented/raw-delta-accounting.md) -- the plan this session implemented; its divergence section points back here for the why
+- [2026-09-02_doc_freshness_and_travel_accounting.md](2026-09-02_doc_freshness_and_travel_accounting.md) -- the next retro; its period starts where section 6 of this one ends

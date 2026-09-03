@@ -26,7 +26,7 @@ A weak operator inside a strong family gets nothing, which is what the floors ar
 
 `FULL_ROUTE` sits above the other two small families deliberately: whole-route reassignment is more
 generally useful than splitting and combining, and it becomes far more so once vehicle distances are
-gated. See [planning/vehicle-time-limits.md](../../planning/problem-model/vehicle-time-limits.md).
+gated. See [planning/problem-model/vehicle-time-limits.md](../../planning/problem-model/vehicle-time-limits.md).
 
 ## Proportional, not equal-absolute
 
@@ -96,7 +96,7 @@ first pass, so they never exercise the loop -- which is worth knowing before tru
 someone wrote by eye.
 
 - [family_selection.md](family_selection.md) -- the tree these floors sit on top of.
-- [planning/operator-selection.md](../../planning/operator-selection/operator-selection.md) -- every discount in the
+- [planning/operator-selection/operator-selection.md](../../planning/operator-selection/operator-selection.md) -- every discount in the
   selection machinery is a rate rather than an exclusion, and the floors are one of three mechanisms
   that guarantee it.
 

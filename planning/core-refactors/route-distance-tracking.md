@@ -147,5 +147,4 @@ changes.
 - [planning/problem-model/vehicle-time-limits.md](../problem-model/vehicle-time-limits.md)
 - [planning/implemented/raw-delta-accounting.md](../implemented/raw-delta-accounting.md) -- the landed prerequisite; the processor exists, so this plan only adds the field distance is written into
 - [design/raw_delta_accounting/README.md](../../design/raw_delta_accounting/README.md) -- the shipped pipeline this plan builds on; its processor supplies the raw distance delta at every site
-- [design/raw_delta_accounting/raw_delta_record.md](../../design/raw_delta_accounting/raw_delta_record.md) -- explains why travel stays one bulk number in the record, deferring per-route distance to this plan
 - [retros/2026-08-29_raw_delta_accounting_implementation.md](../../retros/2026-08-29_raw_delta_accounting_implementation.md) -- the retro for the prerequisite that landed

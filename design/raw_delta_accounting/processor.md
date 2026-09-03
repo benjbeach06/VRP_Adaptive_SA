@@ -12,21 +12,21 @@ enough.
 
 One pass covers every route the record names in a load, customer-count, or vehicle map. For each,
 it builds those three transitions: from the record where the record speaks, and from the live route
-where it stays silent. Start-depot changes are a separate pass over the start-depot map. Nothing
-else is consulted about what changed.
+where it stays silent. Travel changes and start-depot changes are each a separate pass over their
+own map. Nothing else is consulted about what changed.
 
 ## The two outputs
 
-The inputs named below are the raw record's four maps -- route load changes, route customer-count
-changes, route start-depot changes, route vehicle reassignments -- plus the solution's live
-counters. See [raw_delta_record.md](raw_delta_record.md) for the record, and
+The inputs named below are the raw record's five maps -- route travel changes, route load changes,
+route customer-count changes, route start-depot changes, route vehicle reassignments -- plus the
+solution's live counters. See [raw_delta_record.md](raw_delta_record.md) for the record, and
 [accounting_record.md](accounting_record.md) for the record the sink applies.
 
 **The objective delta is the change in each objective term.** Every entry is a delta.
 
 | term | inputs | result |
 |---|---|---|
-| travel distance | the record's travel delta | passed through unchanged |
+| travel distance | route travel changes | their sum |
 | total route overload | route load changes; route vehicle reassignments; vehicle capacity | the change in load-above-capacity, summed over affected routes |
 | depots activated | route start-depot changes; each affected depot's live start count | how many depots changed to or from zero routes |
 | vehicles activated | route customer-count changes; route vehicle reassignments; each affected vehicle's live customer count | how many vehicles changed to or from zero customers |
@@ -41,11 +41,19 @@ is applied.
 | overloaded routes, per vehicle | route load changes; route vehicle reassignments; vehicle capacity | +1 or -1 per route whose over-capacity state flipped; a reassigned route moves its contribution from the old vehicle to the new |
 | routes with customers, per vehicle | route customer-count changes; route vehicle reassignments | +1 or -1 per route that crossed zero customers; a reassigned route moves its contribution from the old vehicle to the new |
 | customers, per vehicle | route customer-count changes; route vehicle reassignments | the route's customer-count change on its vehicle; a reassigned route moves its whole count from the old vehicle to the new |
+| travel, per vehicle | route travel changes; route vehicle reassignments; each affected route's live cached distance | each route's delta on the vehicle it ENDS on, plus a reassigned route's whole pre-move distance moved from the old vehicle to the new |
 | route load | route load changes | passed through |
+| route travel | route travel changes | passed through |
 | start depot | route start-depot changes | passed through |
 
-The three per-vehicle deltas do double duty: the processor also reads each against the vehicle's
-live counter to decide the matching objective term, and the sink then applies the same delta.
+The three per-vehicle counter deltas do double duty: the processor also reads each against the
+vehicle's live counter to decide the matching objective term, and the sink then applies the same
+delta. Per-vehicle travel does not, because no objective term reads a threshold on distance.
+
+**A reassigned route's distance moves in two parts.** Its whole pre-move distance leaves the old
+vehicle and joins the new one, and its own travel delta is then added to the vehicle it ends on.
+Doing it in that order lands the final value on the right vehicle without either half needing to
+know what the other did.
 
 ## The activation check
 
@@ -69,9 +77,14 @@ from before the mutation.
 
 An operator that prices by mutating has already changed the structure by the time `process` runs. A
 cache the mutator maintained would hold the after-value, and the processor would count the change
-twice. So each route's current load and each vehicle's customer count are carried in the
-`AccountingRecord` and written only by the sink, next to the counters that have thresholds of their
-own.
+twice. So each route's current load, each route's cached distance, and each vehicle's customer
+count are carried in the `AccountingRecord` and written only by the sink, next to the counters that
+have thresholds of their own.
+
+Route distance is the clearest case. When a route changes vehicle, the processor moves the route's
+**whole** distance across, and it reads that figure off the route. The read is only safe because
+nothing but the sink writes it, so it still holds the pre-move value even when the structure has
+already changed.
 
 A route's own customer count is exempt. It is the route's path length, computed from the structure
 rather than cached, so it never disagrees with the record.

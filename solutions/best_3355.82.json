@@ -1,0 +1,592 @@
+{
+ "objective": 3355.8193817507336,
+ "breakdown": {
+  "vehicle_use_cost": 30,
+  "depot_use_cost": 60,
+  "travel_cost": 3265.8193817507336
+ },
+ "total_overload": 0,
+ "found": {
+  "solver": "Hexaly_VRP.py",
+  "date": "2026-09-02",
+  "budget_seconds": 600.0,
+  "first_reached_seconds": 178,
+  "first_reached_iterations": 6553305,
+  "iterations": 23341441,
+  "run_log": "temp/Hexaly_SmallRoutes_9-2-26"
+ },
+ "instance": {
+  "source": "SimAnn_VRP.py build_vrp_model(), use_pre_refactor_data = True",
+  "numpy_seed": 42,
+  "num_customers": 200,
+  "capacity_per_vehicle": 25,
+  "cost_per_vehicle": 10,
+  "cost_per_depot": 20,
+  "unit_travel_cost": 1,
+  "depots": [
+   {
+    "dID": 0,
+    "location": [
+     10,
+     10
+    ],
+    "supply_limit": 35,
+    "vehicle_count": 1
+   },
+   {
+    "dID": 1,
+    "location": [
+     50,
+     50
+    ],
+    "supply_limit": 35,
+    "vehicle_count": 1
+   },
+   {
+    "dID": 2,
+    "location": [
+     90,
+     10
+    ],
+    "supply_limit": 35,
+    "vehicle_count": 1
+   }
+  ],
+  "vehicles": [
+   {
+    "vID": 0,
+    "initial_depot": 0,
+    "capacity": 25
+   },
+   {
+    "vID": 1,
+    "initial_depot": 1,
+    "capacity": 25
+   },
+   {
+    "vID": 2,
+    "initial_depot": 2,
+    "capacity": 25
+   }
+  ]
+ },
+ "route_order_is_meaningless": true,
+ "note": "Hexaly reference on Benjamin's n=200 / capacity-25 instance, not a SimAnn result. Three vehicles, three depots, 45 non-empty routes. Reported optimality gap 99.11% with bounds=30, so the log's lower bound says nothing about true optimality. Route order is not meaningful; Benjamin verified by hand that a feasible ordering exists per vehicle.",
+ "routes": [
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    137,
+    48,
+    119,
+    142,
+    53,
+    69
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 0,
+   "path": [
+    134,
+    72,
+    156,
+    86
+   ],
+   "end_depot": 0
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    37,
+    97,
+    31,
+    151,
+    33
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 0,
+   "path": [
+    110,
+    92,
+    35,
+    174,
+    177
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    16,
+    93,
+    116,
+    127,
+    17
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 2,
+   "path": [
+    180,
+    89
+   ],
+   "end_depot": 2
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    140,
+    54,
+    178
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 2,
+   "path": [
+    103,
+    145,
+    10,
+    9,
+    161
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    0,
+    195,
+    187,
+    162
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    73,
+    146,
+    63
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    67,
+    75,
+    101,
+    175
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 1,
+   "path": [
+    30,
+    62,
+    136,
+    197,
+    183,
+    186
+   ],
+   "end_depot": 2
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 2,
+   "path": [
+    194,
+    34,
+    60,
+    171,
+    32
+   ],
+   "end_depot": 2
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    120,
+    26,
+    28,
+    19
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    193,
+    150,
+    155,
+    94
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    181,
+    80,
+    188,
+    71,
+    41,
+    2
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    47,
+    7,
+    74,
+    121,
+    118
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    77,
+    199,
+    42,
+    58,
+    49
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 2,
+   "path": [
+    135,
+    198,
+    46,
+    108
+   ],
+   "end_depot": 2
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    24,
+    102,
+    64,
+    79
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    139,
+    11,
+    66,
+    109
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 2,
+   "path": [
+    3,
+    166,
+    50,
+    100
+   ],
+   "end_depot": 2
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    57,
+    191,
+    99
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    8,
+    82,
+    25,
+    158,
+    122
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 2,
+   "path": [
+    141,
+    15,
+    149,
+    1
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    168,
+    38,
+    125
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 1,
+   "path": [
+    56,
+    59,
+    138
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    43,
+    165,
+    40,
+    184,
+    85
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    143,
+    123,
+    61,
+    113
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    112,
+    126,
+    189,
+    39
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    27,
+    84,
+    129
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 1,
+   "path": [
+    87,
+    164,
+    23,
+    172,
+    5
+   ],
+   "end_depot": 2
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 2,
+   "path": [
+    78,
+    170,
+    144,
+    90,
+    20,
+    91,
+    18
+   ],
+   "end_depot": 0
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    179,
+    88,
+    130,
+    65,
+    98
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 1,
+   "path": [
+    157,
+    163,
+    159
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 1,
+   "path": [
+    81,
+    176,
+    167,
+    196,
+    13
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 0,
+   "path": [
+    14,
+    128,
+    185,
+    104
+   ],
+   "end_depot": 0
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 1,
+   "path": [
+    4,
+    190,
+    160,
+    115,
+    51
+   ],
+   "end_depot": 0
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 1,
+   "path": [
+    36,
+    124,
+    105,
+    133,
+    117,
+    96,
+    148,
+    192
+   ],
+   "end_depot": 0
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 0,
+   "path": [
+    153,
+    6,
+    182
+   ],
+   "end_depot": 1
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 1,
+   "path": [
+    169,
+    132,
+    21,
+    22,
+    12
+   ],
+   "end_depot": 0
+  },
+  {
+   "vehicle": 2,
+   "start_depot": 0,
+   "path": [
+    147,
+    29,
+    111,
+    45,
+    55
+   ],
+   "end_depot": 0
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 0,
+   "path": [
+    106,
+    70,
+    68,
+    44,
+    152
+   ],
+   "end_depot": 0
+  },
+  {
+   "vehicle": 0,
+   "start_depot": 0,
+   "path": [
+    52,
+    107,
+    76,
+    114,
+    154
+   ],
+   "end_depot": 0
+  },
+  {
+   "vehicle": 1,
+   "start_depot": 0,
+   "path": [
+    173,
+    131,
+    95,
+    83
+   ],
+   "end_depot": 0
+  }
+ ]
+}

@@ -35,8 +35,7 @@ excess over the Held-Karp lower bound:
 | over 15% | Nearest Neighbour, Greedy, Nearest Insertion, Cheapest Insertion | O(n^2) / O(n^2 log n) |
 
 **Farthest insertion is the only heuristic that is both under 15% and O(n^2).** Christofides is the
-other one under 15%, and its cube is the perfect matching -- at n=70 that alone is ~343k operations,
-against a roster whose most expensive operator costs 134 us. Greedy edge additionally needs an edge
+other one under 15%, and its cube is the perfect matching -- at n=70 that alone is ~343k operations. Greedy edge additionally needs an edge
 sort and union-find, for a bucket it does not even beat farthest insertion into.
 
 So the choice is not a close trade. It is the only option in the cheap-and-accurate corner.
@@ -52,7 +51,7 @@ linked DIMACS data tables that have not been opened.
 
 **The page lists many more algorithms than the six above** -- whole families this design never
 considered. The choice here was made from a shortlist, not from a survey. Surveying them is
-[planning/heuristic-survey.md](../../planning/search-methods/heuristic-survey.md).
+[planning/search-methods/heuristic-survey.md](../../planning/search-methods/heuristic-survey.md).
 
 ## References
 

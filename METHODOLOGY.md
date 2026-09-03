@@ -8,19 +8,25 @@ How work in this repository gets verified and accepted. The measurements themsel
 Part of this repository was written with AI assistance (Claude), and the split is specific enough to
 measure. The `Pre_AI` branch marks the last commit before any was used.
 
+Counts below are current as of 2026-09-02, commit `4bd2d15`.
+
 | | `Pre_AI`, 2026-08-07 | today |
 |---|----------------------|---|
-| solver proper — model, operators, lifecycle, annealing | **4,902 lines**      | 7,513 |
-| `tools/` — profiling, stress, ablation, tuning | 0                    | 1,770 |
-| tests | 0                    | 1,116 |
+| solver proper — model, operators, lifecycle, annealing, accounting | **4,902 lines** | 8,812 |
+| `tools/` — profiling, stress, ablation, tuning, doc linking | 0 | 5,516 |
+| tests | 47 | 3,000 |
+| documentation | 0 | ~10,500 |
 
 The solver is mine. Its architecture — the delta arithmetic, the operator lifecycle, the
 oracle-twin convention, the annealing schedule — was designed and built before an assistant touched
-the project, and about two thirds of the current solver code is still that work.
+the project. That pre-assistance work is 4,902 of today's 8,812 solver lines by the crude count
+above, and the crude count is the honest limit of what a table can say: later refactors rewrote
+parts of it, and a large share of the solver code added since is also mine.
 
 Assistance went almost entirely into **instruments**: the profiling, ablation, stress and tuning
-harnesses that produced the numbers in `RESULTS.md`, plus a test suite that grew from 47 lines to
-roughly 2,900.
+harnesses that produced the numbers in `RESULTS.md`, plus the test suite. Where it reached the
+solver, it did so under a design I set, and the per-commit split is recorded in the commit messages
+and in `retros/` rather than summarized here.
 
 That is why provenance sits at the top of the methodology document instead of in a footnote. The two
 are the same subject. Generating code and experiments quickly moves the binding constraint from
@@ -187,6 +193,29 @@ Every hit from the review becomes a permanent assertion in the preflight, so the
 of real failures rather than guessed ones.
 
 ---
+
+---
+
+## A document about the code is a claim with a date
+
+The rule above says a measurement is only citeable if its solver version is. **The same applies to
+prose.** A paragraph describing how a mechanism behaves was true against some commit, and nothing
+re-checks it when that commit is superseded.
+
+This file is the example. Its provenance table stood at 7,513 / 1,770 / 1,116 lines while the real
+figures were 8,812 / 5,516 / 3,000, and `RESULTS.md` presented a scoring defect as open for eleven
+days after the rework that fixed it shipped. Both were read as current by a reader with the whole
+repository available.
+
+So, when a section describes behavior rather than reporting a measurement:
+
+- **State the commit or the date the description was last checked**, the same way an ablation states
+  its solver commit.
+- **When a mechanism is replaced, the section that described it gets a resolution banner rather than
+  a silent edit.** The old diagnosis is usually why the replacement exists, and deleting it loses
+  that.
+- **A fixed defect presented as open is worse than the defect**, because it misdirects the next
+  person to read the file — including the author.
 
 ## What the rules have caught
 
