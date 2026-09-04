@@ -91,7 +91,7 @@ hardest class of bug to see.
 
 ## Gate
 
-Do not start this before [vehicle-time-limits](vehicle-time-limits.md). Time limits make the model
+Do not start this before [vehicle-time-limits](../implemented/vehicle-time-limits.md). Time limits make the model
 recognizably realistic for a much smaller cost; asymmetry makes it realistic in a narrower way for
 a much larger one.
 
@@ -101,7 +101,7 @@ capability nobody is currently asking for.
 
 ## References
 
-- [vehicle-time-limits.md](vehicle-time-limits.md)
+- [planning/implemented/vehicle-time-limits.md](../implemented/vehicle-time-limits.md)
 - [design/span_reorder/farthest_insertion_order.md](../../design/span_reorder/farthest_insertion_order.md)
 - [RESULTS.md](../../RESULTS.md)
 

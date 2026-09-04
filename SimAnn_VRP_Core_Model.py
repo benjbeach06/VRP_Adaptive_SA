@@ -172,17 +172,26 @@ class ObjectiveTermDelta(NamedTuple):
     depots_activated: int = 0
     total_route_overload: Num = 0
     vehicles_overloaded: int = 0
+    # Vehicle-duration quantities, priced by FullSolution. See design/objective/objective_terms.md.
+    vehicle_regular_hours: Num = 0
+    vehicle_overtime_hours: Num = 0
+    vehicle_excess_hours: Num = 0
+    vehicles_over_time_limit: int = 0
 
     def __pos__(self) -> ObjectiveTermDelta:
-        return ObjectiveTermDelta(self.travel_distance, self.vehicles_activated, self.depots_activated, self.total_route_overload, self.vehicles_overloaded)
+        return ObjectiveTermDelta(self.travel_distance, self.vehicles_activated, self.depots_activated, self.total_route_overload, self.vehicles_overloaded,
+                                  self.vehicle_regular_hours, self.vehicle_overtime_hours, self.vehicle_excess_hours, self.vehicles_over_time_limit)
 
     def __neg__(self) -> ObjectiveTermDelta:
-        return ObjectiveTermDelta(-self.travel_distance, -self.vehicles_activated, -self.depots_activated, -self.total_route_overload, -self.vehicles_overloaded)
+        return ObjectiveTermDelta(-self.travel_distance, -self.vehicles_activated, -self.depots_activated, -self.total_route_overload, -self.vehicles_overloaded,
+                                  -self.vehicle_regular_hours, -self.vehicle_overtime_hours, -self.vehicle_excess_hours, -self.vehicles_over_time_limit)
 
     def __add__(self, other: Any) -> Any:
         if isinstance(other, ObjectiveTermDelta):
             return ObjectiveTermDelta(self.travel_distance + other.travel_distance, self.vehicles_activated + other.vehicles_activated,
-                                      self.depots_activated + other.depots_activated, self.total_route_overload + other.total_route_overload, self.vehicles_overloaded + other.vehicles_overloaded)
+                                      self.depots_activated + other.depots_activated, self.total_route_overload + other.total_route_overload, self.vehicles_overloaded + other.vehicles_overloaded,
+                                      self.vehicle_regular_hours + other.vehicle_regular_hours, self.vehicle_overtime_hours + other.vehicle_overtime_hours,
+                                      self.vehicle_excess_hours + other.vehicle_excess_hours, self.vehicles_over_time_limit + other.vehicles_over_time_limit)
 
         if isinstance(other, tuple):
             return tuple.__add__(self, other)
@@ -192,22 +201,28 @@ class ObjectiveTermDelta(NamedTuple):
     def __sub__(self, other: ObjectiveTermDelta) -> ObjectiveTermDelta:
         return self + (-other)
 
-    def get_cost_delta(self, travel_unit_cost: Num = 0.0, vehicle_cost: Num = 0.0, depot_cost: Num = 0.0, route_overload_penalty: Num = 0.0, vehicle_overload_penalty: Num = 0.0) -> Num:
+    def get_cost_delta(self, travel_unit_cost: Num = 0.0, vehicle_cost: Num = 0.0, depot_cost: Num = 0.0, route_overload_penalty: Num = 0.0, vehicle_overload_penalty: Num = 0.0,
+                       vehicle_hourly_rate: Num = 0.0, vehicle_overtime_rate: Num = 0.0, vehicle_excess_hour_rate: Num = 0.0, vehicle_time_limit_penalty: Num = 0.0) -> Num:
         """
             Returns the change in cost implied by the deltas stored here, given objective coefficients.
         """
         return travel_unit_cost * self.travel_distance + vehicle_cost * self.vehicles_activated +\
             depot_cost * self.depots_activated + route_overload_penalty * self.total_route_overload +\
-            vehicle_overload_penalty * self.vehicles_overloaded
+            vehicle_overload_penalty * self.vehicles_overloaded +\
+            vehicle_hourly_rate * self.vehicle_regular_hours + vehicle_overtime_rate * self.vehicle_overtime_hours +\
+            vehicle_excess_hour_rate * self.vehicle_excess_hours + vehicle_time_limit_penalty * self.vehicles_over_time_limit
 
-    def get_cost_improvement(self, travel_unit_cost: Num = 0.0, vehicle_cost: Num = 0.0, depot_cost: Num = 0.0, overload_penalty: Num = 0.0, vehicle_overload_penalty: Num = 0.0, minimizing: bool = True) -> Num:
+    def get_cost_improvement(self, travel_unit_cost: Num = 0.0, vehicle_cost: Num = 0.0, depot_cost: Num = 0.0, overload_penalty: Num = 0.0, vehicle_overload_penalty: Num = 0.0,
+                             vehicle_hourly_rate: Num = 0.0, vehicle_overtime_rate: Num = 0.0, vehicle_excess_hour_rate: Num = 0.0, vehicle_time_limit_penalty: Num = 0.0,
+                             minimizing: bool = True) -> Num:
         """
            Returns the improvement value (positive = better) based on cost deltas and weights.
            If minimizing: improvement = -cost_delta (i.e., cost reduction is good).
            If maximizing: improvement = +cost_delta (i.e., increase is good).
         """
         sign = -1 if minimizing else 1
-        return sign * self.get_cost_delta(travel_unit_cost, vehicle_cost, depot_cost, overload_penalty, vehicle_overload_penalty)
+        return sign * self.get_cost_delta(travel_unit_cost, vehicle_cost, depot_cost, overload_penalty, vehicle_overload_penalty,
+                                          vehicle_hourly_rate, vehicle_overtime_rate, vehicle_excess_hour_rate, vehicle_time_limit_penalty)
 
 # The default for a field no mutation touched. IMMUTABLE, and shared by every record that omits
 # that field -- which is the only way a NamedTuple can default a mapping at all. A plain {} default
@@ -4066,12 +4081,20 @@ def _require_dense_ids(items, id_attr: str, label: str) -> None:
 #endregion
 
 
+# Named rather than a bare `inf`: the modules that `import *` from here also `import *` from the
+# solver, and two bare `inf` names collide.
+NO_TIME_LIMIT: Num = float("inf")
+
+
 class FullSolution:
     __slots__ = "all_routes", "vehicles", "empty_routes", "unit_travel_cost", "cost_per_vehicle", "cost_per_depot", \
                 "unit_overload_penalty", "vehicle_overload_penalty", "depots", "customers", "capacity_per_vehicle", \
                 "total_customer_capacity", "mean_customer_capacity", "min_vehicle_capacity", "max_vehicle_capacity", \
                 "mean_vehicle_capacity", "total_vehicle_capacity", "num_routes_lb", "depot_route_starts", "version", \
-                "neighbors", "neighbor_rank", "depot_neighbors", "customer_depots"
+                "neighbors", "neighbor_rank", "depot_neighbors", "customer_depots", \
+                "travel_time_per_distance", "service_time_per_customer", "load_time_per_route", \
+                "overtime_threshold", "time_limit", "vehicle_hourly_rate", "vehicle_overtime_rate", \
+                "vehicle_excess_hour_rate", "vehicle_time_limit_penalty", "duration_terms_active"
 
     # NOTE: annotations only -- no values. Every field is initialized per-instance in __init__.
     # These must never carry defaults: a class-level `vehicles: list = []` (or RouteSet()/defaultdict())
@@ -4093,6 +4116,26 @@ class FullSolution:
     # Strongly discourages temporary src_route overloading. Per-vehicle computation prevents penalization of splitting
     # two severely overloaded routes into one far less overloaded src_route.
     #vehicle_overload_penalty: Num  # activated feasibility penalty for overloading any vehicle in a src_route. Don't wanna replace the truck.
+
+    #region Vehicle duration objective. See design/objective/objective_terms.md.
+    # The three duration inputs.
+    #travel_time_per_distance: Num
+    #service_time_per_customer: Num
+    #load_time_per_route: Num
+
+    # The two band thresholds.
+    #overtime_threshold: Num
+    #time_limit: Num
+
+    # The four prices.
+    #vehicle_hourly_rate: Num
+    #vehicle_overtime_rate: Num
+    #vehicle_excess_hour_rate: Num
+    #vehicle_time_limit_penalty: Num
+
+    # True iff any of the three duration INPUTS is nonzero.
+    #duration_terms_active: bool
+    #endregion
 
     # Problem data
     #depots: list[Depot]
@@ -4137,6 +4180,18 @@ class FullSolution:
         self.cost_per_depot: Num = 0
         self.unit_overload_penalty: Num = 1000
         self.vehicle_overload_penalty: Num = 100000
+
+        # Vehicle duration objective. Off: no duration accrues, so no band can be priced.
+        self.travel_time_per_distance: Num = 0
+        self.service_time_per_customer: Num = 0
+        self.load_time_per_route: Num = 0
+        self.overtime_threshold: Num = NO_TIME_LIMIT
+        self.time_limit: Num = NO_TIME_LIMIT
+        self.vehicle_hourly_rate: Num = 0
+        self.vehicle_overtime_rate: Num = 0
+        self.vehicle_excess_hour_rate: Num = 0
+        self.vehicle_time_limit_penalty: Num = 0
+        self.duration_terms_active: bool = False
 
         # Problem data
         self.depots: list[Depot] = []
@@ -4224,13 +4279,65 @@ class FullSolution:
             depot_location, _locations_array(self.customers), wider, exclude_self=False)[0]
         return True
 
-    def set_objectives(self, unit_travel_cost: Num, cost_per_vehicle: Num, cost_per_depot: Num,
+    def set_objectives(self, unit_travel_cost: Num = 0, cost_per_vehicle: Num = 0, cost_per_depot: Num = 0,
                        unit_overload_penalty: Num = 1000, vehicle_overload_penalty: Num = 100000):
         self.unit_travel_cost = unit_travel_cost
         self.cost_per_vehicle = cost_per_vehicle
         self.cost_per_depot = cost_per_depot
         self.unit_overload_penalty = unit_overload_penalty
         self.vehicle_overload_penalty = vehicle_overload_penalty
+
+    def set_vehicle_duration_objectives(self,
+                                        travel_time_per_distance: Num = 0,
+                                        service_time_per_customer: Num = 0,
+                                        load_time_per_route: Num = 0,
+                                        overtime_threshold: Num = -1,
+                                        time_limit: Num = -1,
+                                        vehicle_hourly_rate: Num = -1,
+                                        vehicle_overtime_rate: Num = -1,
+                                        vehicle_excess_hour_rate: Num = -1,
+                                        vehicle_time_limit_penalty: Num = -1) -> None:
+        """
+        Set every vehicle-duration constant. -1 means unspecified.
+
+        EVERY CALL IS A FULL RESET, not a patch: an argument left out reverts to its unspecified
+        meaning rather than keeping what a previous call set.
+
+        See design/objective/objective_terms.md for the bands and how a default resolves.
+        """
+        self.travel_time_per_distance = travel_time_per_distance
+        self.service_time_per_customer = service_time_per_customer
+        self.load_time_per_route = load_time_per_route
+
+        self.overtime_threshold = NO_TIME_LIMIT if overtime_threshold == -1 else overtime_threshold
+        self.time_limit = NO_TIME_LIMIT if time_limit == -1 else time_limit
+        # Only when BOTH are real: an unset overtime threshold means there is no overtime band.
+        if self.overtime_threshold != NO_TIME_LIMIT and self.overtime_threshold > self.time_limit:
+            raise ValueError(f"overtime_threshold ({self.overtime_threshold}) must not exceed "
+                             f"time_limit ({self.time_limit}): overtime starts before the legal "
+                             f"bound, never after it.")
+
+        self.vehicle_hourly_rate = 0 if vehicle_hourly_rate == -1 else vehicle_hourly_rate
+        self.vehicle_overtime_rate = 0 if vehicle_overtime_rate == -1 else vehicle_overtime_rate
+
+        limit_is_set = self.time_limit != NO_TIME_LIMIT
+        if vehicle_excess_hour_rate != -1:
+            self.vehicle_excess_hour_rate = vehicle_excess_hour_rate
+        elif limit_is_set:
+            # Whichever rate the caller actually gave. Both zero leaves the excess band unpriced,
+            # and the flat per-vehicle penalty below still fires.
+            self.vehicle_excess_hour_rate = 10 * (self.vehicle_overtime_rate
+                                                  or self.vehicle_hourly_rate)
+        else:
+            self.vehicle_excess_hour_rate = 0
+
+        if vehicle_time_limit_penalty != -1:
+            self.vehicle_time_limit_penalty = vehicle_time_limit_penalty
+        else:
+            self.vehicle_time_limit_penalty = 1000 if limit_is_set else 0
+
+        self.duration_terms_active = bool(travel_time_per_distance or service_time_per_customer
+                                          or load_time_per_route)
 
     def add_vehicle(self, vehicle: Vehicle):
         self.vehicles.append(vehicle)
@@ -4640,22 +4747,87 @@ class FullSolution:
     def total_overload(self):
         return sum(route.amount_overloaded for route in self.all_routes)
 
+    #region Vehicle duration
+    def vehicle_duration(self, vehicle: Vehicle) -> Num:
+        """One vehicle's accrued hours, from its three SINK-WRITTEN caches.
+
+        All three are sink-written, so they still hold the pre-mutation value when an operator
+        priced by mutating. recompute_vehicle_duration is the twin that walks the structure.
+        """
+        return (self.travel_time_per_distance * vehicle.current_travel +
+                self.service_time_per_customer * vehicle.num_customers +
+                self.load_time_per_route * vehicle.num_routes_with_customers)
+
+    def recompute_vehicle_duration(self, vehicle: Vehicle) -> Num:
+        """Ground truth for vehicle_duration: the same three inputs, walked from the structure.
+
+        Shares NO cache with vehicle_duration, so a stale cache cannot hide behind it.
+        """
+        routes = vehicle.routes
+        return (self.travel_time_per_distance * sum(route.total_distance() for route in routes) +
+                self.service_time_per_customer * sum(route.num_customers for route in routes) +
+                self.load_time_per_route * sum(route.num_customers > 0 for route in routes))
+
+    def duration_bands(self, duration: Num) -> tuple[Num, Num, Num, int]:
+        """Cut one vehicle's duration into the four priced quantities.
+
+        THE SINGLE DEFINITION OF THE BANDS, shared by the processor's prediction and
+        objective_terms()' measurement so the two cannot drift apart. See
+        design/objective/objective_terms.md.
+
+        Every branch below degrades correctly at an unset NO_TIME_LIMIT threshold: min(t, inf) is
+        t, max(0, t - inf) is 0, and t > inf is False.
+        """
+        overtime_threshold = self.overtime_threshold
+        time_limit = self.time_limit
+        regular = duration if duration < overtime_threshold else overtime_threshold
+        overtime = duration - overtime_threshold if duration > overtime_threshold else 0
+        excess = duration - time_limit if duration > time_limit else 0
+        return regular, overtime, excess, duration > time_limit
+
+    def vehicle_duration_terms(self) -> tuple[Num, Num, Num, int]:
+        """The four duration quantities summed over every vehicle, measured from the structure."""
+        if not self.duration_terms_active:
+            return 0, 0, 0, 0
+
+        regular_total: Num = 0
+        overtime_total: Num = 0
+        excess_total: Num = 0
+        over_limit_total: int = 0
+        for vehicle in self.vehicles:
+            regular, overtime, excess, over_limit = self.duration_bands(
+                self.recompute_vehicle_duration(vehicle))
+            regular_total += regular
+            overtime_total += overtime
+            excess_total += excess
+            over_limit_total += over_limit
+        return regular_total, overtime_total, excess_total, over_limit_total
+    #endregion
+
     def solution_cost(self):
+        regular_hours, overtime_hours, excess_hours, over_limit = self.vehicle_duration_terms()
         return (self.cost_per_vehicle * self.vehicles_used() +
                 self.cost_per_depot * self.depots_used() +
                 self.unit_travel_cost * self.total_path_len() +
                 self.unit_overload_penalty * self.total_overload() +
-                self.vehicle_overload_penalty * self.num_overloaded_vehicles())
+                self.vehicle_overload_penalty * self.num_overloaded_vehicles() +
+                self.vehicle_hourly_rate * regular_hours +
+                self.vehicle_overtime_rate * overtime_hours +
+                self.vehicle_excess_hour_rate * excess_hours +
+                self.vehicle_time_limit_penalty * over_limit)
 
     def objective_terms(self) -> ObjectiveTermDelta:
         # Absolute totals in the same 5-field shape as ObjectiveTermDelta, so deltas can be
         # checked against ground truth by diffing two calls to this. Also the measurement
         # available to operators that set _evaluates_by_applying because they can't price a move
         # without performing it.
+        regular_hours, overtime_hours, excess_hours, over_limit = self.vehicle_duration_terms()
         return ObjectiveTermDelta(
             travel_distance=self.total_path_len(), vehicles_activated=self.vehicles_used(),
             depots_activated=self.depots_used(), total_route_overload=self.total_overload(),
-            vehicles_overloaded=self.num_overloaded_vehicles())
+            vehicles_overloaded=self.num_overloaded_vehicles(),
+            vehicle_regular_hours=regular_hours, vehicle_overtime_hours=overtime_hours,
+            vehicle_excess_hours=excess_hours, vehicles_over_time_limit=over_limit)
     #endregion
 
     def __copy__(self):
@@ -4677,6 +4849,18 @@ class FullSolution:
         new_sln.cost_per_depot = self.cost_per_depot
         new_sln.unit_overload_penalty = self.unit_overload_penalty
         new_sln.vehicle_overload_penalty = self.vehicle_overload_penalty
+
+        # Vehicle duration objective. Plain constants, taken by value.
+        new_sln.travel_time_per_distance = self.travel_time_per_distance
+        new_sln.service_time_per_customer = self.service_time_per_customer
+        new_sln.load_time_per_route = self.load_time_per_route
+        new_sln.overtime_threshold = self.overtime_threshold
+        new_sln.time_limit = self.time_limit
+        new_sln.vehicle_hourly_rate = self.vehicle_hourly_rate
+        new_sln.vehicle_overtime_rate = self.vehicle_overtime_rate
+        new_sln.vehicle_excess_hour_rate = self.vehicle_excess_hour_rate
+        new_sln.vehicle_time_limit_penalty = self.vehicle_time_limit_penalty
+        new_sln.duration_terms_active = self.duration_terms_active
 
         # Copy problem data
         new_sln.depots = self.depots

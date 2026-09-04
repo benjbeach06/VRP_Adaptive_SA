@@ -54,3 +54,4 @@ to scan. The problem only appears with many short routes.
 ## Links to here
 
 - [planning/README.md](../README.md)
+- [end-depot-usage-tracking.md](end-depot-usage-tracking.md) -- the mechanism that would make the index here cheap to maintain, by routing end depots through the accounting sink

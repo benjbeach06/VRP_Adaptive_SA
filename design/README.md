@@ -29,6 +29,7 @@ The other homes do not overlap with this one:
 
 | area | doc | covers |
 |---|---|---|
+| objective | [objective_terms](objective/objective_terms.md) | the nine terms, the quantity/price split, priced infeasibility, and the vehicle-duration bands |
 | span reorder | [reorder_operators](span_reorder/reorder_operators.md) | the `_SpanReorderBase` seam, the family tree, and the exact short-span optimizer |
 | | [farthest_insertion_ops](span_reorder/farthest_insertion_ops.md) | the three heuristic variants and how they differ |
 | | [farthest_insertion_order](span_reorder/farthest_insertion_order.md) | the fixed-endpoint path helper, why farthest insertion, the measured O(n^2) |
@@ -72,6 +73,7 @@ code gets covered, not restructured ahead of need.
 - [design/raw_delta_accounting/raw_delta_record.md](raw_delta_accounting/raw_delta_record.md) -- the record the core model produces
 - [design/raw_delta_accounting/README.md](raw_delta_accounting/README.md) -- the raw-delta accounting hub: four layers and reading order
 - [design/raw_delta_accounting/tracking_for_cached_accounting.md](raw_delta_accounting/tracking_for_cached_accounting.md) -- the two application-tracking bits, and the one-time cache build
+- [design/objective/objective_terms.md](objective/objective_terms.md) -- the nine terms, the quantity/price split, priced infeasibility, and the vehicle-duration bands
 
 ## Links to here
 

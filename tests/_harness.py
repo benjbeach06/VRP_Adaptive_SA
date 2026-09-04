@@ -96,6 +96,37 @@ def make_solution(depots: list[Depot], customers: list[Customer], vehicle_capaci
     return sln
 
 
+def apply_binding_duration_model(sln: FullSolution, overtime_at: float = 0.5,
+                                 limit_at: float = 0.75) -> None:
+    """Turn the vehicle-duration objective on, with thresholds that actually BIND on `sln`.
+
+    THE POINT IS THAT THE TERMS FIRE. A duration objective whose thresholds sit above every
+    vehicle's real duration reads exactly like one the solution comfortably satisfies, and the
+    second reading flatters the solver for nothing. So the thresholds are placed as fractions of
+    the LONGEST vehicle in the solution as it stands: at 0.5 and 0.75, the longest vehicle is over
+    the legal limit before a single move is priced.
+
+    Call it AFTER the routes are built. It measures, so an empty solution would place both
+    thresholds at zero.
+
+    All three inputs are nonzero, which matters: each one reaches the duration through a different
+    per-vehicle aggregate, and a term wired to only one of them would still pass a check that left
+    the other two at zero.
+    """
+    sln.set_vehicle_duration_objectives(travel_time_per_distance=1.0,
+                                        service_time_per_customer=0.5,
+                                        load_time_per_route=2.0)
+    longest = max((sln.recompute_vehicle_duration(vehicle) for vehicle in sln.vehicles),
+                  default=0.0)
+    sln.set_vehicle_duration_objectives(travel_time_per_distance=1.0,
+                                        service_time_per_customer=0.5,
+                                        load_time_per_route=2.0,
+                                        overtime_threshold=longest * overtime_at,
+                                        time_limit=longest * limit_at,
+                                        vehicle_hourly_rate=1.0,
+                                        vehicle_overtime_rate=1.5)
+
+
 DEFAULT_TEST_SEED = 20260809
 
 
@@ -506,6 +537,10 @@ def term_deltas(before: ObjectiveTermDelta, after: ObjectiveTermDelta) -> Object
         depots_activated=after.depots_activated - before.depots_activated,
         total_route_overload=after.total_route_overload - before.total_route_overload,
         vehicles_overloaded=after.vehicles_overloaded - before.vehicles_overloaded,
+        vehicle_regular_hours=after.vehicle_regular_hours - before.vehicle_regular_hours,
+        vehicle_overtime_hours=after.vehicle_overtime_hours - before.vehicle_overtime_hours,
+        vehicle_excess_hours=after.vehicle_excess_hours - before.vehicle_excess_hours,
+        vehicles_over_time_limit=after.vehicles_over_time_limit - before.vehicles_over_time_limit,
     )
 #endregion
 

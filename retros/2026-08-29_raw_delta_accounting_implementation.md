@@ -200,7 +200,7 @@ Covers the wrap-up and `/report_design` on the same refactor. No new solver logi
 ### Done
 
 - **Deferred step 4** (end-depot usage tracking). Moved to
-  [route-distance-tracking.md](../planning/core-refactors/route-distance-tracking.md).
+  [route-distance-tracking.md](../planning/implemented/route-distance-tracking.md).
 - **Deleted `DepotUsageOrderAcrossRevert`** and its dead imports. Fixed stale prose in
   `tools/compare_deterministic.py` and `tests/test_raw_delta_record.py` that still said step 3
   would carry a removal position.
@@ -279,7 +279,7 @@ review is the process working. But the search for his side is done each retro, p
 
 - [2026-08-27_raw_delta_accounting_plan.md](2026-08-27_raw_delta_accounting_plan.md) -- the prior retro; it covered planning the refactor, this one covers building it
 - [design/raw_delta_accounting/README.md](../design/raw_delta_accounting/README.md) -- the design docs written in the finalization section
-- [planning/core-refactors/route-distance-tracking.md](../planning/core-refactors/route-distance-tracking.md) -- carries deferred step 4 and the distance work this refactor unblocks
+- [planning/implemented/route-distance-tracking.md](../planning/implemented/route-distance-tracking.md) -- carries deferred step 4 and the distance work this refactor unblocks
 - [planning/implemented/raw-delta-accounting.md](../planning/implemented/raw-delta-accounting.md) -- the plan, moved to implemented in the finalization
 
 ## Links to here

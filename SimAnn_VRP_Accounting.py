@@ -190,13 +190,54 @@ class AccountingProcessor:
 
             num_depots_used_delta += is_used - was_used
 
+        # Vehicle duration, from the three per-vehicle aggregates already built above -- so it
+        # needs no field of its own on either record. See design/objective/objective_terms.md.
+        # MUST FOLLOW THE TRAVEL LOOP, which is where vehicle_delta_travel is finished.
+        regular_hours_delta: Num = 0
+        overtime_hours_delta: Num = 0
+        excess_hours_delta: Num = 0
+        num_over_time_limit_delta: int = 0
+        if sln.duration_terms_active:
+            travel_rate = sln.travel_time_per_distance
+            service_rate = sln.service_time_per_customer
+            load_rate = sln.load_time_per_route
+
+            # Every vehicle any of the three aggregates moved. A vehicle absent from all three
+            # kept its duration, so it can cross no band boundary.
+            #
+            # TESTING HAZARD: ordered merge, not a set union. A set of Vehicles iterates by object
+            # hash, and these are float sums, so a set would break determinism tests.
+            touched: dict[Vehicle, None] = dict.fromkeys(vehicle_delta_travel)
+            touched.update(dict.fromkeys(vehicle_delta_num_customers))
+            touched.update(dict.fromkeys(vehicle_delta_active_routes))
+            for vehicle in touched:
+                # Sink-written caches, so this holds the PRE-mutation duration even for an
+                # operator that priced by mutating -- as with the counter bases above.
+                duration_before = sln.vehicle_duration(vehicle)
+                duration_after = (duration_before
+                                  + travel_rate * vehicle_delta_travel.get(vehicle, 0)
+                                  + service_rate * vehicle_delta_num_customers.get(vehicle, 0)
+                                  + load_rate * vehicle_delta_active_routes.get(vehicle, 0))
+
+                regular_i, overtime_i, excess_i, over_limit_i = sln.duration_bands(duration_before)
+                regular_f, overtime_f, excess_f, over_limit_f = sln.duration_bands(duration_after)
+
+                regular_hours_delta += regular_f - regular_i
+                overtime_hours_delta += overtime_f - overtime_i
+                excess_hours_delta += excess_f - excess_i
+                num_over_time_limit_delta += over_limit_f - over_limit_i
+
         # Finally, construct objective term and accounting
         objective_deltas = ObjectiveTermDelta(
             travel_distance=travel_delta,
             total_route_overload=overload_delta,
             depots_activated=num_depots_used_delta,
             vehicles_activated=num_active_vehicles_delta,
-            vehicles_overloaded=num_vehicles_overloaded_delta)
+            vehicles_overloaded=num_vehicles_overloaded_delta,
+            vehicle_regular_hours=regular_hours_delta,
+            vehicle_overtime_hours=overtime_hours_delta,
+            vehicle_excess_hours=excess_hours_delta,
+            vehicles_over_time_limit=num_over_time_limit_delta)
 
         accounting_record = AccountingRecord(vehicle_delta_routes_overloaded = vehicle_delta_routes_overloaded,
                                             vehicle_delta_active_routes = vehicle_delta_active_routes,

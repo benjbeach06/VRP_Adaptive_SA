@@ -64,7 +64,7 @@ to instance size.
 
 Related: [family-generation](family-generation.md) -- a dynamically generated family
 gates its own operator creation on the same cost estimates. [module-structure](../core-refactors/module-structure.md) for where the estimate would live, and
-[route-distance-tracking](../core-refactors/route-distance-tracking.md), which removes one of the current
+[route-distance-tracking](../implemented/route-distance-tracking.md), which removes one of the current
 per-proposal costs. Design context in
 [design/span_reorder/reorder_operators.md](../../design/span_reorder/reorder_operators.md).
 
@@ -73,7 +73,7 @@ per-proposal costs. Design context in
 - [family-generation.md](family-generation.md) -- dynamically gated family creation on the same cost estimates
 - [design/span_reorder/reorder_operators.md](../../design/span_reorder/reorder_operators.md) -- design context for the span reorder operators
 - [planning/core-refactors/module-structure.md](../core-refactors/module-structure.md) -- where per-operator cost estimates would be stored
-- [planning/core-refactors/route-distance-tracking.md](../core-refactors/route-distance-tracking.md) -- removes one of the per-proposal costs this plan would gate
+- [planning/implemented/route-distance-tracking.md](../implemented/route-distance-tracking.md) -- removes one of the per-proposal costs this plan would gate
 
 ## Links to here
 

@@ -303,7 +303,11 @@ class OperatorBL[Ops: tuple](ABC):
         return deltas.get_cost_improvement(
             travel_unit_cost=sln.unit_travel_cost, vehicle_cost=sln.cost_per_vehicle,
             depot_cost=sln.cost_per_depot, overload_penalty=sln.unit_overload_penalty,
-            vehicle_overload_penalty=sln.vehicle_overload_penalty)
+            vehicle_overload_penalty=sln.vehicle_overload_penalty,
+            vehicle_hourly_rate=sln.vehicle_hourly_rate,
+            vehicle_overtime_rate=sln.vehicle_overtime_rate,
+            vehicle_excess_hour_rate=sln.vehicle_excess_hour_rate,
+            vehicle_time_limit_penalty=sln.vehicle_time_limit_penalty)
 
 class ReassignRouteBefore(OperatorBL[ReassignRouteBeforeOps]):
     def _evaluate_impl(self, operands: ReassignRouteBeforeOps):

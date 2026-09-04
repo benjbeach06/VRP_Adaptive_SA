@@ -32,7 +32,7 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 
 from _harness import (
     Customer, FULL_MATRIX, Route, SeededTestCase,
-    DirectOperator,
+    DirectOperator, apply_binding_duration_model,
     all_problems, fingerprint, make_depots, make_solution, random_instance,
     raw_record_claim_problems, raw_record_completeness_problems,
     raw_record_distance_problems, route_of, route_states, route_travels, term_deltas,
@@ -220,15 +220,40 @@ class RandomisedOperatorContract(OperatorContractBase):
     shapes) the hand-built matrices above don't enumerate.
     """
 
-    def test_contract_across_random_operands(self):
+    def _solved_instance(self):
+        """A real initial solution and the solver that owns its operator roster."""
         from SimAnn_VRP_Solver import SimAnnVRPSolver
         import contextlib, io
 
-        proposals = 2000 if FULL_MATRIX else 400
         sln = random_instance(seed=20260809, n_customers=30, n_vehicles=4)
         solver = SimAnnVRPSolver(sln)
         with contextlib.redirect_stdout(io.StringIO()):
             solver.make_initial_solution()
+        return sln, solver
+
+    def test_contract_across_random_operands(self):
+        sln, solver = self._solved_instance()
+        self._sweep(sln, solver)
+
+    def test_contract_with_vehicle_duration_objective(self):
+        """The same sweep, with the vehicle-duration objective ON and its thresholds BINDING.
+
+        The four duration terms are zero in every other test in this suite, so the per-term
+        assertion inside the sweep grades them vacuously there. This is the run where they carry a
+        value, and it is what checks the processor's band arithmetic against a measurement for
+        every operator in the roster rather than for a hand-built case.
+
+        Binding thresholds are the point. With the limit above every vehicle's real duration, the
+        excess and over-limit terms stay zero however wrong the arithmetic is.
+        """
+        sln, solver = self._solved_instance()
+        apply_binding_duration_model(sln)
+        self.assertGreater(sln.objective_terms().vehicles_over_time_limit, 0,
+                           "duration thresholds did not bind, so the new terms are untested here")
+        self._sweep(sln, solver)
+
+    def _sweep(self, sln, solver):
+        proposals = 2000 if FULL_MATRIX else 400
 
         self.assertEqual(all_problems(sln), [], "initial solution violates its own invariants")
 

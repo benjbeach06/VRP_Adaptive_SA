@@ -44,7 +44,7 @@ reports a travel delta per route, the processor aggregates it per vehicle, and t
 `Route.total_distance` and `Vehicle.get_total_distance` are the recompute twins.
 
 End-depot usage as an objective term is not built. It is in
-[planning/core-refactors/route-distance-tracking.md](../../planning/core-refactors/route-distance-tracking.md),
+[planning/core-refactors/route-distance-tracking.md](../../planning/implemented/route-distance-tracking.md),
 which this pipeline makes cheap to add.
 
 ## How this came to be
@@ -58,7 +58,7 @@ The plan, and the ways the built pipeline departed from it, are in
 - [processor.md](processor.md) -- the resolver that turns a record into an objective delta and cache updates
 - [accounting_record.md](accounting_record.md) -- the record fields, its inverse, and how the sink applies one
 - [tracking_for_cached_accounting.md](tracking_for_cached_accounting.md) -- the two application-tracking bits, and the one-time cache build
-- [planning/core-refactors/route-distance-tracking.md](../../planning/core-refactors/route-distance-tracking.md) -- end-depot usage as an objective term, the one part of that plan still unbuilt
+- [planning/implemented/route-distance-tracking.md](../../planning/implemented/route-distance-tracking.md) -- end-depot usage as an objective term, the one part of that plan still unbuilt
 - [planning/implemented/raw-delta-accounting.md](../../planning/implemented/raw-delta-accounting.md) -- the plan, and how the built pipeline departed from it
 
 ## Links to here
@@ -66,3 +66,5 @@ The plan, and the ways the built pipeline departed from it, are in
 - [design/README.md](../README.md) -- parent index to the design folder
 - [retros/2026-08-29_raw_delta_accounting_implementation.md](../../retros/2026-08-29_raw_delta_accounting_implementation.md) -- the retro covering the build and its finalization
 - [design/span_reorder/farthest_insertion_ops.md](../span_reorder/farthest_insertion_ops.md) -- cites the sink-written route distance this pipeline maintains, which its route-weighted draw reads
+- [planning/implemented/route-distance-tracking.md](../../planning/implemented/route-distance-tracking.md) -- the distance half of this pipeline, planned separately and landed into it; points here for the shipped shape
+- [design/objective/objective_terms.md](../objective/objective_terms.md) -- the terms this pipeline computes deltas for, and why each one is shaped the way it is

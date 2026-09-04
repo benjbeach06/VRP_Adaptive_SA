@@ -23,8 +23,9 @@ The plans are grouped into five folders by what they touch:
 | [inverted-view-refactor](core-refactors/inverted-view-refactor.md) | deferred, gate NOT met | O(1) "where is customer j"; needs ablation evidence for guidance, which currently sits at 2 sigma |
 | [end-depot-index](core-refactors/end-depot-index.md) | measured, small | the only operator whose cost grows with instance size |
 | [module-structure](core-refactors/module-structure.md) | deferred by timeboxing | 4,662-line core model; a mechanical `self` -> typed-parameter split into a static evaluator |
-| [raw-delta-accounting](implemented/raw-delta-accounting.md) | **IMPLEMENTED** (steps 0-3, 5; step 4 deferred) | accounting was derived twice and independently; one processor now replaces ~29 per-mutation derivations |
-| [route-distance-tracking](core-refactors/route-distance-tracking.md) | unblocked; raw-delta-accounting landed | no route knows its own length; maintain it like load, with an oracle twin |
+| [raw-delta-accounting](implemented/raw-delta-accounting.md) | **IMPLEMENTED** (steps 0-3, 5; step 4 is now [end-depot-usage-tracking](core-refactors/end-depot-usage-tracking.md)) | accounting was derived twice and independently; one processor now replaces ~29 per-mutation derivations |
+| [route-distance-tracking](implemented/route-distance-tracking.md) | **IMPLEMENTED** | per-route and per-vehicle distance are sink-written caches with recompute twins |
+| [end-depot-usage-tracking](core-refactors/end-depot-usage-tracking.md) | not started | raw-delta-accounting's deferred step 4; would make the tail-swap operator's scan an index lookup |
 | [determinism-import-branch](core-refactors/determinism-import-branch.md) | small, isolated | per-call attribute read on a hot path for a determinism-only decision |
 
 ### problem-model/
@@ -32,7 +33,7 @@ The plans are grouped into five folders by what they touch:
 | plan | status | one-line reason |
 |---|---|---|
 | [warm-start](problem-model/warm-start.md) | small, isolated | saved solutions cannot be loaded back |
-| [vehicle-time-limits](problem-model/vehicle-time-limits.md) | blocked on route-distance-tracking | travel + service + loading time per vehicle; the largest step toward realistic dispatch |
+| [vehicle-time-limits](implemented/vehicle-time-limits.md) | **IMPLEMENTED**, off by default | travel + service + loading duration per vehicle, priced in four bands; the largest step toward realistic dispatch |
 | [asymmetric-distances](problem-model/asymmetric-distances.md) | gated on a real need | supplied distance oracle, directed by default; breaks O(1) chain reversal |
 
 ### operator-selection/
@@ -103,10 +104,10 @@ See [implemented/README.md](implemented/README.md) for features that have shippe
 - [planning/problem-model/warm-start.md](problem-model/warm-start.md) -- saved solutions cannot be loaded back.
 - [planning/core-refactors/module-structure.md](core-refactors/module-structure.md) -- 4,662-line core model; a mechanical `self` ->
   typed-parameter split into a static evaluator.
-- [planning/core-refactors/route-distance-tracking.md](core-refactors/route-distance-tracking.md) -- no route knows its own length;
-  maintain it like load, with an oracle twin.
-- [planning/problem-model/vehicle-time-limits.md](problem-model/vehicle-time-limits.md) -- travel + service + loading time per vehicle;
-  the largest step toward realistic dispatch.
+- [planning/implemented/route-distance-tracking.md](implemented/route-distance-tracking.md) -- IMPLEMENTED; per-route and
+  per-vehicle distance are sink-written caches with recompute twins.
+- [planning/implemented/vehicle-time-limits.md](implemented/vehicle-time-limits.md) -- IMPLEMENTED; travel + service + loading
+  duration per vehicle, priced in four bands.
 - [planning/problem-model/asymmetric-distances.md](problem-model/asymmetric-distances.md) -- supplied distance oracle, directed by
   default; breaks O(1) chain reversal.
 - [planning/operator-selection/operator-selection.md](operator-selection/operator-selection.md) -- HUB; which operator gets chosen and how often.
@@ -132,6 +133,7 @@ See [implemented/README.md](implemented/README.md) for features that have shippe
 - [RESULTS.md](../RESULTS.md) -- the evidence these plans are gated on, and the withdrawn re-tune
   result.
 - [planning/implemented/raw-delta-accounting.md](implemented/raw-delta-accounting.md) -- accounting is derived twice and independently; one processor replaces ~29 per-mutation derivations.
+- [planning/core-refactors/end-depot-usage-tracking.md](core-refactors/end-depot-usage-tracking.md) -- raw-delta-accounting's deferred step 4; would make the tail-swap operator's scan an index lookup
 
 ## Links to here
 

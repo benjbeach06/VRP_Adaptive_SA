@@ -65,9 +65,10 @@ size means a *smaller* gap.
 This is a direction worth testing, not a result.
 
 **This is a single-depot special case of the model.** The solver's own problem — chained routes
-across depots, open at both ends — is MDVRPI, which has its own published benchmark that needs
-per-vehicle duration limits before it can be run. See
-[planning/problem-model/vehicle-time-limits.md](planning/problem-model/vehicle-time-limits.md).
+across depots, open at both ends — is MDVRPI, whose published benchmark caps each rotation's
+duration. That cap is now expressible:
+[vehicle-time-limits](planning/implemented/vehicle-time-limits.md) has landed. **The benchmark has
+not been run against it yet**, so no number here comes from it.
 
 ---
 
@@ -439,14 +440,17 @@ the winners is partly the sampler agreeing with itself.
 
 Stated because a portfolio project that lists only its strengths is not evidence of judgment.
 
-**The solver's own problem has a published benchmark, and it cannot run it yet.** Chained routes
+**The solver's own problem has a published benchmark, and it has not been run yet.** Chained routes
 across depots, open at both ends, is MDVRPI — Crevier, Cordeau and Laporte, *EJOR* 176(2), 2007 —
-and that benchmark caps each rotation's duration. This model has no notion of time, so the
-comparison is unavailable until
-[vehicle-time-limits](planning/problem-model/vehicle-time-limits.md) lands. Run on the
-**relaxation** with the duration cap dropped, which is a strictly easier problem, an external review
-measured 5.9% above published values on 8 of 10 instances while overshooting the cap by up to 83%.
-That is not a score; it is the reason the feature is next.
+and that benchmark caps each rotation's duration. The model can now express that cap:
+[vehicle-time-limits](planning/implemented/vehicle-time-limits.md) has landed, so the blocker is
+gone. **What remains is the run itself, and it is still owed.** Until it happens, the only figure
+available is the older one below, measured against the relaxation rather than the real problem.
+
+Run on the **relaxation** with the duration cap dropped, which is a strictly easier problem, an
+external review measured 5.9% above published values on 8 of 10 instances while overshooting the
+cap by up to 83%. That measurement predates the duration objective and says nothing about how the
+solver does with the cap enforced.
 
 **Against Hexaly the gap is 0.8–1.6%, with a massive gap in throughput.** Hexaly reaches 1861.41 on the
 reference instance and converges — tripling its budget to 180 s gained 0.1, improving to around 1846 in 10 minutes.
@@ -517,7 +521,7 @@ experiment could only resolve effects above ~3%, so it does not rule out a small
 - [planning/experiments/ablations.md](planning/experiments/ablations.md) -- where the two unrun measurements this file names are queued: making the CVRPLIB benchmark reproducible, and isolating the cost penalty's contribution
 - [planning/problem-model/warm-start.md](planning/problem-model/warm-start.md) -- the loader that would let the reference family's best-known solutions be saved and re-verified like the small family's
 - [planning/search-methods/ruin-and-recreate.md](planning/search-methods/ruin-and-recreate.md) -- the named fix for the thin inter-route neighborhood listed under Known limitations
-- [planning/problem-model/vehicle-time-limits.md](planning/problem-model/vehicle-time-limits.md) -- the feature that unlocks the MDVRPI benchmark, which is the published instance set for this solver's actual problem
+- [planning/implemented/vehicle-time-limits.md](planning/implemented/vehicle-time-limits.md) -- the landed feature that unblocked the MDVRPI benchmark, the published instance set for this solver's actual problem; the run itself is still owed
 
 ## Links to here
 
@@ -528,3 +532,4 @@ experiment could only resolve effects above ~3%, so it does not rule out a small
 - [planning/experiments/joint-parameter-search.md](planning/experiments/joint-parameter-search.md)
 - [experiment_logs/README.md](experiment_logs/README.md) -- cites this file's reasoning to explain a withdrawn re-tune result
 - [METHODOLOGY.md](METHODOLOGY.md) -- states the rules these measurements are verified and accepted under
+- [retros/2026-09-04_vehicle_duration_objective.md](retros/2026-09-04_vehicle_duration_objective.md) -- the period that corrected the MDVRPI limitation stated here

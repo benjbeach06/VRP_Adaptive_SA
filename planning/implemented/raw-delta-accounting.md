@@ -2,7 +2,7 @@
 
 **IMPLEMENTED, steps 0-3 and 5, commit `321864b` on branch `raw-delta-accounting`.**
 Step 4, end-depot usage tracking, is deferred -- see
-[route-distance-tracking](../core-refactors/route-distance-tracking.md) and "How this diverged, and
+[route-distance-tracking](route-distance-tracking.md) and "How this diverged, and
 why" at the end. The `AccountingRecord` shape shipped is not the one this plan describes; the
 divergence section carries what changed. See [design/raw_delta_accounting/](../../design/raw_delta_accounting/)
 for what the code does now.
@@ -10,7 +10,7 @@ for what the code does now.
 ---
 
 **Status as planned: not started. Infrastructure. Prerequisite for
-[route-distance-tracking](../core-refactors/route-distance-tracking.md) and everything downstream of it.**
+[route-distance-tracking](route-distance-tracking.md) and everything downstream of it.**
 
 ## The problem
 
@@ -117,7 +117,7 @@ being derived a second time there.
 
 It does not add distance tracking. Per-route and per-vehicle distance become cheap to add
 afterwards, because the full deltas already exist, but a new accounting field carries its own blast
-radius and enables its own optimizations. That stays [route-distance-tracking](../core-refactors/route-distance-tracking.md),
+radius and enables its own optimizations. That stays [route-distance-tracking](route-distance-tracking.md),
 sequenced after this.
 
 It does not start [module-structure](../core-refactors/module-structure.md). The processor is a static class in its
@@ -169,7 +169,7 @@ explicit end-depot changeset, which three operators need plus the route creation
 old shape, easy in this one, and sequenced last because a new accounting field should not be vetted
 alongside the extraction that makes it cheap. The infrastructure this plan built is what makes it
 cheap when it is picked up; it now belongs with
-[route-distance-tracking](../core-refactors/route-distance-tracking.md) and the downstream time work.
+[route-distance-tracking](route-distance-tracking.md) and the downstream time work.
 
 Commit per step while working, then squash. The side-by-side state is scaffolding, not history.
 
@@ -281,8 +281,8 @@ case. Neither reads `objective_terms()`.
 
 None on its own. This is the gate for others.
 
-Sequence it **before** [route-distance-tracking](../core-refactors/route-distance-tracking.md), which is in turn the
-blocker for [vehicle-time-limits](../problem-model/vehicle-time-limits.md). Doing distance tracking first would mean
+Sequence it **before** [route-distance-tracking](route-distance-tracking.md), which is in turn the
+blocker for [vehicle-time-limits](vehicle-time-limits.md). Doing distance tracking first would mean
 adding a cached field at ~44 mutation sites by hand, then removing those updates again when the
 processor takes ownership.
 
@@ -304,7 +304,7 @@ So the record carries `travel_distance` as a single number, priced from link del
 is today, and no processor-owned per-route distance exists.
 
 **Per-route and per-vehicle distance belongs to
-[route-distance-tracking](../core-refactors/route-distance-tracking.md), not here.** Decided 2026-08-29 on scope: it
+[route-distance-tracking](route-distance-tracking.md), not here.** Decided 2026-08-29 on scope: it
 needs distance accounting at MUTATION time, which is a different mechanism from everything else in
 this refactor, and folding it in would make a failed equivalence gate unattributable. That plan
 holds the full reasoning.
@@ -360,7 +360,7 @@ by mutators AT ALL."* This is a design defect that reached a committed plan doc.
 forced, and which stands: `current_load` is a sink-written cache like `depot_route_starts`. The
 record carries `(initial, final)` and `apply_accounting` assigns it. `count_load_change` and its
 ~10 call sites are gone. Travel distance is the one deliberate exception, and it lives in
-[route-distance-tracking](../core-refactors/route-distance-tracking.md).
+[route-distance-tracking](route-distance-tracking.md).
 
 Because mutation now maintains no derived cache, a solution assembled route by route carries no
 accounting. `FullSolution.shore_up_accounting()` rebuilds all of it from the structure in a forced
@@ -418,8 +418,8 @@ in place. It is picked up with the downstream distance and time work.
 
 ## References
 
-- [planning/core-refactors/route-distance-tracking.md](../core-refactors/route-distance-tracking.md) -- sequenced after this; the full deltas make it cheap, but a new accounting field carries its own blast radius
-- [planning/problem-model/vehicle-time-limits.md](../problem-model/vehicle-time-limits.md) -- downstream of route-distance-tracking; its per-vehicle aggregates are what this infrastructure exists to make cheap
+- [route-distance-tracking.md](route-distance-tracking.md) -- sequenced after this; the full deltas make it cheap, but a new accounting field carries its own blast radius
+- [vehicle-time-limits.md](vehicle-time-limits.md) -- downstream of route-distance-tracking; its per-vehicle aggregates are what this infrastructure exists to make cheap
 - [planning/core-refactors/module-structure.md](../core-refactors/module-structure.md) -- proposes the same static-class shape for the whole core model; deliberately NOT started by this plan
 - [planning/core-refactors/inverted-view-refactor.md](../core-refactors/inverted-view-refactor.md) -- also a broad core-model diff; must not run concurrently with this one
 - [retros/2026-08-29_raw_delta_accounting_implementation.md](../../retros/2026-08-29_raw_delta_accounting_implementation.md) -- the implementation session; carries the reasoning for each way the shipped design departed from this plan
@@ -427,8 +427,9 @@ in place. It is picked up with the downstream distance and time work.
 ## Links to here
 
 - [planning/README.md](../README.md)
-- [planning/core-refactors/route-distance-tracking.md](../core-refactors/route-distance-tracking.md) -- downstream plan whose old per-site-update shape is replaced by this refactor's processor output
+- [route-distance-tracking.md](route-distance-tracking.md) -- downstream plan whose old per-site-update shape is replaced by this refactor's processor output
 - [retros/2026-08-27_raw_delta_accounting_plan.md](../../retros/2026-08-27_raw_delta_accounting_plan.md) -- the session that produced this plan, including the design attribution
 - [README.md](README.md) -- the implemented-features index; lists this plan with its landing commit
 - [design/raw_delta_accounting/README.md](../../design/raw_delta_accounting/README.md) -- the design doc for what shipped
 - [retros/2026-08-29_raw_delta_accounting_implementation.md](../../retros/2026-08-29_raw_delta_accounting_implementation.md) -- the build-and-finalization retro
+- [planning/core-refactors/end-depot-usage-tracking.md](../core-refactors/end-depot-usage-tracking.md) -- carries this plan's deferred step 4 forward on its own

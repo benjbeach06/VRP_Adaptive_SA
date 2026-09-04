@@ -1,9 +1,17 @@
 # Track total distance on routes and vehicles
 
-**Status: not started, now unblocked. [raw-delta-accounting](../implemented/raw-delta-accounting.md)
-landed (steps 0-3, 5), so the processor this plan's shape depends on exists. Prerequisite for
-[vehicle-time-limits](../problem-model/vehicle-time-limits.md). Carries deferred step 4 of
-raw-delta-accounting, end-depot usage tracking.**
+**Status: IMPLEMENTED in `6df59e0`. Per-route and per-vehicle distance are sink-written caches with
+recompute twins, carried through the [raw-delta-accounting](raw-delta-accounting.md) pipeline.
+[vehicle-time-limits](vehicle-time-limits.md), which this unblocked, has since
+landed on top of it.**
+
+**One thing this plan carried is still unbuilt: end-depot usage tracking**, deferred step 4 of
+[raw-delta-accounting](raw-delta-accounting.md), which records the deferral. It is a new objective
+term rather than a distance cache, and nothing here depends on it.
+
+The design as shipped is [design/raw_delta_accounting/](../../design/raw_delta_accounting/README.md).
+What follows is the plan that produced it, and the one question it left open is answered under
+"How the rework question resolved" below.
 
 ## The problem
 
@@ -82,13 +90,25 @@ free, where doing it during pricing is not.
   * per-route distance is a CUMSUM ALONG THE PATH, maintained at mutation time. A route stores no
     total -- it reads the last element of its cumsum;
   * per-vehicle distance is maintained too, not derived on demand, so vehicle-level objective terms
-    (travel time, and [vehicle-time-limits](../problem-model/vehicle-time-limits.md)) have their
+    (travel time, and [vehicle-time-limits](vehicle-time-limits.md)) have their
     aggregates ready;
   * this is an ACCEPTED DUAL TRUTH: the priced total and the maintained cumsum are two derivations
     of one quantity. Every dual truth in this codebase so far drifted silently because nothing
     compared the two, so the per-route oracle ships in the same change, not after it.
 
-### The unresolved part: rework during multi-step pricing
+### How the rework question resolved
+
+**No cumsum was built.** A route stores ONE scalar, `current_travel`, written only by the
+accounting sink, and the three cross-route aggregators that need a sub-chain length call
+`Route.path_distance`, which walks it in O(k).
+
+That closes the section below without answering it, because the premise was measured and did not
+hold. The sub-chain queries cost about **0.2% of wall time**, and a maintained cumsum was measured
+at **0.09-0.35%** to replace them. The deferred-offset scheme was designed to avoid a cost that is
+not there, so the scalar shipped instead and `path_distance` exists as the one seam a cumsum could
+later drop into.
+
+### The unresolved part: rework during multi-step pricing (SUPERSEDED, see above)
 
 A cumsum gives any sub-chain in O(1) as `prefix[j] - prefix[i]`, which is what makes the interior
 problem go away. The cost moves to the write side: a change at position p shifts every prefix after
@@ -102,7 +122,7 @@ deferred offset during multi-step pricing -- "the tail of route r after position
 o" -- so the tail is rewritten once at the end rather than once per step. That is a second hard
 idea with its own invariants and its own failure modes. Designing it is part of THIS plan, and its
 size is the reason this plan is separate from
-[raw-delta-accounting](../implemented/raw-delta-accounting.md).
+[raw-delta-accounting](raw-delta-accounting.md).
 
 ## Verification
 
@@ -125,26 +145,28 @@ catch, and there are enough mutation sites that at least one will be missed on t
 
 ## Gate
 
-[raw-delta-accounting](../implemented/raw-delta-accounting.md) has landed, so the processor this
+[raw-delta-accounting](raw-delta-accounting.md) has landed, so the processor this
 plan's shape depends on exists. Beyond that, small and self-verifying. Do it when
-[vehicle-time-limits](../problem-model/vehicle-time-limits.md) is wanted, since that plan cannot start without it.
+[vehicle-time-limits](vehicle-time-limits.md) is wanted, since that plan cannot start without it.
 
-Sequence it **before** [inverted-view-refactor](inverted-view-refactor.md) if both are planned:
+Sequence it **before** [inverted-view-refactor](../core-refactors/inverted-view-refactor.md) if both are planned:
 adding a cached field to routes is cheap now and would be rework after the position representation
 changes.
 
 ## References
 
-- [planning/problem-model/vehicle-time-limits.md](../problem-model/vehicle-time-limits.md)
-- [inverted-view-refactor.md](inverted-view-refactor.md)
-- [planning/implemented/raw-delta-accounting.md](../implemented/raw-delta-accounting.md) -- blocking prerequisite; the processor gives this plan the field to write distance into instead of instrumenting mutation sites by hand
+- [vehicle-time-limits.md](vehicle-time-limits.md)
+- [planning/core-refactors/inverted-view-refactor.md](../core-refactors/inverted-view-refactor.md)
+- [raw-delta-accounting.md](raw-delta-accounting.md) -- blocking prerequisite; the processor gives this plan the field to write distance into instead of instrumenting mutation sites by hand
+- [design/raw_delta_accounting/README.md](../../design/raw_delta_accounting/README.md) -- the shipped design this plan produced; read it for what the pipeline IS, where this file is only how it was planned
 
 ## Links to here
 
 - [planning/operator-selection/budget-gated-selection.md](../operator-selection/budget-gated-selection.md) -- budget gating would complement distance-tracking cost reduction
 - [planning/README.md](../README.md)
 - [planning/operator-selection/repeated-work-detection.md](../operator-selection/repeated-work-detection.md)
-- [planning/problem-model/vehicle-time-limits.md](../problem-model/vehicle-time-limits.md)
-- [planning/implemented/raw-delta-accounting.md](../implemented/raw-delta-accounting.md) -- the landed prerequisite; the processor exists, so this plan only adds the field distance is written into
+- [vehicle-time-limits.md](vehicle-time-limits.md)
+- [raw-delta-accounting.md](raw-delta-accounting.md) -- the landed prerequisite; the processor exists, so this plan only adds the field distance is written into
 - [design/raw_delta_accounting/README.md](../../design/raw_delta_accounting/README.md) -- the shipped pipeline this plan builds on; its processor supplies the raw distance delta at every site
 - [retros/2026-08-29_raw_delta_accounting_implementation.md](../../retros/2026-08-29_raw_delta_accounting_implementation.md) -- the retro for the prerequisite that landed
+- [retros/2026-09-04_vehicle_duration_objective.md](../../retros/2026-09-04_vehicle_duration_objective.md) -- the session that found this already implemented and moved it here
