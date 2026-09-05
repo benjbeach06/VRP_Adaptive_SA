@@ -542,7 +542,7 @@ class SimAnnVRPSolver:
             # Only one depot! Cannot reassign
             self.remove(ChangeRandomEndDepot)
 
-            if len(sln.vehicles) == 1 or not sln.is_vehicle_duration_priced_or_limited():
+            if len(sln.vehicles) == 1 or sln.cost_per_vehicle == 0 and not sln.is_vehicle_duration_priced_or_limited():
                 # Moving routes has no impact on the solution
                 self.remove(RandomRouteReassignment)
 

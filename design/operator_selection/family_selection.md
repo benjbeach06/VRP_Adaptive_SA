@@ -198,9 +198,9 @@ change depot visitation data are removed from the roster, e.g. `ChangeRandomEndD
 routes has no effect on the solution quality or feasibility, then any operators that move full
 routes are removed, e.g. `RandomRouteReassignment`. This occurs if there is only one depot, and
 one of the following is true:
-1) The modelled problem has only one vehicle
-2) Total vehicle duration is untracked 
-3) Total vehicle duration is unpriced and unlimitedW
+1) The modeled problem has only one vehicle
+2) Cost per vehicle is zero and total vehicle duration is either 2a) untracked or 2b)
+both unpriced and unlimited
 
 
 ## Further reading
