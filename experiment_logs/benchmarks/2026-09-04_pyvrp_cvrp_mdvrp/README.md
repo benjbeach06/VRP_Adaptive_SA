@@ -164,3 +164,8 @@ CVRP at the default fleet, 8 PyVRP CVRP, and 24 multi-depot.
   chains above.
 - **Priced overload and `cost_per_depot`.** Excluded from the multi-depot instances because PyVRP
   cannot express either, and two solvers optimising different objectives measure nothing.
+
+## Links to here
+
+- [RESULTS.md](../../../RESULTS.md) -- cites the 60 s figures from this run as the reproducible
+  CVRPLIB anchor, and points here for the harness defects behind them

@@ -37,15 +37,42 @@ The strongest external anchor the project has, and the honest headline number.
 | | | | | **mean** | **+4.32%** | **+4.91%** |
 
 *600 s per run, 5 seeds, greedy construction. Every result feasible, vehicle count at or under the
-instance's `k`. PyVRP on the same budget sits at 0.0–1.8% from best-known.*
+instance's `k`.*
 
-**Provenance, stated because it is weaker than everything else in this file.** The harness came from
-an external review and lives outside the repository, so these runs are **not reproducible from a
-clean checkout** and **no solver commit was recorded** — only the run date, 2026-08-24, which places
-them after the scoring rework and the time-based schedule but before raw-delta accounting. They are
-reported because a rough external anchor beats none, and they are flagged rather than promoted to
-the same standing as the paired studies below. Making them reproducible is
-[planning/experiments/ablations.md](planning/experiments/ablations.md) work.
+**A PyVRP figure that stood here was withdrawn on 2026-09-05.** It read "PyVRP on the same budget
+sits at 0.0–1.8% from best-known", and it was impossible: it put PyVRP **below the proven optimum on
+5 of 8 instances**. The harness called `pyvrp.read()` without `round_func`, and its default `"none"`
+TRUNCATES where TSPLIB `EUC_2D` rounds to nearest — about half a unit undercounted per edge. The SA
+column above is unaffected; it never went through PyVRP's reader.
+
+**Provenance of the 600 s table, stated because it is weaker than everything below it.** The harness
+came from an external review, and when this run was made it lived outside the repository. **No
+solver commit was recorded** — only the run date, 2026-08-24, which places it after the scoring
+rework and the time-based schedule but before raw-delta accounting. It is reported because a rough
+external anchor beats none, and it is flagged rather than promoted to the standing of the paired
+studies below.
+
+### The reproducible run — 60 s, both solvers, harness in the repo
+
+| | mean gap to best-known | best gap |
+|---|---|---|
+| this solver, default fleet | **+5.58%** | +5.17% |
+| this solver, one vehicle | **+5.29%** | +4.90% |
+| **PyVRP 0.14** | **+0.61%** | — |
+
+*60 s per run, 3 seeds for this solver and 1 for PyVRP, same 8 instances, sequential on one machine.
+Solver `d4fdfbd`, clean. Distances are TSPLIB `nint` on both sides. Every one of the 80 runs
+satisfies `reported_objective == cost` — the geometry evaluator agrees with each solver's own
+bookkeeping, and it imports no solver.*
+
+PyVRP is compiled C++ and this solver is pure Python, so **this answers "how far off at equal wall
+clock", not "how good is the algorithm"**. Iteration counts are recorded alongside so a reader can
+separate the two.
+
+The harness is now **in the repository** at `pyvrp_benchmarking/`, so this run IS reproducible from
+a clean checkout. Full record, including the four harness defects that had to be fixed first and a
+multi-depot comparison against PyVRP, is in
+[experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md](experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md).
 
 **The gap tracks route length, not instance size.** The two predictors are collinear at r = +0.94,
 so the marginal correlations settle nothing on their own. Controlling for one and then the other
@@ -518,9 +545,10 @@ experiment could only resolve effects above ~3%, so it does not rule out a small
 - [METHODOLOGY.md](METHODOLOGY.md) -- the rules used to accept or reject every measurement here
 - [planning/operator-selection/family-generation.md](planning/operator-selection/family-generation.md) -- K is not yet learnable by the solver; this is the open plan for that
 - [design/operator_selection/dynamic_penalty.md](design/operator_selection/dynamic_penalty.md) -- the pricing mechanism now built to let the solver learn K itself
-- [planning/experiments/ablations.md](planning/experiments/ablations.md) -- where the two unrun measurements this file names are queued: making the CVRPLIB benchmark reproducible, and isolating the cost penalty's contribution
+- [planning/experiments/ablations.md](planning/experiments/ablations.md) -- where the unrun measurement this file names is queued: isolating the cost penalty's contribution
 - [planning/problem-model/warm-start.md](planning/problem-model/warm-start.md) -- the loader that would let the reference family's best-known solutions be saved and re-verified like the small family's
 - [planning/search-methods/ruin-and-recreate.md](planning/search-methods/ruin-and-recreate.md) -- the named fix for the thin inter-route neighborhood listed under Known limitations
+- [experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md](experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md) -- the reproducible 60 s run behind the CVRPLIB table, the harness defects fixed to get it, and a multi-depot comparison against PyVRP
 - [planning/implemented/vehicle-time-limits.md](planning/implemented/vehicle-time-limits.md) -- the landed feature that unblocked the MDVRPI benchmark, the published instance set for this solver's actual problem; the run itself is still owed
 
 ## Links to here

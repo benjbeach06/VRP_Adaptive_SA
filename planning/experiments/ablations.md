@@ -91,4 +91,4 @@ compared K on a roster nobody ships.
 - [planning/operator-selection/family-generation.md](../operator-selection/family-generation.md)
 - [planning/implemented/forget-benefit-not-cost.md](../implemented/forget-benefit-not-cost.md)
 - [planning/operator-selection/operator-selection.md](../operator-selection/operator-selection.md)
-- [RESULTS.md](../../RESULTS.md) -- points here for the CVRPLIB reproducibility gap and for isolating the cost penalty's contribution
+- [RESULTS.md](../../RESULTS.md) -- points here for isolating the cost penalty's contribution. The CVRPLIB reproducibility gap it also named is CLOSED: the harness is in the repo at `pyvrp_benchmarking/` and the 60 s run is recorded in experiment_logs/benchmarks/
