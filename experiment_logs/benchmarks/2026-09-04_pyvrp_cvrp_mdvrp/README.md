@@ -169,3 +169,8 @@ CVRP at the default fleet, 8 PyVRP CVRP, and 24 multi-depot.
 
 - [RESULTS.md](../../../RESULTS.md) -- cites the 60 s figures from this run as the reproducible
   CVRPLIB anchor, and points here for the harness defects behind them
+- [experiment_logs/README.md](../../README.md) -- the experiment index, which carries this run's one-line summary and its two solver commits
+
+## References
+
+*(none yet)*

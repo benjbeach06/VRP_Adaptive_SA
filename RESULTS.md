@@ -52,7 +52,7 @@ rework and the time-based schedule but before raw-delta accounting. It is report
 external anchor beats none, and it is flagged rather than promoted to the standing of the paired
 studies below.
 
-### The reproducible run — 60 s, both solvers, harness in the repo
+### The reproducible runs — 60 s and 600 s, both solvers, harness in the repo
 
 | | mean gap to best-known | best gap |
 |---|---|---|
@@ -65,14 +65,47 @@ Solver `d4fdfbd`, clean. Distances are TSPLIB `nint` on both sides. Every one of
 satisfies `reported_objective == cost` — the geometry evaluator agrees with each solver's own
 bookkeeping, and it imports no solver.*
 
+**The same comparison at ten times the budget, run 2026-09-05.**
+
+| | 60 s | 600 s |
+|---|---|---|
+| this solver, mean gap to best-known | +5.58% | **+4.35%** |
+| PyVRP 0.14, mean gap to best-known | +0.61% | **+0.38%** |
+
+*600 s per run, 3 seeds for this solver and 1 for PyVRP, same 8 instances, same machine, sequential.
+Solver `cbcbb4f`, clean tree, one commit on both arms. All 56 runs feasible, all satisfying
+`reported_objective == cost`, elapsed 600.00–600.51 s.*
+
+**Both sides improve and neither converges.** Ten times the budget closes 1.23 points for this
+solver and 0.23 for PyVRP. The ratio between them barely moves, which is what a wall-clock
+comparison between interpreted and compiled code should look like.
+
+**This 600 s run corroborates the flagged 2026-08-24 table above.** That table has no solver commit
+and is reported at a discount for it. At the same budget it recorded +4.91% mean of 5 and +4.32%
+best of 5; this run records **+4.35% mean of 3** with full provenance. The old number was
+approximately right. It is still flagged, because agreement is not provenance.
+
 PyVRP is compiled C++ and this solver is pure Python, so **this answers "how far off at equal wall
 clock", not "how good is the algorithm"**. Iteration counts are recorded alongside so a reader can
 separate the two.
 
-The harness is now **in the repository** at `pyvrp_benchmarking/`, so this run IS reproducible from
-a clean checkout. Full record, including the four harness defects that had to be fixed first and a
-multi-depot comparison against PyVRP, is in
-[experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md](experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md).
+The harness is now **in the repository** at `pyvrp_benchmarking/`, so both runs ARE reproducible
+from a clean checkout. Full records, including the four harness defects that had to be fixed first
+and a multi-depot comparison against PyVRP at each budget, are in
+[experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md](experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md)
+and
+[experiment_logs/benchmarks/2026-09-05_pyvrp_600s/README.md](experiment_logs/benchmarks/2026-09-05_pyvrp_600s/README.md).
+
+**The multi-depot travel gap closes faster than the CVRP gap, and that is not explained.** Against
+PyVRP on six generated multi-depot instances, this solver's travel term ran +3.90% at 60 s and
+**+1.82% at 600 s**. The CVRP gap over the same budget step went 5.58% to 4.35%. At 60 s the two
+harnesses agreed to within noise and were reported as telling one story about routing quality; at
+600 s they do not. No mechanism is offered here.
+
+*Travel is quoted rather than the multi-depot objective because the objective gap is dominated by
+fleet consolidation, which `cost_per_vehicle` prices. The objective means are −1.56% and −2.18%,
+and a single instance, `md-n1000-d6`, carries all of both. Without it the remaining five are a tie
+at each budget.*
 
 **The gap tracks route length, not instance size.** The two predictors are collinear at r = +0.94,
 so the marginal correlations settle nothing on their own. Controlling for one and then the other
@@ -550,6 +583,7 @@ experiment could only resolve effects above ~3%, so it does not rule out a small
 - [planning/search-methods/ruin-and-recreate.md](planning/search-methods/ruin-and-recreate.md) -- the named fix for the thin inter-route neighborhood listed under Known limitations
 - [experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md](experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md) -- the reproducible 60 s run behind the CVRPLIB table, the harness defects fixed to get it, and a multi-depot comparison against PyVRP
 - [planning/implemented/vehicle-time-limits.md](planning/implemented/vehicle-time-limits.md) -- the landed feature that unblocked the MDVRPI benchmark, the published instance set for this solver's actual problem; the run itself is still owed
+- [experiment_logs/benchmarks/2026-09-05_pyvrp_600s/README.md](experiment_logs/benchmarks/2026-09-05_pyvrp_600s/README.md) -- the 600 s repeat of that run, which supplies the budget-curve row and the multi-depot travel figures, and corroborates the unprovenanced 2026-08-24 table at its own budget
 
 ## Links to here
 

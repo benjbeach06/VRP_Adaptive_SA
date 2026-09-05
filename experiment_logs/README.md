@@ -72,6 +72,7 @@ Ablation and tuning folders have not been moved yet.
 | `Robustness_Smoke_Test.txt` | **20 operators** (confirmed from its own stats block) | `SimAnn_VRP.py` by hand: 600s, n=500, capacity 400, DUMB initial solution. Robustness case study. Digest with `tools/digest_run_log.py`. |
 | `JIT_Smoke_Test.txt` | `a54710e`, 24 operators, K=4 | CPython 3.14.6 experimental JIT, `PYTHON_JIT=1` against unset. n=500 capacity 400, 20s, deterministic weighting so both arms share a trajectory. **Verdict: do not enable, 5.4% slower.** Per-operator data in `jit_smoke_ops_off.json` and `jit_smoke_ops_on.json`. |
 | [`benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/`](benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md) | `d4fdfbd` (CVRP arms), `97718ad` (MDVRP) | First external benchmark. 8 CVRPLIB X-series against published best-known, 6 generated multi-depot against PyVRP 0.14, 60 s and 3 seeds. **5.6% off best-known on CVRP where PyVRP is 0.6%.** Multi-depot mean beats PyVRP by 1.56%, but travel is worse on all six and the win is fleet consolidation; PyVRP itself certifies the solution feasible. Fleet size of 1 vs `ceil(demand/capacity)+2` is below the noise floor. |
+| [`benchmarks/2026-09-05_pyvrp_600s/`](benchmarks/2026-09-05_pyvrp_600s/README.md) | `cbcbb4f`, both arms | The 2026-09-04 benchmark repeated at **600 s**, same 14 instances, 3 seeds and 1 PyVRP seed, 56 runs. **CVRP 4.35% off best-known where PyVRP is 0.38%**; both sides improve and the ratio barely moves. Multi-depot **travel** gap halves, +3.90% to +1.82%, and stops agreeing with the CVRP gap -- unexplained. Corroborates the unprovenanced 2026-08-24 600 s table in RESULTS.md. |
 | `ablate_explore_reward.json` | **post-`2fb9857`, 23 operators**, before `exploit_only` | `tools/ablate_param.py` -- paired ablation of `explore_reward` over 0 / 1e-2 / 1e-5 / 1e-8. 30 seeds x 5min x 4 arms, n=500 capacity 400, dumb start, 9.9h. |
 | `ablate_explore_reward_log.txt` | as above | stdout of that ablation. |
 | `run_comparison.png` | **23 operators WITH `exploit_only` and penalty factors** | `tools/compare_runs.py` -- Hexaly against two SimAnn configurations, same instance. |
@@ -107,6 +108,8 @@ The valid rerun is `tune_selection_v2.json`. Reasoning in [RESULTS.md](../RESULT
 ## References
 
 - [RESULTS.md](../RESULTS.md) -- reasoning for why the withdrawn reheat-affected reruns are invalid
+- [experiment_logs/benchmarks/2026-09-05_pyvrp_600s/README.md](benchmarks/2026-09-05_pyvrp_600s/README.md) -- the 600 s repeat indexed above -- full tables, the driver, and the raw jsonl behind that row
+- [experiment_logs/benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md](benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md) -- the 60 s original indexed above -- full tables, the four harness defects fixed first, and the PyVRP feasibility certificate
 
 ## Links to here
 
