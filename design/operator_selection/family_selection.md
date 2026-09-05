@@ -191,8 +191,16 @@ A node with no children cannot report a MAX, which is why an emptied parent goes
 **Dynamic ADD is the same capability and is not built.** The structure now permits it. See
 [planning/operator-selection/family-generation.md](../../planning/operator-selection/family-generation.md).
 
-Special case: if the modeled problem has only a single depot, then any operators that purely 
-change depot visitation data are removed from the roster. 
+### Special cases: 
+If the modeled problem has only a single depot, then any operators that purely 
+change depot visitation data are removed from the roster, e.g. `ChangeRandomEndDepot`. If moving full
+
+routes has no effect on the solution quality or feasibility, then any operators that move full
+routes are removed, e.g. `RandomRouteReassignment`. This occurs if there is only one depot, and
+one of the following is true:
+1) The modelled problem has only one vehicle
+2) Total vehicle duration is untracked 
+3) Total vehicle duration is unpriced and unlimitedW
 
 
 ## Further reading

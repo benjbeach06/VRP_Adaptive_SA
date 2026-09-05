@@ -4339,6 +4339,13 @@ class FullSolution:
         self.duration_terms_active = bool(travel_time_per_distance or service_time_per_customer
                                           or load_time_per_route)
 
+    def is_vehicle_duration_priced_or_limited(self):
+        time_tracked = not (self.travel_time_per_distance == self.service_time_per_customer == self.load_time_per_route == 0)
+        time_priced = self.vehicle_hourly_rate > 0
+        overtime_priced = self.vehicle_overtime_rate > 0 and (self.overtime_threshold > 0 or self.time_limit > 0)
+        time_limited =  self.time_limit > 0 and (self.vehicle_excess_hour_rate > 0 or self.vehicle_time_limit_penalty > 0)
+        return time_tracked and (time_priced or overtime_priced or time_limited)
+
     def add_vehicle(self, vehicle: Vehicle):
         self.vehicles.append(vehicle)
         vehicle_capacity = vehicle.capacity

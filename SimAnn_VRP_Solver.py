@@ -539,7 +539,12 @@ class SimAnnVRPSolver:
     def remove_useless_operators(self):
         sln = self.sln
         if len(sln.depots) == 1:
+            # Only one depot! Cannot reassign
             self.remove(ChangeRandomEndDepot)
+
+            if len(sln.vehicles) == 1 or not sln.is_vehicle_duration_priced_or_limited():
+                # Moving routes has no impact on the solution
+                self.remove(RandomRouteReassignment)
 
     def refresh_family_tree(self) -> None:
         """
