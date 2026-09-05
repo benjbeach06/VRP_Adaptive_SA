@@ -536,6 +536,11 @@ class SimAnnVRPSolver:
         self.refresh_family_tree()
         return gone
 
+    def remove_useless_operators(self):
+        sln = self.sln
+        if len(sln.depots) == 1:
+            self.remove(ChangeRandomEndDepot)
+
     def refresh_family_tree(self) -> None:
         """
         Recompute node weights and the cumulative arrays selection descends. Once per segment.
@@ -895,12 +900,13 @@ class SimAnnVRPSolver:
         return problems
 
     def solve(self, debug_level: int = 0):
+        start_time = time.time()
+
         sln = self.sln
         initial_temp = self.initial_temp_factor * self.best_objective
         self.temperature = initial_temp
         self.log_temperature = math.log(self.temperature, 2)
 
-        start_time = time.time()
         elapsed_time = 0
         iterations = 0
 
@@ -909,6 +915,8 @@ class SimAnnVRPSolver:
         self.last_cool_at = 0.0
         self.last_improvement_at = 0.0
         self.elapsed_time = 0.0
+
+        self.remove_useless_operators()
 
         # 0 = none.
         # 1 = verify accepted moves' reported improvement against solution_cost() before/after

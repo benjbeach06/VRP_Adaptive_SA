@@ -191,6 +191,11 @@ A node with no children cannot report a MAX, which is why an emptied parent goes
 **Dynamic ADD is the same capability and is not built.** The structure now permits it. See
 [planning/operator-selection/family-generation.md](../../planning/operator-selection/family-generation.md).
 
+Special case: if the modeled problem has only a single depot, then any operators that purely 
+change depot visitation data are removed from the roster. 
+
+
+## Further reading
 - [share_floors.md](share_floors.md) -- the projection that guarantees each root family a minimum
   share. Floors bind at level 0 only.
 - [exploitation_governance.md](exploitation_governance.md) -- the per-leaf penalty factor, which
