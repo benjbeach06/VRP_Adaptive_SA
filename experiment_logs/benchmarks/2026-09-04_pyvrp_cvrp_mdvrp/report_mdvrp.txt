@@ -1,0 +1,22 @@
+instance           n  dep    PyVRP  veh  trips   SA mean  veh  trips    gap%  spread%
+-------------------------------------------------------------------------------------
+md-n100-d3       100    3    8,048    2     10     7,975    1     10   -0.90     3.06
+md-n200-d3       200    3   15,575    3     19    15,834    2     20    1.67     0.41
+md-n200-d5       200    5   12,154    2     19    12,588    2     19    3.57     1.54
+md-n400-d4       400    4   20,659    7     29    20,708    2     29    0.24     1.84
+md-n600-d5       600    5   29,241   10     42    28,748    3     43   -1.69     3.34
+md-n1000-d6     1000    6   43,912   28     58    38,549    5     59  -12.21     1.86
+-------------------------------------------------------------------------------------
+mean gap vs PyVRP                                                    -1.56
+
+throughput  SA     27,489 moves/s      PyVRP    1,564 HGS iterations/s
+  (not comparable units: one SA iteration is a single move proposal; one PyVRP
+   iteration is a full genetic generation with crossover and local search.)
+
+cross-depot trips (a route ending at a different depot than it started):
+  md-n100-d3     SA   4   PyVRP   4   of 10 / 10 trips
+  md-n200-d3     SA   7   PyVRP   4   of 20 / 19 trips
+  md-n200-d5     SA   6   PyVRP   7   of 19 / 19 trips
+  md-n400-d4     SA   8   PyVRP  11   of 29 / 29 trips
+  md-n600-d5     SA  11   PyVRP  21   of 43 / 42 trips
+  md-n1000-d6    SA  19   PyVRP  43   of 59 / 58 trips

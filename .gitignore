@@ -35,6 +35,9 @@ _publishing_gaps.md
 # Third-party material. Not ours to commit, and not thoroughly reviewed - just edited enough to use for experiments.
 pyvrp_benchmarking/_*
 pyvrp_benchmarking/*/_*
+# Driver output. Both drivers truncate and rewrite these on every run; anything
+# worth keeping is moved into experiment_logs/benchmarks/<slug>/ deliberately.
+pyvrp_benchmarking/*/results*.jsonl
 pyvrp_benchmarking/benchmark/venv-sa
 
 # Session assessment of the project. Personal, kept out of the published repo.

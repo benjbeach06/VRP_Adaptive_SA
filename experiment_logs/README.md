@@ -27,6 +27,17 @@ One folder per ablation, named `<date>_<slug>`, holding its own `README.md`, `re
 
 Files outside that folder predate the convention.
 
+## Benchmarks live in `benchmarks/`
+
+Same shape as `ablations/`: one folder per benchmark, named `<date>_<slug>`, readable on its own.
+A benchmark measures this solver against an EXTERNAL reference -- a published best-known value or
+another solver -- rather than against a variant of itself.
+
+The harness for the PyVRP comparisons is `pyvrp_benchmarking/`, not `tools/`, and the raw JSON
+lines stay there beside it. A benchmark folder here carries the analysis and points at them.
+
+Ablation and tuning folders have not been moved yet.
+
 | commit | date | what changed |
 |---|---|---|
 | `58ae053` | 08-16 | 20-operator roster, neighbor-guided operators present |
@@ -36,6 +47,8 @@ Files outside that folder predate the convention.
 | *uncommitted* | 08-19 | `exploit_only`, selection penalty factors, `adj_weights` mirror |
 | `f14b82b` | 08-19 | 24 operators; family-level selection with a tree, MAX weights and root floors |
 | `a54710e` | 08-21 | `EXACT_REORDER_MAX_SPAN` 8 -> 4, after the full-roster K sweep |
+| `97718ad` | 09-04 | vehicle duration objective, off by default |
+| `d4fdfbd` | 09-04 | `start_time` moved before setup; `ChangeRandomEndDepot` removed when there is one depot |
 
 ## Results
 
@@ -58,6 +71,7 @@ Files outside that folder predate the convention.
 | `tune_v2_log.txt` | as above | stdout of the v2 selection search. |
 | `Robustness_Smoke_Test.txt` | **20 operators** (confirmed from its own stats block) | `SimAnn_VRP.py` by hand: 600s, n=500, capacity 400, DUMB initial solution. Robustness case study. Digest with `tools/digest_run_log.py`. |
 | `JIT_Smoke_Test.txt` | `a54710e`, 24 operators, K=4 | CPython 3.14.6 experimental JIT, `PYTHON_JIT=1` against unset. n=500 capacity 400, 20s, deterministic weighting so both arms share a trajectory. **Verdict: do not enable, 5.4% slower.** Per-operator data in `jit_smoke_ops_off.json` and `jit_smoke_ops_on.json`. |
+| [`benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/`](benchmarks/2026-09-04_pyvrp_cvrp_mdvrp/README.md) | `d4fdfbd` (CVRP arms), `97718ad` (MDVRP) | First external benchmark. 8 CVRPLIB X-series against published best-known, 6 generated multi-depot against PyVRP 0.14, 60 s and 3 seeds. **5.6% off best-known on CVRP where PyVRP is 0.6%.** Multi-depot mean beats PyVRP by 1.56%, but travel is worse on all six and the win is fleet consolidation; PyVRP itself certifies the solution feasible. Fleet size of 1 vs `ceil(demand/capacity)+2` is below the noise floor. |
 | `ablate_explore_reward.json` | **post-`2fb9857`, 23 operators**, before `exploit_only` | `tools/ablate_param.py` -- paired ablation of `explore_reward` over 0 / 1e-2 / 1e-5 / 1e-8. 30 seeds x 5min x 4 arms, n=500 capacity 400, dumb start, 9.9h. |
 | `ablate_explore_reward_log.txt` | as above | stdout of that ablation. |
 | `run_comparison.png` | **23 operators WITH `exploit_only` and penalty factors** | `tools/compare_runs.py` -- Hexaly against two SimAnn configurations, same instance. |

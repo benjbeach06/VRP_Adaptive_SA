@@ -1,0 +1,107 @@
+=== CVRP sweep started Fri Sep  4 17:17:11 EDT 2026 ===
+  File "C:\Users\Bben6\PycharmProjects\PythonProject\_from_advisor\benchmark\bench.py", line 91
+    print(f"solver interpreter : {py_sa}
+          ^
+SyntaxError: unterminated f-string literal (detected at line 91)
+=== CVRP done Fri Sep  4 17:17:12 EDT 2026 ===
+=== MDVRP sweep started Fri Sep  4 17:17:12 EDT 2026 ===
+solver interpreter : C:/Users/Bben6/PycharmProjects/PythonProject/.venv1/Scripts/python.exe
+pyvrp  interpreter : C:/Users/Bben6/PycharmProjects/PythonProject/.venv1/Scripts/python.exe
+done sa md-n100-d3 seed 0
+done sa md-n100-d3 seed 1
+done sa md-n100-d3 seed 2
+done pyvrp md-n100-d3
+done sa md-n1000-d6 seed 0
+done sa md-n1000-d6 seed 1
+done sa md-n1000-d6 seed 2
+done pyvrp md-n1000-d6
+done sa md-n200-d3 seed 0
+done sa md-n200-d3 seed 1
+done sa md-n200-d3 seed 2
+done pyvrp md-n200-d3
+done sa md-n200-d5 seed 0
+done sa md-n200-d5 seed 1
+done sa md-n200-d5 seed 2
+done pyvrp md-n200-d5
+done sa md-n400-d4 seed 0
+done sa md-n400-d4 seed 1
+done sa md-n400-d4 seed 2
+done pyvrp md-n400-d4
+done sa md-n600-d5 seed 0
+done sa md-n600-d5 seed 1
+done sa md-n600-d5 seed 2
+done pyvrp md-n600-d5
+ALLDONE
+=== MDVRP done Fri Sep  4 17:41:21 EDT 2026 ===
+=== CVRP sweep (retry) started Fri Sep  4 17:41:38 EDT 2026 ===
+solver interpreter : C:\Users\Bben6\PycharmProjects\PythonProject\.venv1\Scripts\python.exe
+pyvrp  interpreter : C:\Users\Bben6\PycharmProjects\PythonProject\.venv1\Scripts\python.exe
+32 runs x 60s -- about 32 min, sequential.
+  sa X-n101-k25 seed 0 ...
+    cost 28438
+  sa X-n101-k25 seed 1 ...
+    cost 28292
+  sa X-n101-k25 seed 2 ...
+    cost 28954
+  pyvrp X-n101-k25 seed 0 ...
+    cost 27591
+  sa X-n153-k22 seed 0 ...
+    cost 22703
+  sa X-n153-k22 seed 1 ...
+    cost 22368
+  sa X-n153-k22 seed 2 ...
+    cost 22506
+  pyvrp X-n153-k22 seed 0 ...
+    cost 21324
+  sa X-n200-k36 seed 0 ...
+    cost 60645
+  sa X-n200-k36 seed 1 ...
+    cost 60822
+  sa X-n200-k36 seed 2 ...
+    cost 60584
+  pyvrp X-n200-k36 seed 0 ...
+    cost 58932
+  sa X-n303-k21 seed 0 ...
+    cost 23164
+  sa X-n303-k21 seed 1 ...
+    cost 23372
+  sa X-n303-k21 seed 2 ...
+    cost 23453
+  pyvrp X-n303-k21 seed 0 ...
+    cost 21925
+  sa X-n401-k29 seed 0 ...
+    cost 69447
+  sa X-n401-k29 seed 1 ...
+    cost 69542
+  sa X-n401-k29 seed 2 ...
+    cost 68596
+  pyvrp X-n401-k29 seed 0 ...
+    cost 66462
+  sa X-n502-k39 seed 0 ...
+    cost 70968
+  sa X-n502-k39 seed 1 ...
+    cost 70865
+  sa X-n502-k39 seed 2 ...
+    cost 70862
+  pyvrp X-n502-k39 seed 0 ...
+    cost 69362
+  sa X-n701-k44 seed 0 ...
+    cost 87427
+  sa X-n701-k44 seed 1 ...
+    cost 87398
+  sa X-n701-k44 seed 2 ...
+    cost 87008
+  pyvrp X-n701-k44 seed 0 ...
+    cost 82880
+  sa X-n1001-k43 seed 0 ...
+    cost 78133
+  sa X-n1001-k43 seed 1 ...
+    cost 78174
+  sa X-n1001-k43 seed 2 ...
+    cost 78469
+  pyvrp X-n1001-k43 seed 0 ...
+    cost 73124
+
+wrote C:\Users\Bben6\PycharmProjects\PythonProject\_from_advisor\benchmark\results.jsonl
+  python 'C:\Users\Bben6\PycharmProjects\PythonProject\_from_advisor\benchmark\report.py'
+=== CVRP done Fri Sep  4 18:13:48 EDT 2026 ===

@@ -22,7 +22,9 @@ fi
 PY_SA=${PY_SA:-$PY}
 PY_PV=${PY_PV:-$PY}
 
-OUT="$HERE/results_mdvrp.jsonl"
+# Default lands beside the harness, which dirties it. Point OUT at an experiment
+# folder instead:  OUT=experiment_logs/benchmarks/<slug>/results_mdvrp.jsonl ./drive_mdvrp.sh 60
+OUT="${OUT:-$HERE/results_mdvrp.jsonl}"
 : > "$OUT"
 echo "solver interpreter : $PY_SA" >&2
 echo "pyvrp  interpreter : $PY_PV" >&2
