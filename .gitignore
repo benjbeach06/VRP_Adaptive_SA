@@ -33,7 +33,9 @@ planning/_analogies.md
 _publishing_gaps.md
 
 # Third-party material. Not ours to commit, and not thoroughly reviewed - just edited enough to use for experiments.
-_pyvrp_benchmarking/
+pyvrp_benchmarking/_*
+pyvrp_benchmarking/*/_*
+pyvrp_benchmarking/benchmark/venv-sa
 
 # Session assessment of the project. Personal, kept out of the published repo.
 _project_assessment.md
