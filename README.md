@@ -89,7 +89,7 @@ Only `numpy` is required to run or test the solver.
 
 ## The model
 
-Three node types, defined in [SimAnn_VRP_Core_Model.py](SimAnn_VRP_Core_Model.py).
+Three node types, defined in [SimAnn_VRP_Core_Model/nodes.py](SimAnn_VRP_Core_Model/nodes.py).
 
 | | fields |
 |---|---|
@@ -218,7 +218,7 @@ Fixed-iteration cross-commit equivalence. Use it to show a refactor changed noth
 
 | file | role |
 |---|---|
-| `SimAnn_VRP_Core_Model.py` | data model, delta arithmetic, neighbor tables |
+| `SimAnn_VRP_Core_Model/` | data model, delta arithmetic, neighbor tables. A package: `nodes`, `visits`, `routes`, `route_set`, `vehicle`, `solution`, plus `records` (the delta types), `neighbors`, `randomness` and `basics` |
 | `SimAnn_VRP_Accounting.py` | the processor: raw structural deltas to objective terms |
 | `SimAnn_VRP_BLOperators.py` | move lifecycle: `evaluate` → `apply` → `commit` \| `revert` |
 | `SimAnn_VRP_Operators.py` | 24 operators over that lifecycle, plus operand selection |

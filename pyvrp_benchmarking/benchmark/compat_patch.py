@@ -13,8 +13,8 @@ this is a one-line-per-file change with no behavioural effect.
 Both directions are idempotent. If you are on 3.14 you do not need this at all.
 
 (The remaining floor is PEP 695 generic syntax -- `def f[T](...)` in
-SimAnn_VRP_Core_Model.py -- which needs 3.12. Those appear only on an unused
-helper, so deleting them would drop the floor to 3.10.)
+SimAnn_VRP_Core_Model/basics.py and /records.py -- which needs 3.12. Those
+appear only on unused helpers, so deleting them would drop the floor to 3.10.)
 """
 from __future__ import annotations
 
@@ -23,13 +23,18 @@ import sys
 from pathlib import Path
 
 LINE = "from __future__ import annotations\n"
-TARGETS = [
-    "SimAnn_VRP_Core_Model.py",
+ROOT = Path(__file__).resolve().parent.parent
+
+# The core model is a PACKAGE, and every module in it carries the forward references this patch
+# exists for. Discovered rather than listed: a hardcoded list goes stale the day a submodule is
+# added, and the failure then is a confusing SyntaxError on 3.12 rather than a missing-file
+# message. The three flat modules below still catch a wrong ROOT.
+TARGETS = [p.relative_to(ROOT).as_posix()
+           for p in sorted((ROOT / "SimAnn_VRP_Core_Model").glob("*.py"))] + [
     "SimAnn_VRP_BLOperators.py",
     "SimAnn_VRP_Operators.py",
     "SimAnn_VRP_Solver.py",
 ]
-ROOT = Path(__file__).resolve().parent.parent
 
 
 def status(path: Path) -> bool:

@@ -8,7 +8,8 @@ it, and the solver has changed. The `solver state` column says which one, so a r
 whether a number still applies. Retracted measurements are separate, in [`withdrawn/`](#withdrawn).
 
 **The discipline that makes this work: run experiments from a CLEAN SOLVER COMMIT.** The four
-modules `SimAnn_VRP_Core_Model.py`, `SimAnn_VRP_BLOperators.py`, `SimAnn_VRP_Operators.py` and
+modules `SimAnn_VRP_Core_Model/` (the whole package), `SimAnn_VRP_BLOperators.py`,
+`SimAnn_VRP_Operators.py` and
 `SimAnn_VRP_Solver.py` must be committed before a run starts. Docs, planning and tooling may be
 dirty -- they do not change what a solve does.
 

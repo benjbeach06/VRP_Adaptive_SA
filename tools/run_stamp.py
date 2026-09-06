@@ -24,11 +24,15 @@ ROOT = Path(__file__).resolve().parent.parent
 # The modules whose state changes what a solve DOES. SimAnn_VRP.py is the driver -- harnesses build
 # their own instances and never import it -- so edits there do not invalidate a measurement.
 SOLVER_MODULES = frozenset({
-    "SimAnn_VRP_Core_Model.py",
     "SimAnn_VRP_BLOperators.py",
     "SimAnn_VRP_Operators.py",
     "SimAnn_VRP_Solver.py",
 })
+
+# The core model is a PACKAGE, so it is matched by prefix rather than by name. An exact-match set
+# would have to list every submodule, and would silently stop reporting a dirty one the day a new
+# file is added -- which is the mislabelled-result failure this whole module exists to prevent.
+SOLVER_PACKAGE_PREFIX = "SimAnn_VRP_Core_Model/"
 
 
 def _git(*args) -> str:
@@ -75,7 +79,8 @@ def solver_stamp(solver=None) -> dict:
         roster = [type(op).__name__ for op in solver.operators]
 
     dirty = [l[3:] for l in _git("status", "--porcelain").splitlines() if l[:2] != "??"]
-    solver_dirty = sorted(f for f in dirty if f in SOLVER_MODULES)
+    solver_dirty = sorted(f for f in dirty
+                          if f in SOLVER_MODULES or f.startswith(SOLVER_PACKAGE_PREFIX))
     stamp = {
         "when": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "git_sha": _git("rev-parse", "--short", "HEAD"),

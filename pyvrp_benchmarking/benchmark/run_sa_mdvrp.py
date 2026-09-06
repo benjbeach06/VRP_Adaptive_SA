@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 # The solver modules sit at the repo root. This directory was meant to be dropped
 # directly under it, but it also runs from a subdirectory, so search upward for the
 # root rather than assuming it is the parent.
-ROOT = next(p for p in HERE.parents if (p / "SimAnn_VRP_Core_Model.py").exists())
+ROOT = next(p for p in HERE.parents if (p / "SimAnn_VRP_Core_Model").is_dir())
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE))
 
