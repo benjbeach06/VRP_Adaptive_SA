@@ -421,7 +421,7 @@ class RawRecordOracle(SeededTestCase):
 
 class RawRecordDistance(SeededTestCase):
     """
-    The THIRD half of the raw-record oracle, and the four aggregators it currently covers.
+    The THIRD half of the raw-record oracle, and the three aggregators it currently covers.
 
     Distance sits on RawDeltaRecord itself, not inside `routes`, so neither the claim half nor the
     completeness half can see it. That matters most for the INTRA-ROUTE aggregators, which by
@@ -429,9 +429,9 @@ class RawRecordDistance(SeededTestCase):
     oracle at all, and a deterministic run comparing IDENTICAL says nothing about them, because
     the processor does not consume the record yet.
 
-    The aggregators are exercised DIRECTLY rather than through their operators. Two of the four --
-    cost_deltas_for_permutation and cost_deltas_for_subpermutation -- are not reachable from any
-    OperatorBL today, so an operator-driven test would silently skip them.
+    The aggregators are exercised DIRECTLY rather than through their operators. One of the three
+    -- cost_deltas_for_permutation -- is not reachable from any OperatorBL today, so an
+    operator-driven test would silently skip it.
     """
 
     def setUp(self):
@@ -506,17 +506,6 @@ class RawRecordDistance(SeededTestCase):
 
         self.assertNotAlmostEqual(self.check(priced), 0, places=6,
                                   msg="the permutation moved no distance, so nothing was proven")
-
-    def test_subpermutation_reports_its_distance(self):
-        subpermutation = [3, 1, 0]
-
-        def priced():
-            record = self.route.cost_deltas_for_subpermutation(subpermutation)
-            self.route.sub_permute(subpermutation)
-            return record
-
-        self.assertNotAlmostEqual(self.check(priced), 0, places=6,
-                                  msg="the subpermutation moved no distance, so nothing was proven")
 
     def test_adjacent_customer_swap_reports_its_distance(self):
         def priced():

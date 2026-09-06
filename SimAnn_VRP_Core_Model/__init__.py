@@ -78,8 +78,7 @@ from .records import (INVERT_STRATEGIES_CHANGE_DICT, INVERT_STRATEGIES_DELTA_DIC
 
 # MUST precede `.routes`. See the import-order note in the module docstring.
 from .visits import (CustomerLike, CustomerVisit, DepotLike, DepotVisit, FirstRouteVisit,
-                     LastRouteVisit, NextRouteKind, NodeLike, RouteVisit, sub_permute_list,
-                     sub_permute_path)
+                     LastRouteVisit, NextRouteKind, NodeLike, RouteVisit)
 
 from .routes import FirstRoute, LastRoute, Route, VehicleNode
 

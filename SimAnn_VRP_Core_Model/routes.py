@@ -22,7 +22,7 @@ from .basics import Chain, Num, as_chain_range
 from .nodes import VIRTUAL_DEPOT, Customer, Depot, Node, VirtualDepot
 from .records import NO_CHANGES, RawDeltaRecord
 from .visits import (CustomerLike, CustomerVisit, DepotLike, FirstRouteVisit, LastRouteVisit,
-                     NextRouteKind, RouteVisit, sub_permute_list, sub_permute_path)
+                     NextRouteKind, RouteVisit)
 
 if TYPE_CHECKING:
     from .vehicle import Vehicle
@@ -1098,7 +1098,7 @@ class Route(VehicleNode):
             raw(t) for t in travels)
     #endregion
 
-    #region Permutation and subpermutation (travel distance only)
+    #region Permutation (travel distance only)
     def cost_deltas_for_permutation(self, permutation: Sequence[int]) -> RawDeltaRecord:
         # WARNING: Must permute anyway to get the cost delta. Could be cheaper to apply the operator, compute, then unapply.
         if len(permutation) != len(self.path):
@@ -1117,52 +1117,6 @@ class Route(VehicleNode):
         # INTRA-ROUTE: distance and nothing else. No customer crosses a route boundary, so
         # load, count, start depot and vehicle all end where they started, and the whole
         # travel delta belongs to this one route.
-        return RawDeltaRecord(travel_changes={self: travel_delta})
-
-    # UNUSED - DEPRECATE
-    def cost_deltas_for_subpermutation(self, subpermutation: Sequence[int]) -> RawDeltaRecord:
-        # WARNING: Must sub-permute anyway to get the cost delta. Could be cheaper to apply the operator, compute, then unapply.
-        # We would like to compute via summing along a cycle of customer swaps instead. Issue: Need to actually swap customers before computing this.
-        old_distance = self.total_distance()
-
-        first_visit = self.first_visit
-        last_visit = self.last_visit
-
-        path = self.path
-        path_len = len(path)
-        subpermutation_len = len(subpermutation)
-
-
-        new_path = list(path)
-        sub_permute_list(subpermutation, new_path)
-
-        use_partial_update = subpermutation_len <= path_len / 5
-        if use_partial_update:
-            # Affected visits defines consecutive subpaths that are touched by the subpermutation.
-            # Sort is expensive, so we only want to do this if subpermutation is significantly shorter than o/g permutation
-            affected_visits = list(sorted({i for j in subpermutation for i in (j+1,j,j-1)}))
-
-            travel_delta = 0
-
-            for idx in range(len(affected_visits)-1):
-                i = affected_visits[idx]
-                next_i = affected_visits[idx+1]
-                if next_i != i + 1:
-                    continue # Connection not touched by subpermutation
-
-                src = first_visit if i<0 else path[i]
-                new_src = first_visit if i<0 else new_path[i]
-
-                new_dest = last_visit if next_i >= path_len else new_path[next_i]
-
-                travel_delta += new_src.distance(new_dest) - src.distance_out
-        else:
-            new_path = [self.start_depot] + new_path + [self.end_depot]
-            new_distance = sum(new_path[i].distance(new_path[i + 1]) for i in range(len(new_path) - 1))
-
-            travel_delta = new_distance - old_distance
-
-        # INTRA-ROUTE: the whole travel delta belongs to this one route.
         return RawDeltaRecord(travel_changes={self: travel_delta})
     #endregion
 
@@ -1925,18 +1879,6 @@ class Route(VehicleNode):
 
         for i in range(span_len):
             path[start + i].replace_customer(new_path[i])
-
-    # UNUSED - DEPRECATE
-    def sub_permute(self, subpermutation: Sequence[int]):
-        # Like permute, but e.g. if subpermutation is 1,3,5, then we move item 1->3->5->1
-
-        if len(subpermutation) > self.path_len:
-            raise ValueError("Subpermutation is longer than the path")
-        if len(subpermutation) <= 1:
-            return
-
-        # Permute path in place cheaply (no accounting necessary!) via direct node replacement within visits.
-        sub_permute_path(subpermutation, self.path)
 
     def split_at(self, split_index: int, refill_depot: Depot, new_route: Route | None = None) -> Route:
         # Removes the customers at or after the index. Then returns a new src_route with those customers and

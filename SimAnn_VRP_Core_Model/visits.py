@@ -16,7 +16,7 @@ Read the note in __init__.py before reordering anything there.
 """
 from abc import ABC
 from enum import Enum, auto
-from typing import TYPE_CHECKING, List, Sequence
+from typing import TYPE_CHECKING
 
 from .basics import Num, dist
 from .nodes import VIRTUAL_DEPOT, Customer, Depot, Node
@@ -624,54 +624,6 @@ DepotVisit = FirstRouteVisit | LastRouteVisit
 
     #endregion
 #endregion
-
-# UNUSED - DEPRECATE
-def sub_permute_list(subpermutation: Sequence[int], lst: List):
-    # Applies subpermutation of list in place.
-    if len(subpermutation) > len(lst):
-        raise ValueError("Subpermutation is longer than the lst")
-    if len(subpermutation) <= 1:
-        return
-
-    subpermutation_set = set(subpermutation)
-    lst_len = len(lst)
-    if len(subpermutation) != len(subpermutation_set):
-        raise ValueError("Entries of Subpermutation are not unique.")
-    if not all(0 <= i < lst_len for i in subpermutation):
-        raise ValueError("Subpermutation indices must be in the range from 0 to the given list length - 1.")
-
-    start = lst[subpermutation[0]]
-    for i in range(len(subpermutation) - 1):
-        lst[subpermutation[i]] = lst[subpermutation[i + 1]]
-    lst[subpermutation[-1]] = start
-
-
-# UNUSED - DEPRECATE
-def sub_permute_path(subpermutation: Sequence[int], path: List[CustomerVisit]):
-    # Applies subpermutation of list in place.
-    if len(subpermutation) > len(path):
-        raise ValueError("Subpermutation is longer than the lst")
-    if len(subpermutation) <= 1:
-        return
-
-
-    subpermutation_set = set(subpermutation)
-    path_len = len(path)
-    if len(subpermutation) != len(subpermutation_set):
-        raise ValueError("Entries of Subpermutation are not unique.")
-    if not all(0 <= i < path_len for i in subpermutation):
-        raise ValueError("Subpermutation indices must be in the range from 0 to the given list length - 1.")
-
-    curr_visit = path[subpermutation[0]]
-    start_customer = curr_visit.source_customer
-    for i in range(len(subpermutation) - 1):
-        # Example: subperm = 1, 3, 5 -> put 3 in 1, then 5 in 3. Then need to put original 1 in 5 (after loop).
-        next_visit = path[subpermutation[i + 1]]
-        curr_visit.replace_customer(next_visit.source_customer)
-        curr_visit = next_visit
-
-    curr_visit.replace_customer(start_customer)
-
 
 
 # Deferred to the very bottom, deliberately. See the module docstring: Route and LastRoute are
