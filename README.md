@@ -124,6 +124,11 @@ This is the decision the whole solver rests on. Every mutation has a matching `c
 function that prices it in **O(1) from the arcs at its boundary**, so the search never recomputes a
 full objective. A proposal that is rejected costs only that arithmetic.
 
+Those functions all live in [SimAnn_VRP_Core_Model/deltas/](SimAnn_VRP_Core_Model/deltas/), and
+they are free functions over the model types rather than methods on them. Nothing in that package
+mutates, and nothing in it reads an objective coefficient. The dependency runs one way: `deltas`
+imports the data model, and the data model never imports `deltas`.
+
 Pricing produces a `RawDeltaRecord` — what structurally changed, per route, and nothing else. A
 single `AccountingProcessor` turns that into objective terms and cached-state updates, and a single
 sink on `FullSolution` applies them. Reverting subtracts the same record. Nothing else in the model
@@ -218,7 +223,8 @@ Fixed-iteration cross-commit equivalence. Use it to show a refactor changed noth
 
 | file | role |
 |---|---|
-| `SimAnn_VRP_Core_Model/` | data model, delta arithmetic, neighbor tables. A package: `nodes`, `visits`, `routes`, `route_set`, `vehicle`, `solution`, plus `records` (the delta types), `neighbors`, `randomness` and `basics` |
+| `SimAnn_VRP_Core_Model/` | the data model and neighbor tables. A package: `nodes`, `visits`, `routes`, `route_set`, `vehicle`, `solution`, plus `records` (the delta types), `neighbors`, `randomness` and `basics` |
+| `SimAnn_VRP_Core_Model/deltas/` | all move pricing, as free functions over those types: `visit_arcs`, `route_moves`, `customer_chain_moves`, `route_reordering`, `route_segmentation`, `solution_sweeps` |
 | `SimAnn_VRP_Accounting.py` | the processor: raw structural deltas to objective terms |
 | `SimAnn_VRP_BLOperators.py` | move lifecycle: `evaluate` → `apply` → `commit` \| `revert` |
 | `SimAnn_VRP_Operators.py` | 24 operators over that lifecycle, plus operand selection |

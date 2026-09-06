@@ -23,7 +23,10 @@ from _harness import (Customer, Depot, SeededTestCase, Vehicle, depot_usage_prob
                       make_solution, raw_record_claim_problems,
                       raw_record_completeness_problems, raw_record_distance_problems, route_of,
                       route_states)
-from SimAnn_VRP_Core_Model import AccountingRecord, Num, RawDeltaRecord, VIRTUAL_DEPOT
+from SimAnn_VRP_Core_Model import (AccountingRecord, Num, RawDeltaRecord, VIRTUAL_DEPOT,
+                                   cost_deltas_for_adjacent_customer_swap_starting_with,
+                                   cost_deltas_for_permutation,
+                                   cost_deltas_if_customer_chain_reversed)
 
 
 def rec(travels=None, loads=None, counts=None, starts=None, vehicles=None) -> RawDeltaRecord:
@@ -489,7 +492,7 @@ class RawRecordDistance(SeededTestCase):
         span = range(1, 4)
 
         def priced():
-            record = self.route.cost_deltas_if_customer_chain_reversed(span)
+            record = cost_deltas_if_customer_chain_reversed(self.route, span)
             self.route.reverse_customer_chain(span)
             return record
 
@@ -500,7 +503,7 @@ class RawRecordDistance(SeededTestCase):
         permutation = [4, 0, 3, 1, 2]
 
         def priced():
-            record = self.route.cost_deltas_for_permutation(permutation)
+            record = cost_deltas_for_permutation(self.route, permutation)
             self.route.permute(permutation)
             return record
 
@@ -510,7 +513,7 @@ class RawRecordDistance(SeededTestCase):
     def test_adjacent_customer_swap_reports_its_distance(self):
         def priced():
             first = self.route.path[1]
-            record = self.route.cost_deltas_for_adjacent_customer_swap_starting_with(first)
+            record = cost_deltas_for_adjacent_customer_swap_starting_with(first)
             self.route.swap_customers(1, 2)
             return record
 

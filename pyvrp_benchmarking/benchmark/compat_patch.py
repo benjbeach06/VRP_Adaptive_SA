@@ -29,8 +29,12 @@ ROOT = Path(__file__).resolve().parent.parent
 # exists for. Discovered rather than listed: a hardcoded list goes stale the day a submodule is
 # added, and the failure then is a confusing SyntaxError on 3.12 rather than a missing-file
 # message. The three flat modules below still catch a wrong ROOT.
+#
+# rglob, NOT glob: `deltas` is a SUBpackage, and its modules annotate Route and RouteVisit the
+# same way. A plain glob stops at the top level and would leave exactly those seven files
+# unpatched.
 TARGETS = [p.relative_to(ROOT).as_posix()
-           for p in sorted((ROOT / "SimAnn_VRP_Core_Model").glob("*.py"))] + [
+           for p in sorted((ROOT / "SimAnn_VRP_Core_Model").rglob("*.py"))] + [
     "SimAnn_VRP_BLOperators.py",
     "SimAnn_VRP_Operators.py",
     "SimAnn_VRP_Solver.py",

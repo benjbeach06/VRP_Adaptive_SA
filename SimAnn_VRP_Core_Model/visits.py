@@ -79,14 +79,6 @@ class RouteVisit(ABC):
         return dist(self.location, other.location)
 
     @property
-    def travel_delta_if_removed(self) -> Num:
-        assert self.prev_visit is not None, "Cannot remove nodes at start or end of vehicle or unassigned src_route path."
-        # Change to current-src_route travel distance if removing this from src_route
-        old_length = self.distance_surrounding
-        new_length = self.distance_if_removed
-        return new_length - old_length
-
-    @property
     def is_first_route_visit(self) -> bool:
         return isinstance(self, FirstRouteVisit)
 
@@ -151,63 +143,9 @@ class CustomerVisit(RouteVisit):
 
     #region Delta computations
 
-    def travel_delta_if_customer_replaced(self, new_customer: CustomerLike) -> Num:
-        old_length = self.distance_surrounding
-        new_length = self.prev_visit.distance(new_customer) + new_customer.distance(self.next_visit)
-        return new_length - old_length
-
-    def travel_deltas_if_swapped_with(self, other: CustomerVisit) -> tuple[Num, Num]:
-        """(this visit's route share, the other visit's route share) of swapping the two.
-
-        Adjacency is only possible WITHIN one route, so the adjacent branch puts the whole delta
-        on this side and zero on the other. The non-adjacent branch is already two independent
-        replacements, one per route -- travel_delta_if_swapped_with just adds them.
-        """
-        if not self.is_adjacent_with(other):
-            return (self.travel_delta_if_customer_replaced(other),
-                    other.travel_delta_if_customer_replaced(self))
-        return self.travel_delta_if_swapped_with(other), 0
-
-    def travel_delta_if_swapped_with(self, other: CustomerVisit) -> Num:
-        # Change to current-src_route travel distance if swapping customers with another CustomerVisit
-        if not self.is_adjacent_with(other):
-            return self.travel_delta_if_customer_replaced(other) + other.travel_delta_if_customer_replaced(self)
-
-        if other == self.next_visit:
-            prev = self.prev_visit
-            nxt = other.next_visit
-
-            old_distance = self.distance_in + other.distance_out
-            new_distance = prev.distance(other) + self.distance(nxt)
-
-        else: # dest_route == self.prev_visit
-            prev = other.prev_visit
-            nxt = self.next_visit
-
-            old_distance = other.distance_in + self.distance_out
-            new_distance = prev.distance(self) + other.distance(nxt)
-
-        return new_distance - old_distance
-
-    # Route splits
-    def travel_delta_if_depot_stop_added_after_this(self, depot_stop: DepotLike) -> Num:
-        next_visit = self.next_visit
-        # ASSUME: this is part of a general split delta conversation. Verification that next_visit is a customer
-        # has already been done. (We don't want to re-verify this several times.)
-
-        # Add path self->depot->next_visit instead of self->next_visit
-        old_distance = self.distance_out
-        new_distance = self.distance(depot_stop) + depot_stop.distance(next_visit)
-        return new_distance - old_distance
-
     # For src_route splits: new depot will activate, no need to calculate depot usage changes here. Vehicles won't activate/deactivate.
     # New overloads need to be computed at the src_route level, as full demand lists before and after must be summed
 
-
-    def current_route_load_delta_if_swapped_with(self, other: CustomerVisit) -> Num:
-        # Can reduce numerical error compared to "always subtract" if in same src_route:
-        # (a-b) + (b-a) may evaluate to a small nonzero value due to numerical errors
-        return 0 if self.route == other.route else other.demand - self.demand
 
     #endregion
 
@@ -348,20 +286,6 @@ class FirstRouteVisit(RouteVisit):
     #endregion
 
     #region Delta computations
-    def start_travel_delta_if_depot_swapped(self, new_node: DepotLike) -> Num:
-        # Change to src_route travel distance if replacing the node here with a new one
-        old_length = self.distance_out
-        new_length = new_node.distance(self.next_visit)
-        return new_length - old_length
-
-    def start_travel_delta_if_route_removed(self):
-        if self.route_is_trivial or self.source_depot.is_virtual_depot:
-            return 0
-
-        # If src_route is removed: connection first->next no longer occurs.
-        # LastRouteVisit can handle the delta from any change in start depot for the next src_route
-        return -self.distance(self.next_visit)
-
     def travel_delta_if_inserting_customer_before_this(self, new_customer: CustomerLike):
         # Change to src_route travel distance if inserting new_customer before this
         raise ValueError("Cannot insert a node before a first src_route visit.")
@@ -526,45 +450,11 @@ class LastRouteVisit(RouteVisit):
     def depot_is(self, node: Depot):
         return self.source_depot == node
 
-    def get_replacement_travel_deltas(self, new_depot: DepotLike) -> tuple[Num, Num]:
-        """(this route's share, the next route's share) of replacing this end depot.
-
-        Two routes move, and each half is already route-local: this route's last arc changes, and
-        the next route's first arc changes because a route's end depot IS the next route's start
-        depot. The sum is what get_replacement_travel_delta returns.
-        """
-        own_delta = self.prev_visit.distance(new_depot) - self.distance_in
-
-        next_first_visit = self.next_visit
-        next_delta = (next_first_visit.start_travel_delta_if_depot_swapped(new_depot)
-                      if next_first_visit is not None else 0)
-
-        return own_delta, next_delta
-
-    def get_replacement_travel_delta(self, new_depot: DepotLike):
-        # Travel delta if replacing own end depot in place:
-        # 1) Relink depot for this route's last move
-        # 2) Relink depot for next route's first move
-        own_delta, next_delta = self.get_replacement_travel_deltas(new_depot)
-        return own_delta + next_delta
-
     def travel_delta_if_inserting_customer_before_this(self, new_customer: CustomerLike):
         # Change to src_route travel distance if inserting new_customer before this
         old_length = self.distance_in
         new_length = self.prev_visit.distance(new_customer) + new_customer.distance(self)
         return new_length - old_length
-
-    def end_travel_delta_if_route_removed(self) -> Num:
-        # If src_route is removed: the next src_route's start depot will change
-        # FirstRouteVisit handles the disconnect from start->next_visit
-
-        # If src_route is a cycle or there is no next src_route, start depot doesn't change
-        next_visit = self.next_visit
-        if next_visit is None or self.depot_is(self.route.start_depot):
-            return 0
-
-        # Otherwise: report travel distance if the next src_route swaps start depots
-        return next_visit.start_travel_delta_if_depot_swapped(self.route.start_depot)
 
     #endregion
 

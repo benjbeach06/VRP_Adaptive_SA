@@ -11,7 +11,7 @@ objective term, so the incremental state cannot disagree with itself.
 
 | layer | file | job |
 |---|---|---|
-| core model | `SimAnn_VRP_Core_Model/` | reports raw. The minimum data -- travel, load and customer-count changes, start depot, vehicle -- needed to reconstruct the objective change and the cached values. |
+| core model | `SimAnn_VRP_Core_Model/deltas/` | reports raw. The minimum data -- travel, load and customer-count changes, start depot, vehicle -- needed to reconstruct the objective change and the cached values. |
 | processor | `SimAnn_VRP_Accounting.py` | resolves. Raw record plus current state, to an `ObjectiveTermDelta` and an `AccountingRecord`. Reads state, writes nothing. |
 | `Operator` | `SimAnn_VRP_Operators.py` | applies. Drives two application-tracking bits in the `Move` and calls the sink. |
 | `FullSolution` | `SimAnn_VRP_Core_Model/solution.py` | is the sink. Writes derived caches from resolved numbers. |

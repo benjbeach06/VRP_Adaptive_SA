@@ -20,6 +20,11 @@ WHERE THINGS LIVE
     vehicle     Vehicle
     neighbors   the nearest-neighbor tables and the dense-ID precondition
     solution    FullSolution, and the accounting sink
+    deltas      a SUBPACKAGE: every delta computation in the model, and nothing else
+
+The data model describes state. `deltas` describes the arithmetic that prices a change to it. The
+dependency runs one way -- `deltas` imports the model, the model never imports `deltas` -- so it is
+always imported LAST below.
 
 IMPORT ORDER BELOW IS LOAD-BEARING. `visits` MUST be imported before `routes`.
 LastRouteVisit isinstance-tests Route and LastRoute at runtime, and Route builds and
@@ -91,7 +96,43 @@ from .neighbors import (CUSTOMER_DEPOTS_K, CUSTOMER_NEIGHBORS_K, _locations_arra
 
 from .solution import NO_TIME_LIMIT, FullSolution
 
-from . import basics, neighbors, nodes, randomness, records, route_set, routes, solution, vehicle
+# LAST, and it must stay last. Every module under `deltas` imports the data model above it.
+from .deltas import (
+    # visit_arcs
+    current_route_load_delta_if_swapped_with, end_travel_delta_if_route_removed,
+    get_replacement_travel_delta, get_replacement_travel_deltas,
+    start_travel_delta_if_depot_swapped, start_travel_delta_if_route_removed,
+    travel_delta_if_customer_replaced, travel_delta_if_depot_stop_added_after_this,
+    travel_delta_if_swapped_with, travel_delta_if_visit_removed, travel_deltas_if_swapped_with,
+    # route_moves
+    cost_deltas_if_appended_to, cost_deltas_if_end_depot_changes, cost_deltas_if_inserted_before,
+    cost_deltas_if_removed, cost_deltas_if_swapped_with_next_route, travel_delta_if_appended_to,
+    travel_delta_if_end_depot_changes, travel_delta_if_inserted_before,
+    travel_delta_if_route_removed,
+    # customer_chain_moves
+    cost_deltas_for_adjacent_customer_swap_starting_at,
+    cost_deltas_for_adjacent_customer_swap_starting_with, cost_deltas_for_customer_chain_swap,
+    cost_deltas_for_customer_swap, cost_deltas_for_inter_route_customer_swap_at,
+    cost_deltas_for_intra_route_customer_swap_at, cost_deltas_if_customer_appended,
+    cost_deltas_if_customer_chain_inserted_before, cost_deltas_if_customer_chain_moved,
+    cost_deltas_if_customer_chain_removed, cost_deltas_if_customer_inserted_before,
+    cost_deltas_if_customer_popped, cost_deltas_if_customer_removed,
+    customer_chains_are_adjacent, total_load_deltas_for_customer_swap,
+    travel_delta_if_customer_chain_removed, travel_delta_if_customer_inserted_before,
+    travel_delta_if_customer_popped, travel_delta_if_customer_removed,
+    travel_delta_if_unassigned_customer_appended,
+    travel_deltas_if_customer_chain_inserted_before, travel_deltas_if_customer_chain_moved,
+    # route_reordering
+    cost_deltas_for_permutation, cost_deltas_if_customer_chain_reversed,
+    # route_segmentation
+    cost_deltas_for_combine_with, cost_deltas_for_split_at, travel_delta_for_combine_with,
+    travel_delta_for_combine_with_next, travel_delta_for_combine_with_nonadjacent,
+    travel_delta_for_combine_with_prev,
+    # solution_sweeps
+    cost_deltas_for_removing_empty_routes)
+
+from . import basics, deltas, neighbors, nodes, randomness, records, route_set, routes
+from . import solution, vehicle
 from . import visits
 
 

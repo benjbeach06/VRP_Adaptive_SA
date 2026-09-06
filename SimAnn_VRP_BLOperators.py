@@ -321,7 +321,7 @@ class ReassignRouteBefore(OperatorBL[ReassignRouteBeforeOps]):
             # (if prev is empty, the op is equivalent to moving that empty route forward one - prevented)
             return None, MoveKind.INVALID
 
-        return src_route.cost_deltas_if_inserted_before(dest_route), MoveKind.VALID
+        return cost_deltas_if_inserted_before(src_route, dest_route), MoveKind.VALID
 
     def _apply_impl(self, operands: ReassignRouteBeforeOps) -> tuple[Route, Route | LastRoute | None]:
         src_route, dest_route = operands
@@ -374,7 +374,7 @@ class ReassignCustomerChain(OperatorBL[ReassignCustomerChainOps]):
             # so this stays a no-op rather than becoming a second way to spell that move.
             return None, MoveKind.NOOP, False
 
-        not_reversed, reversed_ = src_route.cost_deltas_if_customer_chain_moved(rng, dest_route, dest_idx)
+        not_reversed, reversed_ = cost_deltas_if_customer_chain_moved(src_route, rng, dest_route, dest_idx)
 
         # Only travel_distance differs, so this comparison decides the whole orientation. Each
         # orientation arrives as a (deltas, raw record) pair; index 1 is the RAW RECORD, which is
@@ -495,7 +495,7 @@ class SwapCustomerChains(OperatorBL[SwapCustomerChainsOps]):
         if route1 is route2 and rng1.start < rng2.stop and rng2.start < rng1.stop:
             return None, MoveKind.INVALID, False, False   # overlapping ranges in one route
 
-        deltas = route1.cost_deltas_for_customer_chain_swap(rng1, route2, rng2)
+        deltas = cost_deltas_for_customer_chain_swap(route1, rng1, route2, rng2)
 
         # argmin over all four rather than two independent comparisons. The two reversals ARE
         # independent when the chains are disjoint, but not when they are adjacent in one route --
@@ -548,7 +548,7 @@ class ReverseCustomerChain(OperatorBL[ReverseCustomerChainOps]):
         if len(rng) <= 1:
             return None, MoveKind.NOOP   # a chain of 0 or 1 reverses to itself
 
-        return route.cost_deltas_if_customer_chain_reversed(rng), MoveKind.VALID
+        return cost_deltas_if_customer_chain_reversed(route, rng), MoveKind.VALID
 
     def _apply_impl(self, operands: ReverseCustomerChainOps) -> tuple[Route, Chain]:
         route, chain = operands
@@ -633,7 +633,7 @@ class ChangeEndDepot(OperatorBL[ChangeEndDepotOps]):
         if new_end_depot == route.end_depot:
             return None, MoveKind.INVALID
 
-        return route.cost_deltas_if_end_depot_changes(new_end_depot), MoveKind.VALID
+        return cost_deltas_if_end_depot_changes(route, new_end_depot), MoveKind.VALID
 
     def _apply_impl(self, operands: ChangeEndDepotOps) -> tuple[Route, Depot]:
         route, new_end_depot = operands
@@ -670,7 +670,7 @@ class DisposeOfEmptyRoutesBL(OperatorBL[DisposeOfEmptyRoutesOps]):
             # trivial routes are cost-neutral by definition
             return RawDeltaRecord(), MoveKind.VALID
 
-        return self.sln.cost_deltas_for_removing_empty_routes(routes), MoveKind.VALID
+        return cost_deltas_for_removing_empty_routes(routes), MoveKind.VALID
 
     def _apply_impl(self, operands: DisposeOfEmptyRoutesOps) -> tuple[list[tuple[Route, Route | FirstRoute | None]], list[tuple[Route, int]]]:
         (routes,) = operands
@@ -716,7 +716,7 @@ class SplitRoute(OperatorBL[SplitRouteOps]):
         if num_customers <= 1 or 0 == split_index or split_index >= num_customers:
             return None, MoveKind.INVALID
 
-        return route.cost_deltas_for_split_at(split_index, intermediate_end_depot, new_route), MoveKind.VALID
+        return cost_deltas_for_split_at(route, split_index, intermediate_end_depot, new_route), MoveKind.VALID
 
     def _apply_impl(self, operands: SplitRouteOps) -> tuple[Route, Route]:
         route, split_index, intermediate_end_depot, new_route = operands
@@ -747,7 +747,7 @@ class CombineRoutes(OperatorBL[CombineRoutesOps]):
         if route1 is route2 or route1.is_empty or route2.is_empty:
             return None, MoveKind.INVALID
 
-        return route1.cost_deltas_for_combine_with(route2), MoveKind.VALID
+        return cost_deltas_for_combine_with(route1, route2), MoveKind.VALID
 
     def _apply_impl(self, operands: CombineRoutesOps) -> tuple[Route, int, Depot, Route | FirstRoute | None, int, Route]:
         route1, route2 = operands
@@ -847,20 +847,20 @@ class _SequentialCombineRoutes(OperatorBL[CombineRoutesOps]):
         # either happens, so its depot and vehicle terms are "activates at the destination minus
         # deactivates at the source". Split, each half stands alone -- which is what a ruin step
         # needs, since it removes customers long before it decides where they land.
-        chain_removal = route2.cost_deltas_if_customer_chain_removed(chain)
+        chain_removal = cost_deltas_if_customer_chain_removed(route2, chain)
         visits = route2.remove_customer_chain(chain)
 
         insert_visit = route1.get_visit_at(dest_idx)
         assert isinstance(insert_visit, CustomerVisit|LastRouteVisit)
 
-        chain_insert, _ = route1.cost_deltas_if_customer_chain_inserted_before(
+        chain_insert, _ = cost_deltas_if_customer_chain_inserted_before(route1, 
             visits, insert_visit)
         route1.insert_customer_chain(visits, dest_idx, False)
 
-        depot_change = route1.cost_deltas_if_end_depot_changes(inherited_end_depot)
+        depot_change = cost_deltas_if_end_depot_changes(route1, inherited_end_depot)
         route1.set_end_depot(inherited_end_depot)
 
-        route_removal = route2.cost_deltas_if_removed()
+        route_removal = cost_deltas_if_removed(route2)
         route2.unlink_from_vehicle()
         other_slot = sln.all_routes.remove(route2)
 
