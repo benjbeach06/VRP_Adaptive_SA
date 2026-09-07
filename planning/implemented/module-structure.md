@@ -7,7 +7,9 @@ functions over the model types. The rest of the plan -- every OTHER method on a 
 becoming a free function -- did not ship and is not queued.
 
 The plan as agreed follows, with one factual correction applied in place: the file was **4,940**
-lines immediately before the work, not 4,662. How the work diverged, and why, is at the end.
+lines immediately before the work, not 4,662. How the work diverged, and why, is at the end. What
+the divergence taught us is in
+[retros/2026-09-07_core_model_modularization.md](../../retros/2026-09-07_core_model_modularization.md).
 
 ---
 
@@ -191,9 +193,12 @@ writable as a design doc today. The data model itself still is not.
 ## References
 
 - [planning/core-refactors/inverted-view-refactor.md](../core-refactors/inverted-view-refactor.md)
+- [retros/2026-09-07_core_model_modularization.md](../../retros/2026-09-07_core_model_modularization.md)
+  -- the retro covering the period this landed in; what the divergence taught us.
 
 ## Links to here
 
+- [retros/2026-09-07_core_model_modularization.md](../../retros/2026-09-07_core_model_modularization.md) -- the retro for the period this landed in
 - [planning/implemented/README.md](README.md) -- lists this as implemented in part
 - [planning/operator-selection/budget-gated-selection.md](../operator-selection/budget-gated-selection.md) -- proposes cost-estimate field placement for budget gating
 - [planning/README.md](../README.md)

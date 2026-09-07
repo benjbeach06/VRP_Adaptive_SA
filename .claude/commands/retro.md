@@ -5,14 +5,31 @@ argument-hint: "[optional scope, e.g. 'since the tuning run' or a topic]"
 
 Run a retro. Scope is `$ARGUMENTS` if given, otherwise everything since the last retro.
 
+## HOW THIS RUNS: IN CHAT FIRST, ALWAYS
+
+**Sections 1 through 4 are a conversation, not a document.** Deliver them in the chat reply and
+STOP. Write nothing to `retros/`. Change no memory. Wait for his answer.
+
+He is half of the retro, and his answers change the findings. On 2026-09-07 one of his replies
+replaced the ROOT CAUSE of the top finding -- the retro had it as "Claude argued after a decision",
+and he identified that the file organization being argued over was internally inconsistent, which is
+why the argument happened at all. A file written first commits the wrong cause.
+
+Steps 5 and 6 run ONLY after he has replied to steps 1 through 4. The retro file is a record of the
+conversation. It is written afterwards, from what the conversation concluded.
+
+This section exists because the skill did not say it, and the failure recurred. See memory
+`feedback-retro-procedure`.
+
 ## 0. Read `_session/hiccups.md` first
 
 That file is the running log of friction, dead ends and wasted effort, appended as things happened
-rather than reconstructed afterwards. Read it before writing anything -- it is the raw material for
+rather than reconstructed afterwards. Read it before saying anything -- it is the raw material for
 sections 3 and 4, and it holds the items that are easiest to forget precisely because they were
 resolved.
 
-**Clear it once consumed.** Anything durable graduates to a memory.
+**Clear it in step 6, not here.** Anything durable graduates to a memory, and the memories are not
+written until he has signed off.
 
 ## 1. Summarize the work since the last retro
 
@@ -62,7 +79,14 @@ Look hard for the failures that waste work early, because they are the expensive
 - **Repeated corrections.** The same instruction given more than once is a workflow defect, not a
   memory defect.
 
-## 5. Then: record it
+## 5. AFTER HIS REPLY: record it
+
+Nothing in this step runs until he has answered sections 1 through 4. His corrections change what
+gets recorded, and a memory written first has to be rewritten.
+
+List the memory edits you intend to make and get his approval before applying them. Findings about
+HIS work are surfaced in chat and never auto-saved -- see memory
+`feedback-assessments-surface-dont-autowrite`.
 
 Promote each finding from instance to class before you write it. A rule that covers only the exact
 incident is worth little.
