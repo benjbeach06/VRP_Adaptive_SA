@@ -120,7 +120,7 @@ afterwards, because the full deltas already exist, but a new accounting field ca
 radius and enables its own optimizations. That stays [route-distance-tracking](route-distance-tracking.md),
 sequenced after this.
 
-It does not start [module-structure](../core-refactors/module-structure.md). The processor is a static class in its
+It does not start [module-structure](module-structure.md). The processor is a static class in its
 own file, `SimAnn_VRP_Accounting.py`. That is one file, not a reorganization of the core model, and
 that refactor stays deferred.
 
@@ -286,7 +286,7 @@ blocker for [vehicle-time-limits](vehicle-time-limits.md). Doing distance tracki
 adding a cached field at ~44 mutation sites by hand, then removing those updates again when the
 processor takes ownership.
 
-Not interleaved with [module-structure](../core-refactors/module-structure.md) or
+Not interleaved with [module-structure](module-structure.md) or
 [inverted-view-refactor](../core-refactors/inverted-view-refactor.md). All three touch the core model broadly, and
 concurrent large diffs there make "is the objective still identical?" unanswerable.
 
@@ -420,7 +420,7 @@ in place. It is picked up with the downstream distance and time work.
 
 - [route-distance-tracking.md](route-distance-tracking.md) -- sequenced after this; the full deltas make it cheap, but a new accounting field carries its own blast radius
 - [vehicle-time-limits.md](vehicle-time-limits.md) -- downstream of route-distance-tracking; its per-vehicle aggregates are what this infrastructure exists to make cheap
-- [planning/core-refactors/module-structure.md](../core-refactors/module-structure.md) -- proposes the same static-class shape for the whole core model; deliberately NOT started by this plan
+- [module-structure.md](module-structure.md) -- proposes the same static-class shape for the whole core model; deliberately NOT started by this plan
 - [planning/core-refactors/inverted-view-refactor.md](../core-refactors/inverted-view-refactor.md) -- also a broad core-model diff; must not run concurrently with this one
 - [retros/2026-08-29_raw_delta_accounting_implementation.md](../../retros/2026-08-29_raw_delta_accounting_implementation.md) -- the implementation session; carries the reasoning for each way the shipped design departed from this plan
 

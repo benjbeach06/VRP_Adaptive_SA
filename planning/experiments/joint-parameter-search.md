@@ -65,7 +65,7 @@ without waiting longer. They are independent and they multiply.
 **1. Raise throughput.** Faster iterations mean shorter runs measure the same amount of search.
 Profiling found few easy wins: the time is spread across `[self]` attribute lookups in the operators'
 own frames rather than concentrated anywhere. That points at structural work --
-[module-structure](../core-refactors/module-structure.md) turns `self` into a typed parameter, and
+[module-structure](../implemented/module-structure.md) turns `self` into a typed parameter, and
 [inverted-view-refactor](../core-refactors/inverted-view-refactor.md) removes the lookup chain that feeds the hottest
 delta path.
 
@@ -118,7 +118,7 @@ expect a different result.
 
 - [planning/search-methods/heuristic-survey.md](../search-methods/heuristic-survey.md)
 - [planning/core-refactors/inverted-view-refactor.md](../core-refactors/inverted-view-refactor.md)
-- [planning/core-refactors/module-structure.md](../core-refactors/module-structure.md)
+- [planning/implemented/module-structure.md](../implemented/module-structure.md)
 - [RESULTS.md](../../RESULTS.md)
 
 ## Links to here

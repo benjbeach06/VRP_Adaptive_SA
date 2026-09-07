@@ -22,7 +22,7 @@ The plans are grouped into five folders by what they touch:
 |---|---|---|
 | [inverted-view-refactor](core-refactors/inverted-view-refactor.md) | deferred, gate NOT met | O(1) "where is customer j"; needs ablation evidence for guidance, which currently sits at 2 sigma |
 | [end-depot-index](core-refactors/end-depot-index.md) | measured, small | the only operator whose cost grows with instance size |
-| [module-structure](core-refactors/module-structure.md) | deferred by timeboxing | 4,662-line core model; a mechanical `self` -> typed-parameter split into a static evaluator |
+| [module-structure](implemented/module-structure.md) | **IMPLEMENTED IN PART** (the delta arithmetic only) | the mechanical `self` -> typed-parameter split, applied to every delta computation; they are now `SimAnn_VRP_Core_Model/deltas/`. Every other method on a core-model type stays a method |
 | [raw-delta-accounting](implemented/raw-delta-accounting.md) | **IMPLEMENTED** (steps 0-3, 5; step 4 is now [end-depot-usage-tracking](core-refactors/end-depot-usage-tracking.md)) | accounting was derived twice and independently; one processor now replaces ~29 per-mutation derivations |
 | [route-distance-tracking](implemented/route-distance-tracking.md) | **IMPLEMENTED** | per-route and per-vehicle distance are sink-written caches with recompute twins |
 | [end-depot-usage-tracking](core-refactors/end-depot-usage-tracking.md) | not started | raw-delta-accounting's deferred step 4; would make the tail-swap operator's scan an index lookup |
@@ -102,7 +102,7 @@ See [implemented/README.md](implemented/README.md) for features that have shippe
   landed.
 - [planning/core-refactors/end-depot-index.md](core-refactors/end-depot-index.md) -- the only operator whose cost grows with instance size.
 - [planning/problem-model/warm-start.md](problem-model/warm-start.md) -- saved solutions cannot be loaded back.
-- [planning/core-refactors/module-structure.md](core-refactors/module-structure.md) -- 4,662-line core model; a mechanical `self` ->
+- [planning/implemented/module-structure.md](implemented/module-structure.md) -- a mechanical `self` ->
   typed-parameter split into a static evaluator.
 - [planning/implemented/route-distance-tracking.md](implemented/route-distance-tracking.md) -- IMPLEMENTED; per-route and
   per-vehicle distance are sink-written caches with recompute twins.
