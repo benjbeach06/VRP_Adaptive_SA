@@ -1,4 +1,4 @@
-# Multi-depot Capacitated VRP solver with Cross-Depot Routing
+# Multi-depot Capacitated VRP Solver with Cross-Depot Routing
 
 A simulated-annealing solver for the **multi-depot vehicle routing problem with inter-depot
 routes**, written from scratch in Python with no solver dependency.
